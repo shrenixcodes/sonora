@@ -526,6 +526,12 @@
   padding-inline: var(--space-2);
 }
 
+/* The padding above only makes room for card hover fills; keep the
+   scrollbar lined up with the cards instead of running past them. */
+.shelf::-webkit-scrollbar-track {
+  margin-inline: var(--space-2);
+}
+
 .shelf-card {
   display: flex;
   flex-direction: column;
