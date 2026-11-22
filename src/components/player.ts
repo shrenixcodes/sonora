@@ -5,12 +5,18 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { attachSlider, type Slider } from "@/lib/slider";
 import { icon } from "@/icons";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
 import { queuePanel } from "@/components/queue-panel";
 import type { Track, PlaybackState } from "@/types/music";
+
+/** One wheel notch or arrow key on the progress bar. */
+const SEEK_STEP_SECONDS = 5;
+/** One wheel notch or arrow key on the volume bar. */
+const VOLUME_STEP = 0.05;
 
 class PlayerBar {
   private elements: {
@@ -35,8 +41,8 @@ class PlayerBar {
     nowPlayingBtn: HTMLElement;
   } | null = null;
 
-  private isDraggingProgress = false;
-  private isDraggingVolume = false;
+  private progressSlider: Slider | null = null;
+  private volumeSlider: Slider | null = null;
 
   render(): HTMLElement {
     // ── Controls ──────────────────────────────────────────
@@ -77,7 +83,6 @@ class PlayerBar {
 
     // ── Progress Bar ──────────────────────────────────────
     const progressFill = el("div", { className: "player__progress-fill" });
-    progressFill.style.width = "0%";
 
     const progressBar = el("div", {
       className: "player__progress-bar",
@@ -123,7 +128,6 @@ class PlayerBar {
     // ── Volume ────────────────────────────────────────────
     const initialVol = playerEngine.currentState.volume;
     const volumeFill = el("div", { className: "player__volume-fill" });
-    volumeFill.style.width = `${initialVol * 100}%`;
 
     const volumeBar = el("div", {
       className: "player__volume-slider",
@@ -237,67 +241,30 @@ class PlayerBar {
 
   private setupInteractivity(): void {
     if (!this.elements) return;
-    const { progressBar, volumeBar } = this.elements;
+    const { progressBar, volumeBar, currentTime } = this.elements;
+    const duration = () => playerEngine.currentState.duration || 0;
 
-    // Progress bar seeking
-    progressBar.addEventListener("pointerdown", (e) => {
-      this.isDraggingProgress = true;
-      this.seekFromPointer(e);
-
-      const onPointerMove = (moveEvent: PointerEvent) => {
-        if (this.isDraggingProgress) {
-          this.seekFromPointer(moveEvent);
-        }
-      };
-
-      const onPointerUp = () => {
-        this.isDraggingProgress = false;
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-      };
-
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
+    // Dragging previews the position; the seek happens when the drag ends, so
+    // YouTube Music isn't asked to seek dozens of times per second.
+    this.progressSlider = attachSlider(progressBar, {
+      label: "Seek",
+      onInput: (ratio) => {
+        currentTime.textContent = formatTime(ratio * duration());
+      },
+      onCommit: (ratio) => playerEngine.seekTo(ratio * duration()),
+      step: () => (duration() > 0 ? SEEK_STEP_SECONDS / duration() : 0),
+      valueText: (ratio) => `${formatTime(ratio * duration())} of ${formatTime(duration())}`,
     });
 
-    // Volume bar scrubbing
-    volumeBar.addEventListener("pointerdown", (e) => {
-      this.isDraggingVolume = true;
-      this.volumeFromPointer(e);
-
-      const onPointerMove = (moveEvent: PointerEvent) => {
-        if (this.isDraggingVolume) {
-          this.volumeFromPointer(moveEvent);
-        }
-      };
-
-      const onPointerUp = () => {
-        this.isDraggingVolume = false;
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-      };
-
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
+    this.volumeSlider = attachSlider(volumeBar, {
+      label: "Volume",
+      onInput: (ratio) => playerEngine.setVolume(ratio),
+      onCommit: (ratio) => playerEngine.setVolume(ratio),
+      step: () => VOLUME_STEP,
+      valueText: (ratio) => `${Math.round(ratio * 100)}%`,
     });
-  }
-
-  private seekFromPointer(e: PointerEvent): void {
-    if (!this.elements) return;
-    const rect = this.elements.progressBar.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const targetTime = ratio * (playerEngine.currentState.duration || 0);
-
-    this.elements.progressFill.style.width = `${ratio * 100}%`;
-    this.elements.currentTime.textContent = formatTime(targetTime);
-    playerEngine.seekTo(targetTime);
-  }
-
-  private volumeFromPointer(e: PointerEvent): void {
-    if (!this.elements) return;
-    const rect = this.elements.volumeBar.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    playerEngine.setVolume(ratio);
+    this.volumeSlider.setValue(playerEngine.currentState.volume);
+    this.progressSlider.setValue(0);
   }
 
   private handleToggleLike(): void {
@@ -344,12 +311,10 @@ class PlayerBar {
       this.elements.repeatBtn.classList.toggle("player__btn--active", state.repeat !== "off");
 
       // Volume slider & icon
-      if (!this.isDraggingVolume) {
-        const vol = state.isMuted ? 0 : state.volume;
-        this.elements.volumeFill.style.width = `${vol * 100}%`;
-        const volIcon = vol > 0.5 ? "volumeHigh" : vol > 0 ? "volumeLow" : "volumeMute";
-        this.elements.volumeBtn.innerHTML = icon(volIcon);
-      }
+      const vol = state.isMuted ? 0 : state.volume;
+      this.volumeSlider?.setValue(vol);
+      const volIcon = vol > 0.5 ? "volumeHigh" : vol > 0 ? "volumeLow" : "volumeMute";
+      this.elements.volumeBtn.innerHTML = icon(volIcon);
     });
 
     playerEngine.on("trackChange", (track: Track | null) => {
@@ -380,13 +345,12 @@ class PlayerBar {
     });
 
     playerEngine.on("timeUpdate", ({ currentTime, duration }) => {
-      if (!this.elements || this.isDraggingProgress) return;
+      if (!this.elements || this.progressSlider?.dragging) return;
 
       this.elements.currentTime.textContent = formatTime(currentTime);
       if (duration > 0) {
         this.elements.duration.textContent = formatTime(duration);
-        const percent = Math.min(100, (currentTime / duration) * 100);
-        this.elements.progressFill.style.width = `${percent}%`;
+        this.progressSlider?.setValue(currentTime / duration);
       }
     });
   }

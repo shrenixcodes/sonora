@@ -168,28 +168,77 @@
   text-align: center;
 }
 
+/* Progress and volume bars (src/lib/slider.ts). The element is a tall,
+   easy-to-grab hit area; the 4px track, fill and handle are drawn inside it. */
+.player__progress-bar,
+.player__volume-slider {
+  --value: 0;
+  position: relative;
+  height: 16px;
+  cursor: pointer;
+  touch-action: none;
+  border-radius: var(--radius-full);
+}
+
 .player__progress-bar {
   flex: 1;
-  height: 4px;
+}
+
+.player__progress-bar::before,
+.player__volume-slider::before {
+  content: "";
+  position: absolute;
+  inset: 6px 0;
   background: var(--color-border);
   border-radius: var(--radius-full);
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
 }
 
-.player__progress-fill {
+.player__progress-fill,
+.player__volume-fill {
   position: absolute;
-  top: 0;
+  top: 6px;
   left: 0;
-  height: 100%;
+  height: 4px;
+  width: calc(var(--value) * 100%);
   background: var(--color-text);
   border-radius: var(--radius-full);
-  transition: width 100ms linear;
 }
 
-.player__progress-bar:hover .player__progress-fill {
+/* Handle: appears on hover, focus or drag, centred on the current value. */
+.player__progress-bar::after,
+.player__volume-slider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(var(--value) * 100%);
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.player__progress-bar:hover::after,
+.player__volume-slider:hover::after,
+.player__progress-bar:focus-visible::after,
+.player__volume-slider:focus-visible::after,
+.is-dragging::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.player__progress-bar:hover .player__progress-fill,
+.player__volume-slider:hover .player__volume-fill,
+.is-dragging > .player__progress-fill,
+.is-dragging > .player__volume-fill {
   background: var(--color-accent);
+}
+
+.player__progress-bar:focus-visible,
+.player__volume-slider:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* ── Volume + extras (right) ─────────────────────────────── */
@@ -229,25 +278,6 @@
 
 .player__volume-slider {
   width: 80px;
-  height: 4px;
-  background: var(--color-border);
-  border-radius: var(--radius-full);
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.player__volume-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: var(--color-text);
-  border-radius: var(--radius-full);
-}
-
-.player__volume-slider:hover .player__volume-fill {
-  background: var(--color-accent);
 }
 
 .player__extra-btn {
