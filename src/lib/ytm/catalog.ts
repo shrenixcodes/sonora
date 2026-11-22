@@ -34,6 +34,8 @@ export type { AccountProfile, HomeChip, HomeCollection, HomeItem, HomePage, Home
 export { CatalogError };
 
 const HOME_TTL_MS = 5 * 60_000;
+/** Playlists change rarely; a short cache makes playing one again instant. */
+const PLAYLIST_TTL_MS = 10 * 60_000;
 /**
  * The YouTube Music page takes a few seconds to load when Sonora starts, and
  * reloads whenever a song is loaded. A request sent while it loads either gets
@@ -56,6 +58,7 @@ export class Catalog {
   private home: { page: HomePage; at: number } | null = null;
   private explore: { shelves: HomeShelf[]; at: number } | null = null;
   private inFlight = new Map<string, Promise<unknown>>();
+  private playlists = new Map<string, { tracks: Track[]; at: number }>();
   /** How many pages each Home page has loaded, to cap how far it goes. */
   private homePages = new WeakMap<HomePage, number>();
 
@@ -130,6 +133,7 @@ export class Catalog {
   clearCache(): void {
     this.home = null;
     this.explore = null;
+    this.playlists.clear();
   }
 
   /** YouTube Music's Explore page: new releases, charts and trending. */
@@ -171,28 +175,62 @@ export class Catalog {
     return parseLibraryArtists(await this.fetch({ kind: "libraryArtists" }));
   }
 
-  /** Songs of a playlist, album or mix; mixes without a playlist page fall back to their watch queue. */
-  async getPlaylistTracks(id: string): Promise<Track[]> {
-    const tracks = await this.fetchTrackList({ kind: "playlist", id }).catch((err) => {
-      if (!id.startsWith("RD")) throw err;
-      return [];
-    });
-    if (tracks.length > 0 || !id.startsWith("RD")) return tracks;
-    return parseWatchPlaylist(await this.fetch({ kind: "watchPlaylist", id }));
+  /**
+   * Songs of a playlist, album or mix. With `onMore`, resolves with the first
+   * page so playback can start at once, and reports later pages as they
+   * arrive; without it, resolves with every page. Mixes without a playlist
+   * page fall back to their watch queue.
+   */
+  async getPlaylistTracks(id: string, onMore?: (more: Track[]) => void): Promise<Track[]> {
+    const cached = this.playlists.get(id);
+    if (cached && this.now() - cached.at < PLAYLIST_TTL_MS) return cached.tracks;
+
+    const remember = (tracks: Track[]) => {
+      this.playlists.set(id, { tracks, at: this.now() });
+      return tracks;
+    };
+    const isMix = id.startsWith("RD");
+    let response: unknown;
+    try {
+      response = await this.fetch({ kind: "playlist", id });
+    } catch (err) {
+      if (!isMix) throw err;
+      response = null;
+    }
+    const first = response ? dedupeById(parsePlaylistTracks(response)) : [];
+    if (first.length === 0) {
+      return remember(isMix ? parseWatchPlaylist(await this.fetch({ kind: "watchPlaylist", id })) : []);
+    }
+
+    const all = this.fetchRemainingPages(response, first, onMore).then(remember);
+    if (!onMore) return all;
+    all.catch((err) => console.warn("[catalog] stopped loading the rest of a playlist:", err));
+    return first;
   }
 
   private async fetchTrackList(request: CatalogRequest): Promise<Track[]> {
-    let response = await this.fetch(request);
-    const tracks = parsePlaylistTracks(response);
+    const response = await this.fetch(request);
+    return this.fetchRemainingPages(response, dedupeById(parsePlaylistTracks(response)));
+  }
+
+  /** Follows a list's continuation pages, reporting each page's new songs to `onMore`. */
+  private async fetchRemainingPages(
+    response: unknown,
+    first: Track[],
+    onMore?: (more: Track[]) => void,
+  ): Promise<Track[]> {
+    const tracks = [...first];
+    const seen = new Set(first.map((t) => t.id));
     for (let page = 1; page < MAX_LIST_PAGES; page++) {
       const token = parseContinuation(response);
       if (!token) break;
       response = await this.fetch({ kind: "continuation", token });
-      const more = parsePlaylistTracks(response);
+      const more = parsePlaylistTracks(response).filter((t) => !seen.has(t.id) && (seen.add(t.id), true));
       if (more.length === 0) break;
       tracks.push(...more);
+      onMore?.(more);
     }
-    return dedupeById(tracks);
+    return tracks;
   }
 
   private fetch(request: CatalogRequest): Promise<unknown> {

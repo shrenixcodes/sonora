@@ -103,6 +103,16 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.emit("queueChange", this.queue.all);
   }
 
+  /**
+   * Adds the rest of a list that started playing before it finished loading.
+   * Ignored if the user has since moved on to something else.
+   */
+  extendQueue(listStart: Track, more: Track[]): void {
+    if (this.queue.all[0]?.id !== listStart.id) return;
+    this.queue.append(more);
+    this.emit("queueChange", this.queue.all);
+  }
+
   togglePlay(): void {
     if (!this.state.currentTrack) {
       const first = this.queue.current ?? this.queue.all[0];

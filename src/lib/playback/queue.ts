@@ -45,6 +45,24 @@ export class PlayQueue {
     this.rebuildOrder(this.tracks.length > 0 ? startIndex : -1);
   }
 
+  /** Adds tracks to the end (shuffled into the rest when shuffle is on), skipping ones already queued. */
+  append(tracks: Track[]): void {
+    const known = new Set(this.tracks.map((t) => t.id));
+    const added = tracks.filter((t) => !known.has(t.id) && (known.add(t.id), true));
+    if (added.length === 0) return;
+    const start = this.tracks.length;
+    this.tracks.push(...added);
+    const indices = added.map((_, i) => start + i);
+    if (this.shuffled) {
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(this.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+    }
+    this.order.push(...indices);
+    if (this.position < 0) this.position = 0;
+  }
+
   /** Moves to a track already in the queue; returns false if it isn't there. */
   jumpTo(trackId: string): boolean {
     const at = this.order.findIndex((i) => this.tracks[i].id === trackId);

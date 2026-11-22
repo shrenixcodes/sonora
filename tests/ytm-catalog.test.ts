@@ -153,4 +153,35 @@ describe("Catalog", () => {
     const nextSession = new Catalog(fetcher, Date.now, undefined, store);
     expect(nextSession.peekHome()?.shelves.map((s) => s.title)).toEqual(["Listen again"]);
   });
+
+  it("hands back a playlist's first page at once and streams the rest", async () => {
+    const row = (videoId: string) => ({
+      musicResponsiveListItemRenderer: {
+        flexColumns: [{ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: videoId }] } } }],
+        playlistItemData: { videoId },
+      },
+    });
+    const next = { continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: "P2" } } } };
+    let releasePage2!: () => void;
+    const fetcher = vi.fn(async (r: CatalogRequest): Promise<unknown> => {
+      if (r.kind === "playlist") return { contents: [row("a"), row("b"), next] };
+      await new Promise<void>((resolve) => (releasePage2 = resolve));
+      return { contents: [row("c")] };
+    });
+    const catalog = new Catalog(fetcher, Date.now, undefined, null);
+    const more: string[] = [];
+
+    const first = await catalog.getPlaylistTracks("PL1", (tracks) => more.push(...tracks.map((t) => t.id)));
+    expect(first.map((t) => t.id)).toEqual(["a", "b"]);
+    expect(more).toEqual([]);
+
+    await vi.waitFor(() => expect(releasePage2).toBeTypeOf("function"));
+    releasePage2();
+    await vi.waitFor(() => expect(more).toEqual(["c"]));
+
+    // Played again: served whole from the cache, without asking YouTube Music.
+    const again = await catalog.getPlaylistTracks("PL1");
+    expect(again.map((t) => t.id)).toEqual(["a", "b", "c"]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });

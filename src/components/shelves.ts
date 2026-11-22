@@ -177,7 +177,11 @@ function createCollectionCard(item: HomeCollection): HTMLElement {
       card.setAttribute("aria-busy", "true");
       subtitle.textContent = "Loading…";
       try {
-        const tracks = await catalog.getPlaylistTracks(item.playlistId);
+        let first: Track | undefined;
+        const tracks = await catalog.getPlaylistTracks(item.playlistId, (more) => {
+          if (first) playerEngine.extendQueue(first, more);
+        });
+        first = tracks[0];
         subtitle.textContent = tracks.length > 0 ? item.subtitle : "Nothing playable here";
         if (tracks.length > 0) playerEngine.playTrack(tracks[0], tracks);
       } catch (err) {

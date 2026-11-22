@@ -476,7 +476,11 @@ function createYtmPlaylistCard(playlist: LibraryPlaylist): HTMLElement {
       loading = true;
       subtitle.textContent = "Loading…";
       try {
-        const tracks = await catalog.getPlaylistTracks(playlist.id);
+        let first: Track | undefined;
+        const tracks = await catalog.getPlaylistTracks(playlist.id, (more) => {
+          if (first) playerEngine.extendQueue(first, more);
+        });
+        first = tracks[0];
         subtitle.textContent = tracks.length > 0 ? playlist.subtitle : "No playable songs";
         if (tracks.length > 0) playerEngine.playTrack(tracks[0], tracks);
       } catch (err) {
