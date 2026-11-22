@@ -1,12 +1,10 @@
 /**
  * Explore view.
  *
- * Explore curated moods, genres, and trending soundscapes.
+ * Mood and genre shortcuts; each one runs a YouTube Music search.
  */
 
 import { el } from "@/lib/dom";
-import { ytmService } from "@/lib/playback/ytm-api";
-import { playerEngine } from "@/lib/playback/engine";
 import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
 
@@ -28,9 +26,6 @@ const MOODS: MoodCategory[] = [
 ];
 
 export function renderExplore(container: HTMLElement): void {
-  const featuredAlbums = ytmService.getFeaturedAlbums();
-  const quickPicks = ytmService.getQuickPicks();
-
   const content = el("div", {
     className: "main__content",
     children: [
@@ -40,124 +35,20 @@ export function renderExplore(container: HTMLElement): void {
           el("h1", { className: "page-header__title", text: "Explore" }),
           el("p", {
             className: "page-header__subtitle",
-            text: "Discover music by mood, genre, and atmosphere",
+            text: "Pick a mood to search YouTube Music for it",
           }),
         ],
       }),
-
-      // ── Moods & Genres ───────────────────────────────────
       el("div", {
         className: "section",
         children: [
           el("div", {
             className: "section__header",
-            children: [
-              el("h2", {
-                className: "section__title",
-                text: "Moods & Genres",
-              }),
-            ],
+            children: [el("h2", { className: "section__title", text: "Moods & Genres" })],
           }),
           el("div", {
             className: "mood-grid",
             children: MOODS.map((mood) => createMoodCard(mood)),
-          }),
-        ],
-      }),
-
-      // ── Trending Collections ─────────────────────────────
-      el("div", {
-        className: "section",
-        children: [
-          el("div", {
-            className: "section__header",
-            children: [
-              el("h2", {
-                className: "section__title",
-                text: "Trending Collections",
-              }),
-            ],
-          }),
-          el("div", {
-            className: "card-grid",
-            children: featuredAlbums.map((album) =>
-              el("div", {
-                className: "card",
-                children: [
-                  el("div", {
-                    className: "card__artwork",
-                    children: [
-                      el("img", {
-                        attrs: { src: album.artworkUrl, alt: album.title },
-                      }),
-                    ],
-                  }),
-                  el("div", {
-                    className: "card__info",
-                    children: [
-                      el("span", {
-                        className: "card__title truncate",
-                        text: album.title,
-                      }),
-                      el("span", {
-                        className: "card__subtitle truncate",
-                        text: album.artist,
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            ),
-          }),
-        ],
-      }),
-
-      // ── Top Tracks This Week ─────────────────────────────
-      el("div", {
-        className: "section",
-        children: [
-          el("div", {
-            className: "section__header",
-            children: [
-              el("h2", {
-                className: "section__title",
-                text: "Top Tracks This Week",
-              }),
-            ],
-          }),
-          el("div", {
-            className: "card-grid",
-            children: quickPicks.slice(0, 4).map((t) =>
-              el("div", {
-                className: "card",
-                children: [
-                  el("div", {
-                    className: "card__artwork",
-                    children: [
-                      el("img", {
-                        attrs: { src: t.artworkUrl, alt: t.title },
-                      }),
-                    ],
-                  }),
-                  el("div", {
-                    className: "card__info",
-                    children: [
-                      el("span", {
-                        className: "card__title truncate",
-                        text: t.title,
-                      }),
-                      el("span", {
-                        className: "card__subtitle truncate",
-                        text: t.artist,
-                      }),
-                    ],
-                  }),
-                ],
-                onClick: () => {
-                  playerEngine.playTrack(t, quickPicks);
-                },
-              }),
-            ),
           }),
         ],
       }),
@@ -168,8 +59,9 @@ export function renderExplore(container: HTMLElement): void {
 }
 
 function createMoodCard(mood: MoodCategory): HTMLElement {
-  return el("div", {
+  return el("button", {
     className: "mood-card",
+    attrs: { type: "button", "aria-label": `Search for ${mood.title}` },
     children: [
       el("span", { className: "mood-card__title", text: mood.title }),
     ],

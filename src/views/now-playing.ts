@@ -111,7 +111,7 @@ export function renderNowPlaying(container: HTMLElement): void {
   const artImg = el("img", {
     className: "now-playing__art-img",
     attrs: {
-      src: currentTrack?.artworkUrl || "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80",
+      src: currentTrack?.artworkUrl || "/artwork-placeholder.svg",
       alt: currentTrack?.title || "Track artwork",
     },
   });

@@ -27,7 +27,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' https://lh3.googleusercontent.com https://yt3.googleusercontent.com https://yt3.ggpht.com https://*.ytimg.com https://images.unsplash.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://lrclib.net"
+      "csp": "default-src 'self'; img-src 'self' https://lh3.googleusercontent.com https://yt3.googleusercontent.com https://yt3.ggpht.com https://*.ytimg.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://lrclib.net"
     }
   },
   "bundle": {

@@ -1,13 +1,14 @@
 /**
  * Home view.
  *
- * Greeting, compact quick-pick tiles, and a "Jump back in" shelf built from
- * local listening history. Every tile is a real button that plays its track.
+ * Greeting, YouTube Music's own Home shelves (the first as compact tiles, the
+ * rest as rows of cards), and a "Jump back in" shelf from local listening
+ * history. Every tile is a real button that plays its track.
  */
 
 import { el, formatTime } from "@/lib/dom";
 import { icon } from "@/icons";
-import { ytmService } from "@/lib/playback/ytm-api";
+import { catalog, CatalogError, type HomeShelf } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
@@ -16,10 +17,12 @@ import { dedupeById } from "@/lib/tracks";
 import type { Track } from "@/types/music";
 
 const RECENT_LIMIT = 10;
+const QUICK_PICK_LIMIT = 12;
+const PLACEHOLDER_TILES = 6;
 
 export function renderHome(container: HTMLElement): void {
-  const quickPicks = ytmService.getQuickPicks();
   const recent = dedupeById(storage.getHistory()).slice(0, RECENT_LIMIT);
+  const shelvesHost = el("div", { className: "home__shelves", attrs: { "aria-live": "polite" } });
 
   const content = el("div", {
     className: "main__content home",
@@ -29,13 +32,7 @@ export function renderHome(container: HTMLElement): void {
         children: [el("h1", { className: "page-header__title", text: greetingFor(new Date()) })],
       }),
 
-      section(
-        "Quick picks",
-        el("div", {
-          className: "quick-grid",
-          children: quickPicks.map((track) => createQuickTile(track, quickPicks)),
-        }),
-      ),
+      shelvesHost,
 
       section(
         "Jump back in",
@@ -69,6 +66,75 @@ export function renderHome(container: HTMLElement): void {
     if (path === "/") return;
     stopTrackListener();
     stopNavListener();
+  });
+
+  const load = async (refresh = false) => {
+    shelvesHost.setAttribute("aria-busy", "true");
+    shelvesHost.replaceChildren(placeholderShelf());
+    try {
+      const shelves = await catalog.getHome({ refresh });
+      if (!shelvesHost.isConnected) return;
+      shelvesHost.replaceChildren(...renderShelves(shelves));
+      markPlaying(playerEngine.currentTrack);
+    } catch (err) {
+      if (!shelvesHost.isConnected) return;
+      const message = err instanceof CatalogError ? err.message : "Something went wrong loading Home.";
+      const canRetry = !(err instanceof CatalogError && err.reason === "unavailable");
+      shelvesHost.replaceChildren(
+        el("div", {
+          className: "home__notice",
+          children: [
+            el("p", { className: "home__hint", text: message }),
+            ...(canRetry
+              ? [el("button", { className: "btn btn--secondary", text: "Try again", attrs: { type: "button" }, onClick: () => load(true) })]
+              : []),
+          ],
+        }),
+      );
+    } finally {
+      shelvesHost.removeAttribute("aria-busy");
+    }
+  };
+  load();
+}
+
+function renderShelves(shelves: HomeShelf[]): HTMLElement[] {
+  if (shelves.length === 0) {
+    return [
+      el("p", {
+        className: "home__hint",
+        text: "YouTube Music has no song suggestions yet. Sign in from Settings for a personal Home, or try Search.",
+      }),
+    ];
+  }
+  const [first, ...rest] = shelves;
+  const picks = first.tracks.slice(0, QUICK_PICK_LIMIT);
+  return [
+    section(
+      first.title,
+      el("div", { className: "quick-grid", children: picks.map((track) => createQuickTile(track, picks)) }),
+    ),
+    ...rest.map((shelf) =>
+      section(
+        shelf.title,
+        el("div", { className: "shelf", children: shelf.tracks.map((track) => createShelfCard(track, shelf.tracks)) }),
+      ),
+    ),
+  ];
+}
+
+/** Grey tiles in the shape of the quick picks while Home loads. */
+function placeholderShelf(): HTMLElement {
+  return el("div", {
+    className: "section",
+    attrs: { "aria-label": "Loading your Home from YouTube Music" },
+    children: [
+      el("div", { className: "skeleton skeleton--title" }),
+      el("div", {
+        className: "quick-grid",
+        children: Array.from({ length: PLACEHOLDER_TILES }, () => el("div", { className: "skeleton skeleton--tile" })),
+      }),
+    ],
   });
 }
 

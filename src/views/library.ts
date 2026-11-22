@@ -194,7 +194,7 @@ function renderPlaylists(container: HTMLElement): void {
           tracks: [],
           isCustom: true,
           artworkUrl:
-            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80",
+            "/artwork-placeholder.svg",
         };
         storage.savePlaylist(newPl);
         container.innerHTML = "";
@@ -253,7 +253,7 @@ function renderPlaylists(container: HTMLElement): void {
                 attrs: {
                   src:
                     pl.artworkUrl ||
-                    "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80",
+                    "/artwork-placeholder.svg",
                   alt: pl.title,
                 },
               }),
