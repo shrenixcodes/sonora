@@ -24,7 +24,35 @@ body {
   -webkit-user-select: none;
 }
 
+/* ── Ambience ─────────────────────────────────────────────
+ * Artwork colors (set by src/lib/ambience.ts) glow softly behind the panels.
+ * Registered so they interpolate when the track changes. Plain gradients,
+ * no blur filters, so the backdrop costs almost nothing to paint.
+ */
+
+@property --ambience-1 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ambience-2 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ambience-3 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 70% at 12% 0%,
+      color-mix(in oklab, var(--ambience-1) var(--ambience-strength), transparent), transparent 70%),
+    radial-gradient(55% 70% at 92% 18%,
+      color-mix(in oklab, var(--ambience-2) var(--ambience-strength), transparent), transparent 72%),
+    radial-gradient(70% 60% at 55% 105%,
+      color-mix(in oklab, var(--ambience-3) var(--ambience-strength), transparent), transparent 70%);
+  transition: --ambience-1 var(--duration-ambience) var(--ease-in-out),
+              --ambience-2 var(--duration-ambience) var(--ease-in-out),
+              --ambience-3 var(--duration-ambience) var(--ease-in-out);
+}
+
 #app {
+  position: relative;
   display: grid;
   grid-template-rows: var(--titlebar-height) 1fr var(--player-height);
   grid-template-columns: var(--sidebar-width) 1fr;
@@ -32,8 +60,19 @@ body {
     "titlebar titlebar"
     "sidebar  main"
     "player   player";
+  gap: var(--shell-gap);
+  padding: 0 var(--shell-gap) var(--shell-gap);
   height: 100%;
   overflow: hidden;
+}
+
+/* Shared look for the sidebar, content and player panels. */
+.sidebar,
+.main,
+.player {
+  background: var(--color-panel);
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-2xl);
 }
 
 /* ── Scrollbar ───────────────────────────────────────────── */

@@ -10,11 +10,7 @@
   justify-content: space-between;
   height: var(--titlebar-height);
   padding: 0 var(--space-2);
-  background: var(--color-bg);
-  -webkit-app-region: drag;
-  app-region: drag;
   z-index: var(--z-titlebar);
-  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .titlebar__left {

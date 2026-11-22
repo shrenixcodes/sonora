@@ -70,6 +70,7 @@
   --duration-normal: 200ms;
   --duration-slow: 320ms;
   --duration-slower: 500ms;
+  --duration-ambience: 1200ms;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
@@ -91,6 +92,7 @@
   --titlebar-height: 40px;
   --player-height: 80px;
   --scrollbar-width: 6px;
+  --shell-gap: 8px;
 }
 
 /* ── Dark theme (default) ──────────────────────────────── */
@@ -116,6 +118,14 @@
   --color-success: #22C55E;
   --color-warning: #F59E0B;
 
+  /* Shell panels sit over the artwork ambience (see global.css). */
+  --color-panel: rgba(23, 21, 28, 0.68);
+  --color-panel-border: rgba(244, 240, 246, 0.06);
+  --ambience-1: #A78BFA;
+  --ambience-2: #3B2F5C;
+  --ambience-3: #C9A96E;
+  --ambience-strength: 42%;
+
   color-scheme: dark;
 }
 
@@ -140,6 +150,13 @@
   --color-danger: #DC2626;
   --color-success: #16A34A;
   --color-warning: #D97706;
+
+  --color-panel: rgba(248, 245, 236, 0.94); /* keeps secondary text at WCAG AA over any artwork */
+  --color-panel-border: rgba(32, 40, 32, 0.08);
+  --ambience-1: #315E48;
+  --ambience-2: #D8C9A8;
+  --ambience-3: #D95342;
+  --ambience-strength: 22%;
 
   color-scheme: light;
 }

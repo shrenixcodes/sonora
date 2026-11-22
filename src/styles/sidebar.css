@@ -7,9 +7,6 @@
   grid-area: sidebar;
   display: flex;
   flex-direction: column;
-  width: var(--sidebar-width);
-  background: var(--color-bg);
-  border-right: 1px solid var(--color-border-subtle);
   overflow: hidden;
   z-index: var(--z-nav);
 }

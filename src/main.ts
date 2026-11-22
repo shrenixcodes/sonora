@@ -12,6 +12,7 @@ import { router } from "@/lib/router";
 import { el } from "@/lib/dom";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
+import { applyAmbience } from "@/lib/ambience";
 
 // Views
 import { renderHome } from "@/views/home";
@@ -64,6 +65,9 @@ function init(): void {
 
   // Start the router
   router.start(main);
+
+  // Tint the shell with the current artwork
+  playerEngine.on("paletteChange", (palette) => applyAmbience(palette));
 
   // Register desktop keyboard shortcuts
   setupGlobalShortcuts();
