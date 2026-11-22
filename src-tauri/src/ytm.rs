@@ -101,9 +101,27 @@ fn is_allowed_navigation(url: &Url) -> bool {
     let Some(host) = url.host_str() else {
         return false;
     };
-    ["youtube.com", "google.com"]
-        .iter()
-        .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
+    let is_youtube = host == "youtube.com" || host.ends_with(".youtube.com");
+    is_youtube || is_google_host(host)
+}
+
+/// `google.com` or one of Google's country domains (`google.co.in`, `google.de`,
+/// `google.com.br`, ...), with any subdomain. Sign-in hops through the user's
+/// country domain to set cookies there; blocking it leaves buttons on Google's
+/// pages doing nothing.
+fn is_google_host(host: &str) -> bool {
+    let labels: Vec<&str> = host.split('.').collect();
+    let Some(at) = labels.iter().rposition(|label| *label == "google") else {
+        return false;
+    };
+    let is_country =
+        |label: &str| label.len() == 2 && label.chars().all(|c| c.is_ascii_lowercase());
+    match &labels[at + 1..] {
+        ["com"] => true,
+        [country] => is_country(country),
+        ["co" | "com", country] => is_country(country),
+        _ => false,
+    }
 }
 
 fn is_valid_video_id(id: &str) -> bool {
@@ -311,6 +329,32 @@ mod tests {
 
     fn url(s: &str) -> Url {
         s.parse().unwrap()
+    }
+
+    #[test]
+    fn allows_google_country_domains_used_during_sign_in() {
+        assert!(is_allowed_navigation(&url(
+            "https://accounts.google.co.in/accounts/SetSID"
+        )));
+        assert!(is_allowed_navigation(&url("https://www.google.de/")));
+        assert!(is_allowed_navigation(&url(
+            "https://accounts.google.com.br/"
+        )));
+        assert!(is_allowed_navigation(&url("https://google.co.uk/")));
+    }
+
+    #[test]
+    fn rejects_look_alike_google_domains() {
+        assert!(!is_allowed_navigation(&url("https://google.evil.com/")));
+        assert!(!is_allowed_navigation(&url("https://notgoogle.co.in/")));
+        assert!(!is_allowed_navigation(&url(
+            "https://google.co.in.evil.net/"
+        )));
+        assert!(!is_allowed_navigation(&url("https://google.com.evil.net/")));
+        assert!(!is_allowed_navigation(&url("https://google.xyz.in/")));
+        assert!(!is_allowed_navigation(&url(
+            "http://accounts.google.co.in/"
+        )));
     }
 
     #[test]
