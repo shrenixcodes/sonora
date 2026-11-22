@@ -117,13 +117,40 @@ describe("Catalog", () => {
       if (r.kind === "playlist") return { contents: [] };
       return { contents: [{ playlistPanelVideoRenderer: { videoId: "mixsong", title: { runs: [{ text: "Mix song" }] } } }] };
     });
-    const catalog = new Catalog(fetcher);
+    const catalog = new Catalog(fetcher, Date.now, undefined, null);
 
     const home = await catalog.getHome();
+    expect(home.shelves.map((s) => s.title)).toEqual(["one"]);
+    expect(home.more).toBe("MORE");
+    const more = await catalog.getMoreHome(home);
+    expect(more.map((s) => s.title)).toEqual(["two"]);
     expect(home.shelves.map((s) => s.title)).toEqual(["one", "two"]);
+    expect(home.more).toBeUndefined();
+    expect(await catalog.getMoreHome(home)).toEqual([]);
 
     const mix = await catalog.getPlaylistTracks("RDTMAK5uy_mix");
     expect(mix.map((t) => t.id)).toEqual(["mixsong"]);
     expect(fetcher).toHaveBeenLastCalledWith({ kind: "watchPlaylist", id: "RDTMAK5uy_mix" }, expect.any(Number));
+  });
+
+  it("remembers Home between sessions so it can show before the network answers", async () => {
+    const saved = new Map<string, string>();
+    const store = { getItem: (k: string) => saved.get(k) ?? null, setItem: (k: string, v: string) => void saved.set(k, v) };
+    const fetcher = vi.fn(async () => ({
+      contents: [
+        {
+          musicCarouselShelfRenderer: {
+            header: { musicCarouselShelfBasicHeaderRenderer: { title: { runs: [{ text: "Listen again" }] } } },
+            contents: [{ musicResponsiveListItemRenderer: { flexColumns: [{ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: "x" }] } } }], playlistItemData: { videoId: "x" } } }],
+          },
+        },
+      ],
+    }));
+
+    expect(new Catalog(fetcher, Date.now, undefined, store).peekHome()).toBeNull();
+    await new Catalog(fetcher, Date.now, undefined, store).getHome();
+
+    const nextSession = new Catalog(fetcher, Date.now, undefined, store);
+    expect(nextSession.peekHome()?.shelves.map((s) => s.title)).toEqual(["Listen again"]);
   });
 });

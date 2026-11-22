@@ -178,6 +178,8 @@ export interface HomeChip {
 export interface HomePage {
   chips: HomeChip[];
   shelves: HomeShelf[];
+  /** Token for more shelves further down the page, if there are any. */
+  more?: string;
 }
 
 function pageTypeOf(endpoint: unknown): string | undefined {

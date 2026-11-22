@@ -8,7 +8,7 @@
  */
 
 import { el } from "@/lib/dom";
-import { catalog, CatalogError, type HomeChip } from "@/lib/ytm/catalog";
+import { catalog, CatalogError, type HomeChip, type HomePage } from "@/lib/ytm/catalog";
 import { account } from "@/lib/ytm/account";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
@@ -97,26 +97,37 @@ export function renderHome(container: HTMLElement): void {
     chipsHost.replaceChildren(chip("All", null), ...chips.map((c) => chip(c.title, c.params)));
   };
 
+  const emptyText =
+    "YouTube Music has no suggestions here yet. Sign in from Settings for a personal Home, or try Search.";
+  const showPage = (page: HomePage) => {
+    if (!selectedChip && page.chips.length > 0) {
+      chips = page.chips;
+      renderChips();
+    }
+    shelvesHost.replaceChildren(...renderShelves(page.shelves, emptyText));
+    markPlaying(playerEngine.currentTrack);
+  };
+
+  /**
+   * Shows Home as last seen at once (if there is a copy), then the fresh first
+   * page, then appends further shelves as they arrive.
+   */
   const load = async (refresh = false) => {
     const params = selectedChip;
+    const stillWanted = () => shelvesHost.isConnected && params === selectedChip;
+    const snapshot = !params && !refresh ? catalog.peekHome() : null;
+    const showingSnapshot = !!snapshot && snapshot.shelves.length > 0;
+    if (showingSnapshot) showPage(snapshot);
+    else shelvesHost.replaceChildren(placeholderShelf("Loading your Home from YouTube Music"));
+
     shelvesHost.setAttribute("aria-busy", "true");
-    shelvesHost.replaceChildren(placeholderShelf("Loading your Home from YouTube Music"));
+    let page: HomePage;
     try {
-      const page = await catalog.getHome({ refresh, params: params ?? undefined });
-      if (!shelvesHost.isConnected || params !== selectedChip) return;
-      if (!params && page.chips.length > 0) {
-        chips = page.chips;
-        renderChips();
-      }
-      shelvesHost.replaceChildren(
-        ...renderShelves(
-          page.shelves,
-          "YouTube Music has no suggestions here yet. Sign in from Settings for a personal Home, or try Search.",
-        ),
-      );
-      markPlaying(playerEngine.currentTrack);
+      page = await catalog.getHome({ refresh, params: params ?? undefined });
     } catch (err) {
-      if (!shelvesHost.isConnected) return;
+      if (!stillWanted()) return;
+      shelvesHost.removeAttribute("aria-busy");
+      if (showingSnapshot) return; // keep the last Home rather than replace it with an error
       const message = err instanceof CatalogError ? err.message : "Something went wrong loading Home.";
       const canRetry = !(err instanceof CatalogError && err.reason === "unavailable");
       shelvesHost.replaceChildren(
@@ -130,8 +141,22 @@ export function renderHome(container: HTMLElement): void {
           ],
         }),
       );
+      return;
+    }
+    if (!stillWanted()) return;
+    if (page !== snapshot) showPage(page);
+
+    try {
+      while (page.more) {
+        const more = await catalog.getMoreHome(page);
+        if (!stillWanted() || more.length === 0) break;
+        shelvesHost.append(...renderShelves(more, ""));
+        markPlaying(playerEngine.currentTrack);
+      }
+    } catch {
+      // The shelves already shown are enough; the rest can come with the next refresh.
     } finally {
-      shelvesHost.removeAttribute("aria-busy");
+      if (shelvesHost.isConnected) shelvesHost.removeAttribute("aria-busy");
     }
   };
   load();

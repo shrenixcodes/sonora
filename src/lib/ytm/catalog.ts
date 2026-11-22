@@ -46,6 +46,7 @@ const NOT_READY_DELAY_MS = 1_000;
 const MAX_LIST_PAGES = 20;
 /** Home arrives a few shelves at a time, like the site loading more as you scroll. */
 const MAX_HOME_PAGES = 5;
+const HOME_SNAPSHOT_KEY = "sonora:home_snapshot";
 /** Sending fails outright while the page is still being created at startup. */
 const RETRYABLE = new Set(["not-ready", "timeout", "send-failed"]);
 
@@ -55,38 +56,74 @@ export class Catalog {
   private home: { page: HomePage; at: number } | null = null;
   private explore: { shelves: HomeShelf[]; at: number } | null = null;
   private inFlight = new Map<string, Promise<unknown>>();
+  /** How many pages each Home page has loaded, to cap how far it goes. */
+  private homePages = new WeakMap<HomePage, number>();
 
   constructor(
     private readonly fetcher: Fetcher = requestCatalog,
     private readonly now: () => number = Date.now,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+    private readonly store: Pick<Storage, "getItem" | "setItem"> | null = globalThis.localStorage ?? null,
   ) {}
 
   /**
-   * Home shelves and chips. `params` picks a mood or genre chip; filtered pages
-   * aren't cached since each chip is its own page.
+   * The first page of Home: shelves and chips. More shelves come from
+   * getMoreHome, so the page can show before all of them arrive. `params` picks
+   * a mood or genre chip; filtered pages aren't cached since each chip is its own page.
    */
   async getHome(options: { refresh?: boolean; params?: string } = {}): Promise<HomePage> {
     const filtered = !!options.params;
     if (!filtered && !options.refresh && this.home && this.now() - this.home.at < HOME_TTL_MS) {
       return this.home.page;
     }
-    let response = await this.fetch(filtered ? { kind: "home", params: options.params } : { kind: "home" });
+    const response = await this.fetch(filtered ? { kind: "home", params: options.params } : { kind: "home" });
     const page: HomePage = { chips: parseHomeChips(response), shelves: parseHomeShelves(response) };
-    for (let n = 1; n < MAX_HOME_PAGES; n++) {
-      const token = parseContinuation(response);
-      if (!token) break;
-      try {
-        response = await this.fetch({ kind: "continuation", token });
-      } catch {
-        break; // the first page is enough to show
-      }
-      const more = parseHomeShelves(response);
-      if (more.length === 0) break;
-      page.shelves.push(...more);
+    const more = parseContinuation(response);
+    if (more) page.more = more;
+    this.homePages.set(page, 1);
+    if (!filtered) {
+      this.home = { page, at: this.now() };
+      this.saveSnapshot(page);
     }
-    if (!filtered) this.home = { page, at: this.now() };
     return page;
+  }
+
+  /** Loads the next shelves of a Home page into it and returns them; empty when there are no more. */
+  async getMoreHome(page: HomePage): Promise<HomeShelf[]> {
+    const loaded = this.homePages.get(page) ?? 1;
+    if (!page.more || loaded >= MAX_HOME_PAGES) return [];
+    const response = await this.fetch({ kind: "continuation", token: page.more });
+    const shelves = parseHomeShelves(response);
+    const next = parseContinuation(response);
+    if (next && shelves.length > 0) page.more = next;
+    else delete page.more;
+    this.homePages.set(page, loaded + 1);
+    page.shelves.push(...shelves);
+    if (this.home?.page === page) this.saveSnapshot(page);
+    return shelves;
+  }
+
+  /**
+   * Home as last seen, to show instantly while a fresh copy loads: the cached
+   * page, or the copy saved by the previous session.
+   */
+  peekHome(): HomePage | null {
+    if (this.home) return this.home.page;
+    try {
+      const saved = this.store?.getItem(HOME_SNAPSHOT_KEY);
+      const page = saved ? (JSON.parse(saved) as HomePage) : null;
+      return page && Array.isArray(page.shelves) && Array.isArray(page.chips) ? page : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private saveSnapshot(page: HomePage): void {
+    try {
+      this.store?.setItem(HOME_SNAPSHOT_KEY, JSON.stringify({ chips: page.chips, shelves: page.shelves }));
+    } catch {
+      // Storage full or unavailable: Home just loads without a head start.
+    }
   }
 
   /** Forgets cached pages so the next request fetches fresh ones. */
