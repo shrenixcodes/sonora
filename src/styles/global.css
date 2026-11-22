@@ -91,19 +91,21 @@ body {
 }
 
 /* Shared look for the sidebar, content, queue and player panels: tinted
-   glass over the artwork backdrop. */
+   glass over the ambient glow, with a soft sheen and a lit top edge. */
 .sidebar,
 .main,
 .queue-panel,
 .player {
-  background: var(--color-panel);
+  background: var(--glass-sheen), var(--color-panel);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
+  box-shadow: var(--glass-edge);
 }
 
-/* ── Artwork backdrop ────────────────────────────────────
- * The playing track's artwork fills the window behind the
- * panels (src/lib/ambience.ts). Above the solid background, below the color glow.
+/* ── Ambient mode ────────────────────────────────────────
+ * Like YouTube's ambient mode: the playing track's artwork, scaled up and
+ * dissolved into a soft wash of its own colors, lights the window from behind
+ * the panels (src/lib/ambience.ts). It reads as light, not as a second picture.
  */
 
 .ambient-art {
@@ -116,10 +118,14 @@ body {
 
 .ambient-art__layer {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  /* Overscan: the glow spreads past the edges instead of fading out at them. */
+  top: -15%;
+  left: -15%;
+  width: 130%;
+  height: 130%;
+  max-width: none;
   object-fit: cover;
+  filter: blur(var(--ambient-glow-blur)) saturate(150%);
   opacity: 0;
   transition: opacity var(--duration-ambience) var(--ease-in-out);
 }

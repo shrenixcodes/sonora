@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { AmbientArtwork, applyAmbience } from "../src/lib/ambience";
+import { AmbientArtwork, applyAmbience, applyArtworkAccent } from "../src/lib/ambience";
 import type { ArtworkPalette } from "../src/lib/visuals/color-extractor";
 
 const palette: ArtworkPalette = {
@@ -53,5 +53,19 @@ describe("AmbientArtwork", () => {
     vi.runAllTimers();
     expect(art.element.querySelectorAll("img")).toHaveLength(0);
     vi.useRealTimers();
+  });
+});
+
+describe("applyArtworkAccent", () => {
+  it("takes a readable accent from the artwork and restores the theme's when cleared", () => {
+    const shell = document.createElement("div");
+    applyArtworkAccent(palette, "dark", shell);
+    const accent = shell.style.getPropertyValue("--color-accent");
+    expect(accent).toMatch(/^#[0-9A-F]{6}$/);
+    expect(shell.style.getPropertyValue("--color-hover")).toContain(accent);
+
+    applyArtworkAccent(null, "dark", shell);
+    expect(shell.style.getPropertyValue("--color-accent")).toBe("");
+    expect(shell.style.getPropertyValue("--color-hover")).toBe("");
   });
 });

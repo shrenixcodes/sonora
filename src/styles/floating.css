@@ -14,7 +14,9 @@ html[data-window="floating"] {
   --float-gap: 14px;
   --rail-width: 56px;
   --stage-radius: 26px;
-  --float-fill: color-mix(in oklab, var(--color-bg) 92%, transparent);
+  /* Floating pieces are tinted by the artwork's dominant color, so they belong
+     to the same scene as the stage instead of sitting on it as grey pills. */
+  --float-fill: color-mix(in oklab, color-mix(in oklab, var(--color-bg) 78%, var(--ambience-2)) 88%, transparent);
   --float-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
@@ -73,13 +75,14 @@ html[data-window="floating"] .ambient-art::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: color-mix(in oklab, var(--color-bg) 50%, transparent);
+  background: color-mix(in oklab, var(--color-bg) 38%, transparent);
 }
 
 html[data-window="floating"] .main,
 html[data-window="floating"] .queue-panel {
   background: transparent;
   border: 0;
+  box-shadow: none;
   border-radius: var(--stage-radius);
 }
 
@@ -103,9 +106,12 @@ html[data-window="floating"] .titlebar__right,
 html[data-window="floating"] .titlebar__search,
 html[data-window="floating"] .sidebar,
 html[data-window="floating"] .player {
-  background: var(--float-fill);
-  border: 1px solid var(--color-panel-border);
-  box-shadow: var(--float-shadow);
+  background: var(--glass-sheen), var(--float-fill);
+  border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent);
+  box-shadow: var(--glass-edge), var(--float-shadow);
+  /* Blurs the stage where a piece overlaps it; over the desktop there is nothing to blur. */
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
 }
 
 html[data-window="floating"] .titlebar__left,

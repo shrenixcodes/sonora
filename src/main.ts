@@ -13,7 +13,7 @@ import { router } from "@/lib/router";
 import { el } from "@/lib/dom";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
-import { AmbientArtwork, applyAmbience } from "@/lib/ambience";
+import { AmbientArtwork, applyAmbience, applyArtworkAccent } from "@/lib/ambience";
 import { initWindowMode } from "@/lib/window-mode";
 import { searchQuery } from "@/lib/search-query";
 import { account } from "@/lib/ytm/account";
@@ -29,6 +29,7 @@ import { renderNowPlaying } from "@/views/now-playing";
 
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
+import type { ArtworkPalette } from "@/lib/visuals/color-extractor";
 
 const ARTWORK_PLACEHOLDER = "/artwork-placeholder.svg";
 
@@ -80,7 +81,14 @@ function init(): void {
   router.start(main);
 
   // Tint the shell with the current artwork
-  playerEngine.on("paletteChange", (palette) => applyAmbience(palette));
+  // The shell, its buttons and floating pieces all adapt to the artwork's colors
+  let palette: ArtworkPalette | null = null;
+  playerEngine.on("paletteChange", (next) => {
+    palette = next;
+    applyAmbience(next);
+    applyArtworkAccent(next, themeManager.theme, app);
+  });
+  themeManager.onChange((theme) => applyArtworkAccent(palette, theme, app));
   playerEngine.on("trackChange", (track) => ambientArtwork.set(track?.artworkUrl || null));
   ambientArtwork.set(playerEngine.currentTrack?.artworkUrl || null);
 

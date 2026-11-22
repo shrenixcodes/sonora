@@ -7,6 +7,31 @@
  */
 
 import type { ArtworkPalette } from "@/lib/visuals/color-extractor";
+import { readableAccent } from "@/lib/accent";
+import type { Theme } from "@/lib/theme";
+
+/** Variables the artwork overrides on the app shell; removing them restores the theme's own. */
+const ADAPTIVE_VARS = ["--color-accent", "--color-accent-hover", "--color-hover", "--color-active"] as const;
+
+/**
+ * Lets the whole interface take its accent from the artwork: buttons,
+ * progress bars, active links and hover states. Set on the shell element so
+ * the user's own accent on the root comes back as soon as this is cleared.
+ */
+export function applyArtworkAccent(palette: ArtworkPalette | null, theme: Theme, shell: HTMLElement): void {
+  if (!palette) {
+    ADAPTIVE_VARS.forEach((name) => shell.style.removeProperty(name));
+    return;
+  }
+  const accent = readableAccent(palette.vibrant, theme);
+  shell.style.setProperty("--color-accent", accent);
+  shell.style.setProperty(
+    "--color-accent-hover",
+    `color-mix(in oklab, ${accent} 85%, ${theme === "light" ? "black" : "white"})`,
+  );
+  shell.style.setProperty("--color-hover", `color-mix(in oklab, ${accent} 9%, transparent)`);
+  shell.style.setProperty("--color-active", `color-mix(in oklab, ${accent} 16%, transparent)`);
+}
 
 export const AMBIENCE_VARS = {
   "--ambience-1": "vibrant",
