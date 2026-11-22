@@ -83,7 +83,69 @@
   // Seeking or skipping during an ad would cut it short, which YouTube does not allow.
   const BLOCKED_DURING_AD = new Set(["next", "previous", "seek"]);
 
+  // ── Catalog requests ───────────────────────────────────────
+  // Uses the same API and session the YouTube Music web app uses for its own
+  // pages, so results match what the signed-in user sees on the site.
+  const SONGS_ONLY = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
+
+  const readCookie = (name) => {
+    const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+    return match ? match[1] : null;
+  };
+
+  // The site signs its own API calls with this header when the user is signed in.
+  const authorization = async () => {
+    const sapisid = readCookie("SAPISID") || readCookie("__Secure-3PAPISID");
+    if (!sapisid || !crypto.subtle) return null;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const data = new TextEncoder().encode(timestamp + " " + sapisid + " " + location.origin);
+    const digest = await crypto.subtle.digest("SHA-1", data);
+    const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+    return "SAPISIDHASH " + timestamp + "_" + hex;
+  };
+
+  const catalogRequest = async (id, request) => {
+    const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
+    if (!invoke) return;
+    const reply = (ok, body) => invoke("ytm_response", { id, ok, body }).catch(() => {});
+
+    try {
+      const context = window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_CONTEXT");
+      if (!context) return reply(false, "not-ready");
+
+      let endpoint;
+      let body;
+      if (request.kind === "home") {
+        endpoint = "browse";
+        body = { browseId: "FEmusic_home" };
+      } else if (request.kind === "search") {
+        endpoint = "search";
+        body = { query: String(request.query), params: SONGS_ONLY };
+      } else {
+        return reply(false, "unknown-request");
+      }
+
+      const headers = { "Content-Type": "application/json", "X-Goog-AuthUser": "0", "X-Origin": location.origin };
+      const auth = await authorization();
+      if (auth) headers.Authorization = auth;
+
+      const response = await fetch("/youtubei/v1/" + endpoint + "?prettyPrint=false", {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: JSON.stringify(Object.assign({ context }, body)),
+      });
+      if (!response.ok) return reply(false, "http-" + response.status);
+      reply(true, await response.text());
+    } catch (err) {
+      reply(false, String((err && err.message) || err));
+    }
+  };
+
   window.__sonoraBridge = Object.freeze({
+    request(id, request) {
+      catalogRequest(id, request);
+    },
     exec(action, value) {
       if (BLOCKED_DURING_AD.has(action) && isAdPlaying()) {
         send("blocked-ad");

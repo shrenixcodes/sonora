@@ -10,6 +10,8 @@ const APP_COMMANDS: &[&str] = &[
     "ytm_report",
     "ytm_control",
     "ytm_set_signin_visible",
+    "ytm_request",
+    "ytm_response",
     "set_floating_regions",
     "present_main_window",
 ];

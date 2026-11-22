@@ -1,0 +1,199 @@
+import { describe, it, expect } from "vitest";
+import {
+  artworkUrl,
+  parseDuration,
+  parseHomeShelves,
+  parseSearchSongs,
+} from "../src/lib/ytm/parse";
+
+// Fixtures follow the structure of real responses captured from music.youtube.com,
+// trimmed to the fields the parsers read.
+
+const SEP = { text: " • " };
+const artist = (text: string) => ({
+  text,
+  navigationEndpoint: {
+    browseEndpoint: {
+      browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_ARTIST" } },
+    },
+  },
+});
+const album = (text: string) => ({
+  text,
+  navigationEndpoint: {
+    browseEndpoint: {
+      browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_ALBUM" } },
+    },
+  },
+});
+const column = (...runs: object[]) => ({ musicResponsiveListItemFlexColumnRenderer: { text: { runs } } });
+const thumbs = (base: string) => ({
+  musicThumbnailRenderer: {
+    thumbnail: {
+      thumbnails: [
+        { url: `${base}=w60-h60-l90-rj`, width: 60, height: 60 },
+        { url: `${base}=w120-h120-l90-rj`, width: 120, height: 120 },
+      ],
+    },
+  },
+});
+
+function songRow(videoId: string, title: string, detailRuns: object[], extra: object[] = []) {
+  return {
+    musicResponsiveListItemRenderer: {
+      thumbnail: thumbs(`https://lh3.googleusercontent.com/${videoId}`),
+      flexColumns: [
+        column({ text: title, navigationEndpoint: { watchEndpoint: { videoId } } }),
+        column(...detailRuns),
+        ...extra,
+      ],
+      playlistItemData: { videoId },
+      menu: { menuRenderer: { items: [] } },
+    },
+  };
+}
+
+const searchResponse = {
+  contents: {
+    tabbedSearchResultsRenderer: {
+      tabs: [
+        {
+          tabRenderer: {
+            content: {
+              sectionListRenderer: {
+                contents: [
+                  { chipCloudRenderer: {} },
+                  {
+                    musicShelfRenderer: {
+                      contents: [
+                        songRow("FXovf5dsRTw", "Despacito", [
+                          artist("Luis Fonsi"), { text: " & " }, artist("Daddy Yankee"), SEP, album("Despacito"), SEP, { text: "3:49" },
+                        ], [column({ text: "10B plays" })]),
+                        // Real results include artists without a link.
+                        songRow("-yLiEXVZTHs", "Despacito (Bollywood Version)", [
+                          artist("Vivek Agrawal"), { text: " & Tanvi Shah" }, SEP, album("Despacito"), SEP, { text: "3:41" },
+                        ]),
+                        songRow("FXovf5dsRTw", "Despacito", [artist("Luis Fonsi")]),
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    },
+  },
+};
+
+describe("parseSearchSongs", () => {
+  it("reads title, artists, album, duration and sharp artwork", () => {
+    const [first, second] = parseSearchSongs(searchResponse);
+
+    expect(first).toEqual({
+      id: "FXovf5dsRTw",
+      title: "Despacito",
+      artist: "Luis Fonsi & Daddy Yankee",
+      album: "Despacito",
+      duration: 229,
+      artworkUrl: "https://lh3.googleusercontent.com/FXovf5dsRTw=w544-h544-l90-rj",
+    });
+    expect(second.artist).toBe("Vivek Agrawal & Tanvi Shah");
+    expect(second.duration).toBe(221);
+  });
+
+  it("drops duplicate songs and rows without a video", () => {
+    const withBroken = structuredClone(searchResponse);
+    const shelf = (withBroken.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer
+      .contents[1] as { musicShelfRenderer: { contents: object[] } }).musicShelfRenderer;
+    shelf.contents.push({ musicResponsiveListItemRenderer: { flexColumns: [column({ text: "No video" })] } });
+
+    expect(parseSearchSongs(withBroken).map((t) => t.id)).toEqual(["FXovf5dsRTw", "-yLiEXVZTHs"]);
+  });
+
+  it("returns nothing for an unexpected shape instead of throwing", () => {
+    expect(parseSearchSongs({})).toEqual([]);
+    expect(parseSearchSongs(null)).toEqual([]);
+  });
+});
+
+describe("parseHomeShelves", () => {
+  const shelf = (title: string, contents: object[]) => ({
+    musicCarouselShelfRenderer: {
+      header: { musicCarouselShelfBasicHeaderRenderer: { title: { runs: [{ text: title }] } } },
+      contents,
+    },
+  });
+  const homeResponse = {
+    contents: {
+      singleColumnBrowseResultsRenderer: {
+        tabs: [
+          {
+            tabRenderer: {
+              content: {
+                sectionListRenderer: {
+                  contents: [
+                    shelf("Song mixes", [
+                      songRow("WlTlUseVt7E", "Beat It", [artist("Michael Jackson"), SEP, { text: "2.3B plays" }], [
+                        column(album("HIStory: PAST, PRESENT AND FUTURE, BOOK I")),
+                      ]),
+                    ]),
+                    // Playlists need another request to play, so this shelf is skipped.
+                    shelf("Divine Tunes", [
+                      {
+                        musicTwoRowItemRenderer: {
+                          title: { runs: [{ text: "Bhajan Clubbing" }] },
+                          navigationEndpoint: { browseEndpoint: { browseId: "VLxyz" } },
+                        },
+                      },
+                    ]),
+                    shelf("Music videos for you", [
+                      {
+                        musicTwoRowItemRenderer: {
+                          title: { runs: [{ text: "Heart" }] },
+                          subtitle: { runs: [artist("Pet Shop Boys"), SEP, { text: "7M views" }] },
+                          navigationEndpoint: { watchEndpoint: { videoId: "uduy2mebnOk" } },
+                          thumbnailRenderer: thumbs("https://i.ytimg.com/vi/uduy2mebnOk"),
+                        },
+                      },
+                    ]),
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+  };
+
+  it("keeps shelves of playable songs and skips playlist-only shelves", () => {
+    const shelves = parseHomeShelves(homeResponse);
+
+    expect(shelves.map((s) => s.title)).toEqual(["Song mixes", "Music videos for you"]);
+    expect(shelves[0].tracks[0]).toMatchObject({
+      id: "WlTlUseVt7E",
+      title: "Beat It",
+      artist: "Michael Jackson",
+      album: "HIStory: PAST, PRESENT AND FUTURE, BOOK I",
+      duration: 0,
+    });
+    expect(shelves[1].tracks[0]).toMatchObject({ id: "uduy2mebnOk", title: "Heart", artist: "Pet Shop Boys" });
+  });
+});
+
+describe("helpers", () => {
+  it("parses minute and hour durations and rejects other text", () => {
+    expect(parseDuration("3:49")).toBe(229);
+    expect(parseDuration("1:02:03")).toBe(3723);
+    expect(parseDuration("10B plays")).toBe(0);
+  });
+
+  it("leaves artwork URLs without a size suffix alone", () => {
+    expect(artworkUrl([{ url: "https://i.ytimg.com/vi/x/hqdefault.jpg", width: 480 }])).toBe(
+      "https://i.ytimg.com/vi/x/hqdefault.jpg",
+    );
+    expect(artworkUrl([])).toBe("");
+  });
+});

@@ -17,6 +17,8 @@ pub fn run() {
             ytm::ytm_report,
             ytm::ytm_control,
             ytm::ytm_set_signin_visible,
+            ytm::ytm_request,
+            ytm::ytm_response,
             window_mode::set_floating_regions,
             window_mode::present_main_window,
         ])

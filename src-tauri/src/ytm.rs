@@ -11,6 +11,10 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, Url, Webview, WebviewUrl, Webv
 pub const YTM_LABEL: &str = "ytm";
 const YTM_HOME: &str = "https://music.youtube.com/";
 const STATE_EVENT: &str = "ytm://state";
+const RESPONSE_EVENT: &str = "ytm://response";
+const MAX_QUERY_CHARS: usize = 200;
+/// Catalog replies are JSON from YouTube Music's own API; a home feed is well under this.
+const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const BRIDGE_SCRIPT: &str = include_str!("ytm_bridge.js");
 
 /// wry passes these by default; setting our own arguments replaces them, so they are repeated here.
@@ -161,6 +165,98 @@ pub fn ytm_set_signin_visible<R: Runtime>(app: AppHandle<R>, visible: bool) -> R
     result.map_err(|e| e.to_string())
 }
 
+/// Catalog requests the main window may ask the YouTube Music page to make.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum YtmRequest {
+    Home,
+    Search { query: String },
+}
+
+impl YtmRequest {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            YtmRequest::Home => Ok(()),
+            YtmRequest::Search { query } => {
+                let len = query.trim().chars().count();
+                if len == 0 || len > MAX_QUERY_CHARS {
+                    Err(format!(
+                        "search query must be 1 to {MAX_QUERY_CHARS} characters"
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+/// Builds the script that asks the page to run a catalog request.
+fn request_script(id: u32, request: &YtmRequest) -> Result<String, String> {
+    // JSON is a valid JavaScript literal, so user text cannot break out of the call.
+    let payload = serde_json::to_string(request).map_err(|e| e.to_string())?;
+    // While the page is still loading the bridge is missing; say so at once
+    // instead of letting the request wait for its timeout.
+    Ok(format!(
+        "if (window.__sonoraBridge) {{ window.__sonoraBridge.request({id}, {payload}); }}          else if (window.__TAURI_INTERNALS__) {{ window.__TAURI_INTERNALS__.invoke(\"ytm_response\",          {{ id: {id}, ok: false, body: \"not-ready\" }}).catch(() => {{}}); }}"
+    ))
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct YtmResponse {
+    id: u32,
+    ok: bool,
+    body: String,
+}
+
+#[tauri::command]
+pub fn ytm_request<R: Runtime>(
+    app: AppHandle<R>,
+    id: u32,
+    request: YtmRequest,
+) -> Result<(), String> {
+    request.validate()?;
+    let window = app
+        .get_webview_window(YTM_LABEL)
+        .ok_or("YouTube Music window is not available")?;
+    window
+        .eval(&request_script(id, &request)?)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn ytm_response<R: Runtime>(
+    app: AppHandle<R>,
+    webview: Webview<R>,
+    id: u32,
+    ok: bool,
+    body: String,
+) -> Result<(), String> {
+    if webview.label() != YTM_LABEL {
+        return Err("catalog responses can only come from the YouTube Music window".into());
+    }
+    let response = if body.len() > MAX_RESPONSE_BYTES {
+        log::warn!(
+            "dropped oversized catalog response {id} ({} bytes)",
+            body.len()
+        );
+        YtmResponse {
+            id,
+            ok: false,
+            body: "response too large".into(),
+        }
+    } else {
+        YtmResponse { id, ok, body }
+    };
+    log::debug!(
+        "catalog response {id}: ok={} ({} bytes)",
+        response.ok,
+        response.body.len()
+    );
+    app.emit_to("main", RESPONSE_EVENT, response)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,6 +309,50 @@ mod tests {
         assert!(command_script(&YtmCommand::Seek(-1.0)).is_none());
         assert!(command_script(&YtmCommand::Seek(f64::NAN)).is_none());
         assert!(command_script(&YtmCommand::Load("dQw4w9WgXcQ".into())).is_none());
+    }
+
+    #[test]
+    fn validates_catalog_requests() {
+        assert!(YtmRequest::Home.validate().is_ok());
+        assert!(
+            YtmRequest::Search {
+                query: "lofi".into()
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            YtmRequest::Search {
+                query: "   ".into()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            YtmRequest::Search {
+                query: "x".repeat(201)
+            }
+            .validate()
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn embeds_requests_as_json_so_text_cannot_escape() {
+        let script = request_script(
+            7,
+            &YtmRequest::Search {
+                query: "a\"); alert(1); (\"".into(),
+            },
+        )
+        .unwrap();
+        assert!(script.contains(
+            r#"window.__sonoraBridge.request(7, {"kind":"search","query":"a\"); alert(1); (\""});"#
+        ));
+        assert!(script.contains(r#"{ id: 7, ok: false, body: "not-ready" }"#));
+        let parsed: YtmRequest = serde_json::from_str(r#"{"kind":"home"}"#).unwrap();
+        assert_eq!(parsed, YtmRequest::Home);
+        assert!(serde_json::from_str::<YtmRequest>(r#"{"kind":"deleteAccount"}"#).is_err());
     }
 
     #[test]

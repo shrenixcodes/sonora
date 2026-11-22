@@ -14,6 +14,7 @@
     "allow-get-platform-info",
     "allow-ytm-control",
     "allow-ytm-set-signin-visible",
+    "allow-ytm-request",
     "allow-set-floating-regions",
     "allow-present-main-window"
   ]
