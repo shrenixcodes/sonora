@@ -111,6 +111,16 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     expect(sent.at(-1)).toEqual({ action: "volume", value: 0.15 });
   });
 
+  it("ignores sign-in reports, which carry no playback state", () => {
+    const { engine } = setup();
+    engine.playTrack(list[0], list);
+    engine.handleBridgeState(report({ reason: "ready", videoId: "aaaaaaaaaaa", paused: false, currentTime: 42 }));
+    engine.handleBridgeState(report({ reason: "account", paused: true, currentTime: 0, signedIn: true }));
+
+    expect(engine.currentState.status).toBe("playing");
+    expect(engine.currentState.currentTime).toBe(42);
+  });
+
   it("takes the real title from YouTube Music, but not from an ad's first report", () => {
     const { engine } = setup();
     engine.playTrack(list[0], list);

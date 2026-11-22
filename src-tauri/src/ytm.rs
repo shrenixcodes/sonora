@@ -126,6 +126,11 @@ fn is_google_host(host: &str) -> bool {
     }
 }
 
+/// Any allowed page other than YouTube Music itself is part of signing in.
+fn is_sign_in_page(url: &Url) -> bool {
+    url.host_str() != Some("music.youtube.com")
+}
+
 fn is_valid_video_id(id: &str) -> bool {
     id.len() == 11
         && id
@@ -184,6 +189,10 @@ pub fn ytm_control<R: Runtime>(app: AppHandle<R>, command: YtmCommand) -> Result
     if let YtmCommand::Load(id) = &command {
         if !is_valid_video_id(id) {
             return Err(format!("invalid video id: {id}"));
+        }
+        // Loading navigates the page, which would throw away a sign-in in progress.
+        if window.is_visible().unwrap_or(false) && window.url().is_ok_and(|u| is_sign_in_page(&u)) {
+            return Err("finish signing in to YouTube Music first".into());
         }
         let url = Url::parse(&format!("{YTM_HOME}watch?v={id}")).map_err(|e| e.to_string())?;
         return window.navigate(url).map_err(|e| e.to_string());
@@ -431,6 +440,14 @@ mod tests {
         assert!(command_script(&YtmCommand::Seek(-1.0)).is_none());
         assert!(command_script(&YtmCommand::Seek(f64::NAN)).is_none());
         assert!(command_script(&YtmCommand::Load("dQw4w9WgXcQ".into())).is_none());
+    }
+
+    #[test]
+    fn treats_google_and_youtube_pages_as_sign_in() {
+        let url = |s: &str| Url::parse(s).unwrap();
+        assert!(is_sign_in_page(&url("https://accounts.google.com/v3/signin")));
+        assert!(is_sign_in_page(&url("https://www.youtube.com/signin")));
+        assert!(!is_sign_in_page(&url("https://music.youtube.com/watch?v=abc")));
     }
 
     #[test]

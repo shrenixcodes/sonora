@@ -180,6 +180,8 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   /** Applies a report from the YouTube Music page. Public for tests. */
   handleBridgeState(report: YtmState): void {
+    // Sign-in status only; it says nothing about playback.
+    if (report.reason === "account") return;
     this.state.isAd = report.ad;
 
     if (report.videoId) {

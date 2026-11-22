@@ -6,6 +6,7 @@
 
   const TIME_REPORT_INTERVAL_MS = 1000;
   const VIDEO_LOOKUP_INTERVAL_MS = 500;
+  const ACCOUNT_LOOKUP_ATTEMPTS = 60;
   // The page updates mediaSession metadata shortly after the track switches.
   const METADATA_SETTLE_MS = 600;
 
@@ -73,6 +74,18 @@
     if (element) {
       clearInterval(lookup);
       attach(element);
+    }
+  }, VIDEO_LOOKUP_INTERVAL_MS);
+
+  // The <video> element may not exist until something plays, so the sign-in
+  // state is reported on its own as soon as the page knows it. Without this,
+  // a finished sign-in can go unnoticed and the window never closes.
+  let accountChecks = 0;
+  const accountLookup = setInterval(() => {
+    const loggedIn = window.ytcfg && window.ytcfg.get && window.ytcfg.get("LOGGED_IN");
+    if (loggedIn !== undefined || ++accountChecks >= ACCOUNT_LOOKUP_ATTEMPTS) {
+      clearInterval(accountLookup);
+      if (loggedIn !== undefined) send("account");
     }
   }, VIDEO_LOOKUP_INTERVAL_MS);
 

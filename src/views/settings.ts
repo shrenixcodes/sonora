@@ -159,7 +159,8 @@ function createAccountRow(): HTMLElement {
           ? "Signed in. Home, likes and Premium come from your account."
           : "Sign in on YouTube Music's own page for your library, likes and Premium. The window closes by itself when you're done.";
     button.textContent = signedIn ? "Sign out" : "Sign in";
-    button.toggleAttribute("disabled", busy || signedIn === null);
+    // Still offer sign-in while the status is unknown, so a slow page can't lock the button.
+    button.toggleAttribute("disabled", busy);
   };
 
   button.addEventListener("click", async () => {
@@ -177,7 +178,7 @@ function createAccountRow(): HTMLElement {
       description.textContent = "That didn't work. Try again in a moment.";
     } finally {
       busy = false;
-      button.toggleAttribute("disabled", account.isSignedIn === null);
+      button.toggleAttribute("disabled", false);
     }
   });
 
