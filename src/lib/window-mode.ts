@@ -30,6 +30,7 @@ const INTERACTIVE_PARTS = [
   ".main",
   ".queue-panel",
   ".player",
+  "dialog[open]",
 ];
 
 export function modeFor(state: { maximized: boolean; fullscreen: boolean }): WindowMode {
@@ -81,6 +82,7 @@ function watchLayout(): void {
   // Opening "Up next" changes the grid without resizing every observed part.
   const app = document.getElementById("app");
   if (app) new MutationObserver(scheduleRegionSync).observe(app, { attributes: true, attributeFilter: ["class"] });
+  new MutationObserver(scheduleRegionSync).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["open"] });
 }
 
 export async function initWindowMode(): Promise<void> {

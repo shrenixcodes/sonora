@@ -478,7 +478,7 @@ function createThemeImportExport(): HTMLElement {
                   themeManager.set(json.theme);
                 }
                 applyAccent(storage.getSettings().accentColor, themeManager.theme);
-                alert("Theme configuration imported successfully!");
+                router.refresh();
               } catch {
                 alert("Failed to parse theme JSON file.");
               }
