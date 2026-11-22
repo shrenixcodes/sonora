@@ -86,6 +86,12 @@ export class Catalog {
     return page;
   }
 
+  /** Forgets cached pages so the next request fetches fresh ones. */
+  clearCache(): void {
+    this.home = null;
+    this.explore = null;
+  }
+
   /** YouTube Music's Explore page: new releases, charts and trending. */
   async getExplore(): Promise<HomeShelf[]> {
     if (this.explore && this.now() - this.explore.at < HOME_TTL_MS) return this.explore.shelves;

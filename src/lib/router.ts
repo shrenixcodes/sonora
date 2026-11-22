@@ -18,6 +18,7 @@ class Router {
   private routes: Route[] = [];
   private listeners: NavigationListener[] = [];
   private currentPath = "";
+  private render: (() => void) | null = null;
 
   /** Register a route. */
   route(path: string, handler: RouteHandler): this {
@@ -29,6 +30,15 @@ class Router {
   navigate(path: string): void {
     if (path === this.currentPath) return;
     window.location.hash = path;
+  }
+
+  /** Renders the current page again, e.g. after its data was refreshed. */
+  refresh(): void {
+    if (!this.render) return;
+    // Views clean up when told the route changed; an empty path tells the
+    // outgoing page to do so before its replacement renders.
+    this.listeners.forEach((l) => l(""));
+    this.render();
   }
 
   /** Get the current route path. */
@@ -66,6 +76,7 @@ class Router {
       this.listeners.forEach((l) => l(hash));
     };
 
+    this.render = handleRoute;
     window.addEventListener("hashchange", handleRoute);
     handleRoute();
   }

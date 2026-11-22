@@ -44,6 +44,21 @@
   color: var(--color-text);
 }
 
+/* One turn of the refresh icon as feedback for a click. */
+.titlebar__nav-btn.is-spinning svg {
+  animation: titlebar-spin var(--duration-slower) var(--ease-out);
+}
+
+@keyframes titlebar-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titlebar__nav-btn.is-spinning svg {
+    animation: none;
+  }
+}
+
 .titlebar__nav-btn:disabled {
   opacity: 0.3;
   pointer-events: none;
