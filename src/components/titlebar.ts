@@ -1,7 +1,7 @@
 /**
  * Custom window titlebar.
  *
- * Provides drag-to-move, back/forward navigation, and
+ * Provides drag-to-move (via data-tauri-drag-region), back/forward navigation, and
  * minimize/maximize/close controls using the Tauri window API.
  */
 
@@ -16,6 +16,8 @@ export function createTitlebar(): HTMLElement {
 
   const titlebar = el("header", {
     className: "titlebar",
+    // Tauri only starts a window drag when the pressed element itself carries this attribute.
+    attrs: { "data-tauri-drag-region": "" },
     children: [
       // Left: navigation buttons
       el("div", {
@@ -50,9 +52,11 @@ export function createTitlebar(): HTMLElement {
       // Center: app title
       el("div", {
         className: "titlebar__center",
+        attrs: { "data-tauri-drag-region": "" },
         children: [
           el("span", {
             className: "titlebar__title",
+            attrs: { "data-tauri-drag-region": "" },
             text: "Sonora",
           }),
         ],
