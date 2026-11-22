@@ -10,6 +10,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "check": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "eslint src --ext .ts"
   },
   "keywords": [
@@ -24,8 +25,10 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.6",
     "esbuild": "^0.28.2",
+    "jsdom": "^31.0.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.8"
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5"

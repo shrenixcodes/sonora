@@ -1,8 +1,8 @@
 /**
  * Sonora — Application entry point.
  *
- * Assembles the shell (titlebar, sidebar, main content, player)
- * and initializes the router.
+ * Assembles the shell (titlebar, sidebar, main content, player),
+ * initializes the router, applies user preferences, and registers global keyboard shortcuts.
  */
 
 import { createTitlebar } from "@/components/titlebar";
@@ -10,6 +10,8 @@ import { createSidebar } from "@/components/sidebar";
 import { createPlayer } from "@/components/player";
 import { router } from "@/lib/router";
 import { el } from "@/lib/dom";
+import { storage } from "@/lib/storage";
+import { playerEngine } from "@/lib/playback/engine";
 
 // Views
 import { renderHome } from "@/views/home";
@@ -25,6 +27,15 @@ import "@/lib/theme";
 function init(): void {
   const app = document.getElementById("app");
   if (!app) return;
+
+  // Apply saved appearance preferences
+  const settings = storage.getSettings();
+  if (settings.accentColor) {
+    document.documentElement.style.setProperty("--color-accent", settings.accentColor);
+  }
+  if (settings.density === "compact") {
+    document.body.classList.add("density-compact");
+  }
 
   // Build the application shell
   const titlebar = createTitlebar();
@@ -43,7 +54,7 @@ function init(): void {
     .route("/explore", renderExplore)
     .route("/search", renderSearch)
     .route("/library", renderLibrary)
-    .route("/liked", renderLibrary) // shares library view for now
+    .route("/liked", renderLibrary)
     .route("/playlists", renderLibrary)
     .route("/albums", renderLibrary)
     .route("/artists", renderLibrary)
@@ -54,8 +65,61 @@ function init(): void {
   // Start the router
   router.start(main);
 
+  // Register desktop keyboard shortcuts
+  setupGlobalShortcuts();
+
   // Update greeting based on time of day
   updateGreeting();
+}
+
+function setupGlobalShortcuts(): void {
+  window.addEventListener("keydown", (e: KeyboardEvent) => {
+    // Avoid capturing keys when user is typing in a text field
+    const active = document.activeElement;
+    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {
+      return;
+    }
+
+    switch (e.code) {
+      case "Space":
+        e.preventDefault();
+        playerEngine.togglePlay();
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        playerEngine.seekTo(playerEngine.currentState.currentTime - 5);
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        playerEngine.seekTo(playerEngine.currentState.currentTime + 5);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        playerEngine.setVolume(playerEngine.currentState.volume + 0.05);
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        playerEngine.setVolume(playerEngine.currentState.volume - 0.05);
+        break;
+      case "KeyM":
+        playerEngine.toggleMute();
+        break;
+      case "KeyL": {
+        const track = playerEngine.currentTrack;
+        if (track) {
+          storage.toggleLike(track);
+        }
+        break;
+      }
+      case "KeyF":
+        if (window.location.hash === "#/now-playing") {
+          window.history.back();
+        } else {
+          router.navigate("/now-playing");
+        }
+        break;
+    }
+  });
 }
 
 function updateGreeting(): void {
