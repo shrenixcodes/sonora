@@ -14,11 +14,18 @@ export type { HomeShelf };
 export { CatalogError };
 
 const HOME_TTL_MS = 5 * 60_000;
-/** The YouTube Music page takes a few seconds to load when Sonora starts. */
-const STARTUP_RETRIES = 10;
-const STARTUP_RETRY_MS = 1_000;
+/**
+ * The YouTube Music page takes a few seconds to load when Sonora starts, and
+ * reloads whenever a song is loaded. A request sent while it loads either gets
+ * "not-ready" back or is lost with the old page, so both are retried.
+ */
+const MAX_ATTEMPTS = 8;
+const ATTEMPT_TIMEOUT_MS = 6_000;
+const NOT_READY_DELAY_MS = 1_000;
+/** Sending fails outright while the page is still being created at startup. */
+const RETRYABLE = new Set(["not-ready", "timeout", "send-failed"]);
 
-type Fetcher = (request: CatalogRequest) => Promise<unknown>;
+type Fetcher = (request: CatalogRequest, timeoutMs: number) => Promise<unknown>;
 
 export class Catalog {
   private home: { shelves: HomeShelf[]; at: number } | null = null;
@@ -56,13 +63,13 @@ export class Catalog {
   }
 
   private async fetchWithStartupRetry(request: CatalogRequest): Promise<unknown> {
-    for (let attempt = 0; ; attempt++) {
+    for (let attempt = 1; ; attempt++) {
       try {
-        return await this.fetcher(request);
+        return await this.fetcher(request, ATTEMPT_TIMEOUT_MS);
       } catch (err) {
-        const notReady = err instanceof CatalogError && err.reason === "not-ready";
-        if (!notReady || attempt >= STARTUP_RETRIES) throw err;
-        await this.sleep(STARTUP_RETRY_MS);
+        const retryable = err instanceof CatalogError && RETRYABLE.has(err.reason);
+        if (!retryable || attempt >= MAX_ATTEMPTS) throw err;
+        if (err.reason !== "timeout") await this.sleep(NOT_READY_DELAY_MS);
       }
     }
   }

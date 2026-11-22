@@ -36,7 +36,7 @@ describe("Catalog", () => {
 
   it("waits for the YouTube Music page to finish loading", async () => {
     const fetcher = vi
-      .fn<(r: CatalogRequest) => Promise<unknown>>()
+      .fn<(r: CatalogRequest, timeoutMs: number) => Promise<unknown>>()
       .mockRejectedValueOnce(new CatalogError("starting", "not-ready"))
       .mockRejectedValueOnce(new CatalogError("starting", "not-ready"))
       .mockResolvedValue({});
@@ -46,6 +46,28 @@ describe("Catalog", () => {
     await expect(catalog.searchSongs("jazz")).resolves.toEqual([]);
     expect(fetcher).toHaveBeenCalledTimes(3);
     expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a request lost while the page reloads", async () => {
+    const fetcher = vi
+      .fn<(r: CatalogRequest, timeoutMs: number) => Promise<unknown>>()
+      .mockRejectedValueOnce(new CatalogError("slow", "timeout"))
+      .mockResolvedValue({});
+    const catalog = new Catalog(fetcher, Date.now, async () => {});
+
+    await expect(catalog.getHome()).resolves.toEqual([]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0][1]).toBeLessThan(15_000);
+  });
+
+  it("gives up after a bounded number of attempts", async () => {
+    const fetcher = vi.fn(async () => {
+      throw new CatalogError("slow", "timeout");
+    });
+    const catalog = new Catalog(fetcher, Date.now, async () => {});
+
+    await expect(catalog.getHome()).rejects.toMatchObject({ reason: "timeout" });
+    expect(fetcher).toHaveBeenCalledTimes(8);
   });
 
   it("passes other failures straight through", async () => {

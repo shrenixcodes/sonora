@@ -216,12 +216,14 @@ pub fn ytm_request<R: Runtime>(
     request: YtmRequest,
 ) -> Result<(), String> {
     request.validate()?;
+    log::debug!("catalog request {id}: {request:?}");
     let window = app
         .get_webview_window(YTM_LABEL)
         .ok_or("YouTube Music window is not available")?;
-    window
-        .eval(&request_script(id, &request)?)
-        .map_err(|e| e.to_string())
+    window.eval(&request_script(id, &request)?).map_err(|e| {
+        log::warn!("catalog request {id} could not reach the page: {e}");
+        e.to_string()
+    })
 }
 
 #[tauri::command]

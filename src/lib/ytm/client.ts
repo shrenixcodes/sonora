@@ -27,7 +27,7 @@ export class CatalogError extends Error {
   }
 }
 
-const TIMEOUT_MS = 15_000;
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 let nextId = 1;
 const waiting = new Map<number, { resolve: (json: unknown) => void; reject: (err: Error) => void }>();
@@ -61,7 +61,10 @@ export function catalogAvailable(): boolean {
   return isTauri();
 }
 
-export async function requestCatalog(request: CatalogRequest): Promise<unknown> {
+export async function requestCatalog(
+  request: CatalogRequest,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<unknown> {
   if (!isTauri()) {
     throw new CatalogError("Music from YouTube Music shows up in the Sonora desktop app.", "unavailable");
   }
@@ -72,7 +75,7 @@ export async function requestCatalog(request: CatalogRequest): Promise<unknown> 
     const timer = window.setTimeout(() => {
       waiting.delete(id);
       reject(new CatalogError("YouTube Music took too long to answer. Try again.", "timeout"));
-    }, TIMEOUT_MS);
+    }, timeoutMs);
 
     waiting.set(id, {
       resolve: (json) => {
@@ -88,7 +91,8 @@ export async function requestCatalog(request: CatalogRequest): Promise<unknown> 
     invoke("ytm_request", { id, request }).catch((err) => {
       waiting.delete(id);
       window.clearTimeout(timer);
-      reject(new CatalogError("Couldn't ask YouTube Music for that.", String(err)));
+      console.warn("[catalog] could not send request:", err);
+      reject(new CatalogError("Couldn't ask YouTube Music for that.", "send-failed"));
     });
   });
 }
