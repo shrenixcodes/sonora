@@ -132,6 +132,7 @@
       let body;
       if (request.kind === "home") {
         body = { browseId: "FEmusic_home" };
+        if (request.params) body.params = String(request.params);
       } else if (request.kind === "search") {
         endpoint = "search";
         body = { query: String(request.query), params: SONGS_ONLY };
@@ -142,6 +143,10 @@
       } else if (request.kind === "playlist") {
         const id = String(request.id);
         body = { browseId: id.startsWith("VL") ? id : "VL" + id };
+      } else if (request.kind === "watchPlaylist") {
+        // Mixes made for the user have no playlist page; their songs come from a watch queue.
+        endpoint = "next";
+        body = { playlistId: String(request.id), enablePersistentPlaylistPanel: true, isAudioOnly: true };
       } else if (request.kind === "continuation") {
         // Older list pages read the token from the URL, newer ones from the body.
         const token = encodeURIComponent(decodeURIComponent(String(request.token)));

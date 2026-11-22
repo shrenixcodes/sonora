@@ -584,6 +584,48 @@
   color: var(--color-text-secondary);
 }
 
+/* Mood and genre chips from YouTube Music, in one scrollable row. */
+.home__chips {
+  display: flex;
+  gap: var(--space-2);
+  margin: calc(var(--space-2) * -1) 0 var(--space-8);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.home__chips:empty {
+  display: none;
+}
+
+.home__chips .search__filter-chip {
+  flex: none;
+  white-space: nowrap;
+}
+
+.section__strapline {
+  margin-bottom: 2px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+/* Artists get round portraits, as on YouTube Music. */
+.shelf-card--round .shelf-card__art {
+  border-radius: var(--radius-full);
+}
+
+.shelf-card--round .shelf-card__title,
+.shelf-card--round .shelf-card__subtitle {
+  text-align: center;
+}
+
+.shelf-card[aria-busy="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .home__hint {
   font-size: var(--text-md);
   color: var(--color-text-secondary);

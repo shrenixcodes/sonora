@@ -244,11 +244,16 @@ pub fn ytm_sign_out<R: Runtime>(
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum YtmRequest {
-    Home,
+    Home {
+        /// A mood or genre chip from the top of Home.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        params: Option<String>,
+    },
     Search { query: String },
     LikedSongs,
     LibraryPlaylists,
     Playlist { id: String },
+    WatchPlaylist { id: String },
     /// Next page of a list the page already returned.
     Continuation { token: String },
 }
@@ -265,8 +270,17 @@ fn is_token_text(value: &str, max: usize, extra: &[char]) -> bool {
 impl YtmRequest {
     fn validate(&self) -> Result<(), String> {
         match self {
-            YtmRequest::Home | YtmRequest::LikedSongs | YtmRequest::LibraryPlaylists => Ok(()),
-            YtmRequest::Playlist { id } => {
+            YtmRequest::Home { params: None } | YtmRequest::LikedSongs | YtmRequest::LibraryPlaylists => {
+                Ok(())
+            }
+            YtmRequest::Home { params: Some(params) } => {
+                if is_token_text(params, MAX_CONTINUATION_CHARS, &['%', '=']) {
+                    Ok(())
+                } else {
+                    Err("invalid home filter".into())
+                }
+            }
+            YtmRequest::Playlist { id } | YtmRequest::WatchPlaylist { id } => {
                 if is_token_text(id, MAX_PLAYLIST_ID_CHARS, &[]) {
                     Ok(())
                 } else {
@@ -486,7 +500,10 @@ mod tests {
 
     #[test]
     fn validates_catalog_requests() {
-        assert!(YtmRequest::Home.validate().is_ok());
+        assert!(YtmRequest::Home { params: None }.validate().is_ok());
+        assert!(YtmRequest::Home { params: Some("ggMPOg1uX1%3D".into()) }.validate().is_ok());
+        assert!(YtmRequest::Home { params: Some("<x>".into()) }.validate().is_err());
+        assert!(YtmRequest::WatchPlaylist { id: "RDTMAK5uy_abc".into() }.validate().is_ok());
         assert!(
             YtmRequest::Search {
                 query: "lofi".into()
@@ -532,7 +549,7 @@ mod tests {
         ));
         assert!(script.contains(r#"{ id: 7, ok: false, body: "not-ready" }"#));
         let parsed: YtmRequest = serde_json::from_str(r#"{"kind":"home"}"#).unwrap();
-        assert_eq!(parsed, YtmRequest::Home);
+        assert_eq!(parsed, YtmRequest::Home { params: None });
         assert!(serde_json::from_str::<YtmRequest>(r#"{"kind":"deleteAccount"}"#).is_err());
     }
 

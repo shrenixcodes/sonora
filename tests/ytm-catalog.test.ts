@@ -55,7 +55,7 @@ describe("Catalog", () => {
       .mockResolvedValue({});
     const catalog = new Catalog(fetcher, Date.now, async () => {});
 
-    await expect(catalog.getHome()).resolves.toEqual([]);
+    await expect(catalog.getHome()).resolves.toEqual({ chips: [], shelves: [] });
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher.mock.calls[0][1]).toBeLessThan(15_000);
   });
@@ -103,5 +103,27 @@ describe("Catalog", () => {
     const tracks = await catalog.getLikedSongs();
     expect(tracks.map((t) => t.id)).toEqual(["a", "b", "c"]);
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("loads more Home shelves and falls back to the watch queue for mixes", async () => {
+    const shelf = (title: string) => ({
+      musicCarouselShelfRenderer: {
+        header: { musicCarouselShelfBasicHeaderRenderer: { title: { runs: [{ text: title }] } } },
+        contents: [{ musicResponsiveListItemRenderer: { flexColumns: [{ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: title }] } } }], playlistItemData: { videoId: title } } }],
+      },
+    });
+    const fetcher = vi.fn(async (r: CatalogRequest): Promise<unknown> => {
+      if (r.kind === "home") return { contents: [shelf("one")], continuations: [{ nextContinuationData: { continuation: "MORE" } }] };
+      if (r.kind === "continuation") return { contents: [shelf("two")] };
+      if (r.kind === "playlist") return { contents: [] };
+      return { contents: [{ playlistPanelVideoRenderer: { videoId: "mixsong", title: { runs: [{ text: "Mix song" }] } } }] };
+    });
+    const catalog = new Catalog(fetcher);
+
+    const home = await catalog.getHome();
+    expect(home.shelves.map((s) => s.title)).toEqual(["one", "two"]);
+
+    const mix = await catalog.getPlaylistTracks("RDTMAK5uy_mix");
+    expect(mix.map((t) => t.id)).toEqual(["mixsong"]);
+    expect(fetcher).toHaveBeenLastCalledWith({ kind: "watchPlaylist", id: "RDTMAK5uy_mix" }, expect.any(Number));
   });
 });
