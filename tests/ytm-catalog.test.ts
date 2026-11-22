@@ -85,4 +85,23 @@ describe("Catalog", () => {
     await expect(new Catalog(fetcher).searchSongs("   ")).resolves.toEqual([]);
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("follows continuation pages for long liked-song lists", async () => {
+    const row = (videoId: string) => ({
+      musicResponsiveListItemRenderer: {
+        flexColumns: [{ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: videoId }] } } }],
+        playlistItemData: { videoId },
+      },
+    });
+    const next = (token: string) => ({ continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token } } } });
+    const pages: Record<string, unknown> = {
+      likedSongs: { contents: [row("a"), row("b"), next("P2")] },
+      P2: { contents: [row("b"), row("c")] },
+    };
+    const fetcher = vi.fn(async (r: CatalogRequest) => pages[r.kind === "continuation" ? r.token : r.kind]);
+    const catalog = new Catalog(fetcher);
+
+    const tracks = await catalog.getLikedSongs();
+    expect(tracks.map((t) => t.id)).toEqual(["a", "b", "c"]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });

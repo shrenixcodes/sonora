@@ -7,10 +7,19 @@
  */
 
 import { CatalogError, requestCatalog, type CatalogRequest } from "@/lib/ytm/client";
-import { parseHomeShelves, parseSearchSongs, type HomeShelf } from "@/lib/ytm/parse";
+import {
+  parseContinuation,
+  parseHomeShelves,
+  parseLibraryPlaylists,
+  parsePlaylistTracks,
+  parseSearchSongs,
+  type HomeShelf,
+  type LibraryPlaylist,
+} from "@/lib/ytm/parse";
+import { dedupeById } from "@/lib/tracks";
 import type { Track } from "@/types/music";
 
-export type { HomeShelf };
+export type { HomeShelf, LibraryPlaylist };
 export { CatalogError };
 
 const HOME_TTL_MS = 5 * 60_000;
@@ -22,6 +31,8 @@ const HOME_TTL_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 8;
 const ATTEMPT_TIMEOUT_MS = 6_000;
 const NOT_READY_DELAY_MS = 1_000;
+/** Long lists arrive in pages of about 100 songs; this caps a single load. */
+const MAX_LIST_PAGES = 20;
 /** Sending fails outright while the page is still being created at startup. */
 const RETRYABLE = new Set(["not-ready", "timeout", "send-failed"]);
 
@@ -50,6 +61,34 @@ export class Catalog {
     const trimmed = query.trim();
     if (!trimmed) return [];
     return parseSearchSongs(await this.fetch({ kind: "search", query: trimmed }));
+  }
+
+  /** Songs on the signed-in user's Liked Music playlist. */
+  getLikedSongs(): Promise<Track[]> {
+    return this.fetchTrackList({ kind: "likedSongs" });
+  }
+
+  /** Playlists saved in the signed-in user's library. */
+  async getLibraryPlaylists(): Promise<LibraryPlaylist[]> {
+    return parseLibraryPlaylists(await this.fetch({ kind: "libraryPlaylists" }));
+  }
+
+  getPlaylistTracks(id: string): Promise<Track[]> {
+    return this.fetchTrackList({ kind: "playlist", id });
+  }
+
+  private async fetchTrackList(request: CatalogRequest): Promise<Track[]> {
+    let response = await this.fetch(request);
+    const tracks = parsePlaylistTracks(response);
+    for (let page = 1; page < MAX_LIST_PAGES; page++) {
+      const token = parseContinuation(response);
+      if (!token) break;
+      response = await this.fetch({ kind: "continuation", token });
+      const more = parsePlaylistTracks(response);
+      if (more.length === 0) break;
+      tracks.push(...more);
+    }
+    return dedupeById(tracks);
   }
 
   private fetch(request: CatalogRequest): Promise<unknown> {

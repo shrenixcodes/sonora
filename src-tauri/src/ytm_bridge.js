@@ -114,14 +114,26 @@
       const context = window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_CONTEXT");
       if (!context) return reply(false, "not-ready");
 
-      let endpoint;
+      let endpoint = "browse";
+      let query = "";
       let body;
       if (request.kind === "home") {
-        endpoint = "browse";
         body = { browseId: "FEmusic_home" };
       } else if (request.kind === "search") {
         endpoint = "search";
         body = { query: String(request.query), params: SONGS_ONLY };
+      } else if (request.kind === "likedSongs") {
+        body = { browseId: "FEmusic_liked_videos" };
+      } else if (request.kind === "libraryPlaylists") {
+        body = { browseId: "FEmusic_liked_playlists" };
+      } else if (request.kind === "playlist") {
+        const id = String(request.id);
+        body = { browseId: id.startsWith("VL") ? id : "VL" + id };
+      } else if (request.kind === "continuation") {
+        // Older list pages read the token from the URL, newer ones from the body.
+        const token = encodeURIComponent(decodeURIComponent(String(request.token)));
+        query = "&ctoken=" + token + "&continuation=" + token + "&type=next";
+        body = { continuation: decodeURIComponent(String(request.token)) };
       } else {
         return reply(false, "unknown-request");
       }
@@ -130,7 +142,7 @@
       const auth = await authorization();
       if (auth) headers.Authorization = auth;
 
-      const response = await fetch("/youtubei/v1/" + endpoint + "?prettyPrint=false", {
+      const response = await fetch("/youtubei/v1/" + endpoint + "?prettyPrint=false" + query, {
         method: "POST",
         credentials: "include",
         headers,

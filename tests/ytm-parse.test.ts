@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   artworkUrl,
   parseDuration,
+  parseContinuation,
   parseHomeShelves,
+  parseLibraryPlaylists,
+  parsePlaylistTracks,
   parseSearchSongs,
 } from "../src/lib/ytm/parse";
 
@@ -195,5 +198,47 @@ describe("helpers", () => {
       "https://i.ytimg.com/vi/x/hqdefault.jpg",
     );
     expect(artworkUrl([])).toBe("");
+  });
+});
+
+describe("parsePlaylistTracks", () => {
+  it("reads songs from a playlist shelf and its continuation token", () => {
+    const response = {
+      contents: {
+        musicPlaylistShelfRenderer: {
+          contents: [
+            songRow("abc", "First", [artist("A"), SEP, { text: "2:01" }]),
+            songRow("def", "Second", [artist("B")]),
+            { continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: "NEXT" } } } },
+          ],
+        },
+      },
+    };
+    expect(parsePlaylistTracks(response).map((t) => t.id)).toEqual(["abc", "def"]);
+    expect(parseContinuation(response)).toBe("NEXT");
+  });
+
+  it("finds older continuation tokens and reports none when the list ends", () => {
+    expect(parseContinuation({ continuations: [{ nextContinuationData: { continuation: "OLD" } }] })).toBe("OLD");
+    expect(parseContinuation({ contents: [] })).toBeNull();
+  });
+});
+
+describe("parseLibraryPlaylists", () => {
+  const card = (title: string, browseId?: string) => ({
+    musicTwoRowItemRenderer: {
+      title: { runs: [{ text: title }] },
+      subtitle: { runs: [{ text: "Playlist" }, SEP, { text: "12 songs" }] },
+      thumbnailRenderer: thumbs(`https://lh3.googleusercontent.com/${title}`),
+      navigationEndpoint: browseId ? { browseEndpoint: { browseId } } : { createPlaylistEndpoint: {} },
+    },
+  });
+
+  it("keeps saved playlists and skips the new-playlist card and duplicates", () => {
+    const response = { items: [card("New playlist"), card("Liked Music", "VLLM"), card("Mix", "VLPL1"), card("Mix", "VLPL1")] };
+    const playlists = parseLibraryPlaylists(response);
+    expect(playlists.map((p) => p.id)).toEqual(["LM", "PL1"]);
+    expect(playlists[1]).toMatchObject({ title: "Mix", subtitle: "Playlist • 12 songs" });
+    expect(playlists[1].artworkUrl).toContain("=w544-h544");
   });
 });

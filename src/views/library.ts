@@ -2,12 +2,18 @@
  * Library view.
  *
  * Manages saved music, liked tracks, custom playlists, and listening history.
+ * When signed in to YouTube Music, liked songs and saved playlists come from
+ * the user's account alongside the ones kept in Sonora.
  */
 
 import { el, formatTime } from "@/lib/dom";
 import { icon } from "@/icons";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
+import { catalog, CatalogError, type LibraryPlaylist } from "@/lib/ytm/catalog";
+import { catalogAvailable } from "@/lib/ytm/client";
+import { account } from "@/lib/ytm/account";
+import { dedupeById } from "@/lib/tracks";
 import type { Track, Playlist } from "@/types/music";
 
 export function renderLibrary(container: HTMLElement): void {
@@ -27,8 +33,65 @@ export function renderLibrary(container: HTMLElement): void {
   container.appendChild(content);
 }
 
+/** The account can only be read in the desktop app, and only while signed in. */
+const canReadYtmLibrary = () => catalogAvailable() && account.isSignedIn !== false;
+
+function libraryNotice(err: unknown, what: string): HTMLElement {
+  const message = err instanceof CatalogError ? err.message : `Couldn't load your ${what} from YouTube Music.`;
+  return el("p", { className: "home__hint", text: message });
+}
+
+function signInHint(what: string): HTMLElement {
+  return el("p", {
+    className: "home__hint",
+    text: `Sign in to YouTube Music from Settings to see your ${what} here.`,
+  });
+}
+
 function renderLikedSongs(container: HTMLElement): void {
-  const likedTracks = storage.getLikedTracks();
+  if (!catalogAvailable()) {
+    showLikedSongs(container, null);
+    return;
+  }
+  if (account.isSignedIn === false) {
+    showLikedSongs(container, null, signInHint("liked songs"));
+    return;
+  }
+
+  container.appendChild(
+    el("div", {
+      className: "page-header",
+      children: [
+        el("h1", { className: "page-header__title", text: "Liked Music" }),
+        el("p", { className: "page-header__subtitle", text: "Loading your liked songs…" }),
+      ],
+    }),
+  );
+  catalog
+    .getLikedSongs()
+    .then((remote) => {
+      if (!container.isConnected) return;
+      container.replaceChildren();
+      showLikedSongs(container, remote);
+    })
+    .catch((err) => {
+      if (!container.isConnected) return;
+      container.replaceChildren();
+      showLikedSongs(container, null, libraryNotice(err, "liked songs"));
+    });
+}
+
+/**
+ * Songs liked in Sonora come first, then the YouTube Music likes.
+ * `remote` is null when the account's likes aren't available.
+ */
+function showLikedSongs(container: HTMLElement, remote: Track[] | null, notice?: HTMLElement): void {
+  const remoteIds = new Set((remote ?? []).map((t) => t.id));
+  const likedTracks = dedupeById([...storage.getLikedTracks(), ...(remote ?? [])]);
+  const rerender = () => {
+    container.replaceChildren();
+    showLikedSongs(container, remote, notice);
+  };
 
   const playAllBtn = el("button", {
     className: "btn btn--primary",
@@ -78,6 +141,7 @@ function renderLikedSongs(container: HTMLElement): void {
   });
 
   container.appendChild(header);
+  if (notice) container.appendChild(notice);
 
   if (likedTracks.length === 0) {
     container.appendChild(
@@ -102,10 +166,7 @@ function renderLikedSongs(container: HTMLElement): void {
   const list = el("div", {
     className: "track-list",
     children: likedTracks.map((t, idx) =>
-      createTrackRow(t, idx + 1, likedTracks, () => {
-        container.innerHTML = "";
-        renderLikedSongs(container);
-      }),
+      createTrackRow(t, idx + 1, likedTracks, rerender, remoteIds.has(t.id) && !storage.isLiked(t.id)),
     ),
   });
 
@@ -209,7 +270,7 @@ function renderPlaylists(container: HTMLElement): void {
       el("h1", { className: "page-header__title", text: "Playlists" }),
       el("p", {
         className: "page-header__subtitle",
-        text: "Custom playlists created by you",
+        text: "Your YouTube Music playlists and the ones you made in Sonora",
       }),
       el("div", {
         className: "page-header__actions",
@@ -219,6 +280,18 @@ function renderPlaylists(container: HTMLElement): void {
   });
 
   container.appendChild(header);
+
+  if (catalogAvailable()) {
+    const ytmSection = el("div", { className: "section", attrs: { "aria-live": "polite" } });
+    container.appendChild(ytmSection);
+    loadYtmPlaylists(ytmSection);
+    container.appendChild(
+      el("div", {
+        className: "section__header",
+        children: [el("h2", { className: "section__title", text: "Made in Sonora" })],
+      }),
+    );
+  }
 
   if (playlists.length === 0) {
     container.appendChild(
@@ -282,10 +355,81 @@ function renderPlaylists(container: HTMLElement): void {
   container.appendChild(grid);
 }
 
+function loadYtmPlaylists(host: HTMLElement): void {
+  const title = el("div", {
+    className: "section__header",
+    children: [el("h2", { className: "section__title", text: "From YouTube Music" })],
+  });
+  if (account.isSignedIn === false) {
+    host.replaceChildren(title, signInHint("playlists"));
+    return;
+  }
+
+  host.setAttribute("aria-busy", "true");
+  host.replaceChildren(title, el("p", { className: "home__hint", text: "Loading your playlists…" }));
+  catalog
+    .getLibraryPlaylists()
+    .then((items) => {
+      host.replaceChildren(
+        title,
+        items.length > 0
+          ? el("div", { className: "card-grid", children: items.map(createYtmPlaylistCard) })
+          : el("p", { className: "home__hint", text: "No playlists saved in your YouTube Music library yet." }),
+      );
+    })
+    .catch((err) => host.replaceChildren(title, libraryNotice(err, "playlists")))
+    .finally(() => host.removeAttribute("aria-busy"));
+}
+
+/** Plays the playlist from the top; its songs are fetched when clicked. */
+function createYtmPlaylistCard(playlist: LibraryPlaylist): HTMLElement {
+  const subtitle = el("span", { className: "card__subtitle truncate", text: playlist.subtitle });
+  let loading = false;
+
+  return el("button", {
+    className: "card",
+    attrs: { type: "button", title: `Play ${playlist.title}` },
+    children: [
+      el("div", {
+        className: "card__artwork",
+        children: [
+          el("img", {
+            attrs: { src: playlist.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" },
+          }),
+        ],
+      }),
+      el("div", {
+        className: "card__info",
+        children: [el("span", { className: "card__title truncate", text: playlist.title }), subtitle],
+      }),
+    ],
+    onClick: async () => {
+      if (loading) return;
+      loading = true;
+      subtitle.textContent = "Loading…";
+      try {
+        const tracks = await catalog.getPlaylistTracks(playlist.id);
+        subtitle.textContent = tracks.length > 0 ? playlist.subtitle : "No playable songs";
+        if (tracks.length > 0) playerEngine.playTrack(tracks[0], tracks);
+      } catch (err) {
+        subtitle.textContent = err instanceof CatalogError ? err.message : "Couldn't load this playlist.";
+      } finally {
+        loading = false;
+      }
+    },
+  });
+}
+
 function renderMainLibrary(container: HTMLElement): void {
   const liked = storage.getLikedTracks();
   const history = storage.getHistory();
   const playlists = storage.getPlaylists();
+
+  const likedSubtitle = el("span", { className: "card__subtitle truncate", text: `${liked.length} songs` });
+  const playlistsSubtitle = el("span", {
+    className: "card__subtitle truncate",
+    text: `${playlists.length} playlists`,
+  });
 
   const header = el("div", {
     className: "page-header",
@@ -304,21 +448,11 @@ function renderMainLibrary(container: HTMLElement): void {
       el("div", {
         className: "card-grid",
         children: [
-          createLibraryFolderCard(
-            "Liked Music",
-            `${liked.length} songs`,
-            "heart",
-            "#/liked",
-          ),
-          createLibraryFolderCard(
-            "Playlists",
-            `${playlists.length} playlists`,
-            "playlist",
-            "#/playlists",
-          ),
+          createLibraryFolderCard("Liked Music", likedSubtitle, "heart", "#/liked"),
+          createLibraryFolderCard("Playlists", playlistsSubtitle, "playlist", "#/playlists"),
           createLibraryFolderCard(
             "Listening History",
-            `${history.length} songs played`,
+            el("span", { className: "card__subtitle truncate", text: `${history.length} songs played` }),
             "history",
             "#/history",
           ),
@@ -329,6 +463,21 @@ function renderMainLibrary(container: HTMLElement): void {
 
   container.appendChild(header);
   container.appendChild(summarySection);
+
+  if (canReadYtmLibrary()) {
+    catalog
+      .getLikedSongs()
+      .then((remote) => {
+        likedSubtitle.textContent = `${dedupeById([...liked, ...remote]).length} songs`;
+      })
+      .catch(() => {});
+    catalog
+      .getLibraryPlaylists()
+      .then((remote) => {
+        playlistsSubtitle.textContent = `${playlists.length + remote.length} playlists`;
+      })
+      .catch(() => {});
+  }
 
   if (liked.length > 0) {
     const likedSection = el("div", {
@@ -354,7 +503,7 @@ function renderMainLibrary(container: HTMLElement): void {
 
 function createLibraryFolderCard(
   title: string,
-  subtitle: string,
+  subtitle: HTMLElement,
   iconName: any,
   href: string,
 ): HTMLElement {
@@ -375,7 +524,7 @@ function createLibraryFolderCard(
         className: "card__info",
         children: [
           el("span", { className: "card__title truncate", text: title }),
-          el("span", { className: "card__subtitle truncate", text: subtitle }),
+          subtitle,
         ],
       }),
     ],
@@ -387,8 +536,9 @@ function createTrackRow(
   index: number,
   queueContext: Track[],
   onToggleLike?: () => void,
+  likedOnYtm = false,
 ): HTMLElement {
-  const isLiked = storage.isLiked(track.id);
+  const isLiked = likedOnYtm || storage.isLiked(track.id);
 
   return el("div", {
     className: "track-row",
@@ -413,9 +563,13 @@ function createTrackRow(
       el("button", {
         className: `track-row__like-btn${isLiked ? " track-row__like-btn--active" : ""}`,
         html: icon("heart"),
-        attrs: { "aria-label": "Like", title: "Like track" },
+        // Likes from the account can't be changed from Sonora yet.
+        attrs: likedOnYtm
+          ? { "aria-label": "Liked on YouTube Music", title: "Liked on YouTube Music", disabled: "" }
+          : { "aria-label": "Like", title: "Like track" },
         onClick: (e) => {
           e.stopPropagation();
+          if (likedOnYtm) return;
           const liked = storage.toggleLike(track);
           const btn = e.currentTarget as HTMLElement;
           btn.classList.toggle("track-row__like-btn--active", liked);

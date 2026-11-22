@@ -9,7 +9,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-export type CatalogRequest = { kind: "home" } | { kind: "search"; query: string };
+export type CatalogRequest =
+  | { kind: "home" }
+  | { kind: "search"; query: string }
+  | { kind: "likedSongs" }
+  | { kind: "libraryPlaylists" }
+  | { kind: "playlist"; id: string }
+  | { kind: "continuation"; token: string };
 
 interface CatalogResponse {
   id: number;

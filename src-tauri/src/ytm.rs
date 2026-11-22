@@ -15,6 +15,8 @@ const YTM_HOME: &str = "https://music.youtube.com/";
 const STATE_EVENT: &str = "ytm://state";
 const RESPONSE_EVENT: &str = "ytm://response";
 const MAX_QUERY_CHARS: usize = 200;
+const MAX_PLAYLIST_ID_CHARS: usize = 100;
+const MAX_CONTINUATION_CHARS: usize = 4096;
 /// Catalog replies are JSON from YouTube Music's own API; a home feed is well under this.
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const BRIDGE_SCRIPT: &str = include_str!("ytm_bridge.js");
@@ -235,12 +237,40 @@ pub fn ytm_sign_out<R: Runtime>(
 pub enum YtmRequest {
     Home,
     Search { query: String },
+    LikedSongs,
+    LibraryPlaylists,
+    Playlist { id: String },
+    /// Next page of a list the page already returned.
+    Continuation { token: String },
+}
+
+/// Playlist ids and continuation tokens are URL-safe text; anything else is rejected.
+fn is_token_text(value: &str, max: usize, extra: &[char]) -> bool {
+    !value.is_empty()
+        && value.len() <= max
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || extra.contains(&c))
 }
 
 impl YtmRequest {
     fn validate(&self) -> Result<(), String> {
         match self {
-            YtmRequest::Home => Ok(()),
+            YtmRequest::Home | YtmRequest::LikedSongs | YtmRequest::LibraryPlaylists => Ok(()),
+            YtmRequest::Playlist { id } => {
+                if is_token_text(id, MAX_PLAYLIST_ID_CHARS, &[]) {
+                    Ok(())
+                } else {
+                    Err("invalid playlist id".into())
+                }
+            }
+            YtmRequest::Continuation { token } => {
+                if is_token_text(token, MAX_CONTINUATION_CHARS, &['%', '=']) {
+                    Ok(())
+                } else {
+                    Err("invalid continuation token".into())
+                }
+            }
             YtmRequest::Search { query } => {
                 let len = query.trim().chars().count();
                 if len == 0 || len > MAX_QUERY_CHARS {
@@ -461,6 +491,14 @@ mod tests {
             .validate()
             .is_err()
         );
+        assert!(YtmRequest::LikedSongs.validate().is_ok());
+        assert!(YtmRequest::Playlist { id: "PLabc_-1".into() }.validate().is_ok());
+        assert!(YtmRequest::Playlist { id: "PL\"; x".into() }.validate().is_err());
+        assert!(YtmRequest::Playlist { id: String::new() }.validate().is_err());
+        assert!(YtmRequest::Continuation { token: "4qmFsgK%3D".into() }.validate().is_ok());
+        assert!(YtmRequest::Continuation { token: "a b".into() }.validate().is_err());
+        let parsed: YtmRequest = serde_json::from_str(r#"{"kind":"likedSongs"}"#).unwrap();
+        assert_eq!(parsed, YtmRequest::LikedSongs);
     }
 
     #[test]

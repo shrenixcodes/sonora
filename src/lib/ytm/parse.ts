@@ -167,3 +167,46 @@ export function parseHomeShelves(response: unknown): HomeShelf[] {
     })
     .filter((shelf) => shelf.title && shelf.tracks.length > 0);
 }
+
+/** A playlist saved in the user's YouTube Music library. */
+export interface LibraryPlaylist {
+  id: string;
+  title: string;
+  subtitle: string;
+  artworkUrl: string;
+}
+
+/** Songs on a playlist page, the Liked Music page, or one of their continuation pages. */
+export function parsePlaylistTracks(response: unknown): Track[] {
+  const items = findAll(response, "musicResponsiveListItemRenderer");
+  return uniqueById(items.map(parseListItem).filter((t): t is Track => t !== null));
+}
+
+/** Playlist cards from the library's Playlists page; the "New playlist" card is skipped. */
+export function parseLibraryPlaylists(response: unknown): LibraryPlaylist[] {
+  const seen = new Set<string>();
+  return findAll(response, "musicTwoRowItemRenderer").flatMap((item) => {
+    const browseId = get(item, "navigationEndpoint", "browseEndpoint", "browseId");
+    const title = joined(runsOf(item.title));
+    if (typeof browseId !== "string" || !browseId.startsWith("VL") || !title) return [];
+    const id = browseId.slice(2);
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return [
+      {
+        id,
+        title,
+        subtitle: joined(runsOf(item.subtitle)),
+        artworkUrl: artworkUrl(get(item, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
+      },
+    ];
+  });
+}
+
+/** Token for the next page of a long list, if there is one. */
+export function parseContinuation(response: unknown): string | null {
+  const command = findAll(response, "continuationCommand").find((c) => typeof c.token === "string");
+  if (command) return command.token as string;
+  const next = findAll(response, "nextContinuationData").find((c) => typeof c.continuation === "string");
+  return next ? (next.continuation as string) : null;
+}
