@@ -3,6 +3,12 @@
  */
 
 import type { Track, Playlist, UserSettings } from "@/types/music";
+import { EventEmitter } from "@/lib/events";
+
+export interface StorageEvents {
+  likeChange: { trackId: string; isLiked: boolean; track: Track };
+  settingsChange: UserSettings;
+}
 
 const STORAGE_KEYS = {
   SETTINGS: "sonora:settings",
@@ -26,7 +32,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   enableDiscordRpc: false,
 };
 
-class StorageService {
+class StorageService extends EventEmitter<StorageEvents> {
   getSettings(): UserSettings {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
@@ -45,6 +51,7 @@ class StorageService {
     } catch (err) {
       console.error("[Storage] Failed to save settings:", err);
     }
+    this.emit("settingsChange", updated);
     return updated;
   }
 
@@ -81,6 +88,7 @@ class StorageService {
       console.error("[Storage] Failed to save liked tracks:", err);
     }
 
+    this.emit("likeChange", { trackId: track.id, isLiked: isNowLiked, track });
     return isNowLiked;
   }
 

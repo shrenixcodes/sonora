@@ -121,7 +121,7 @@ class PlayerBar {
     const likeBtn = el("button", {
       className: "player__like-btn",
       html: icon("heart"),
-      attrs: { "aria-label": "Like", title: "Like" },
+      attrs: { "aria-label": "Like", title: "Like", "aria-pressed": "false" },
       onClick: () => this.handleToggleLike(),
     });
 
@@ -270,14 +270,17 @@ class PlayerBar {
   private handleToggleLike(): void {
     const track = playerEngine.currentTrack;
     if (!track) return;
-    const isLiked = storage.toggleLike(track);
-    this.updateLikeButton(isLiked);
+    storage.toggleLike(track);
   }
 
   private updateLikeButton(isLiked: boolean): void {
     if (!this.elements) return;
     this.elements.likeBtn.classList.toggle("player__btn--active", isLiked);
     this.elements.likeBtn.style.color = isLiked ? "var(--color-accent)" : "";
+    this.elements.likeBtn.setAttribute("aria-pressed", String(isLiked));
+    const label = isLiked ? "Unlike" : "Like";
+    this.elements.likeBtn.setAttribute("aria-label", label);
+    this.elements.likeBtn.setAttribute("title", label);
   }
 
   private subscribeToEngine(): void {
@@ -328,7 +331,7 @@ class PlayerBar {
         // Update artwork
         this.elements.artwork.innerHTML = "";
         const img = document.createElement("img");
-        img.src = track.artworkUrl;
+        img.src = track.artworkUrl || "/artwork-placeholder.svg";
         img.alt = track.title;
         img.className = "player__artwork-img";
         this.elements.artwork.appendChild(img);
@@ -341,6 +344,12 @@ class PlayerBar {
         this.elements.duration.textContent = formatTime(0);
         this.elements.artwork.innerHTML = "";
         this.updateLikeButton(false);
+      }
+    });
+
+    storage.on("likeChange", ({ trackId, isLiked }) => {
+      if (playerEngine.currentTrack?.id === trackId) {
+        this.updateLikeButton(isLiked);
       }
     });
 
