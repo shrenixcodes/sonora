@@ -125,15 +125,23 @@
   --color-warning: #F59E0B;
 
   /* Shell panels sit over the artwork ambience (see global.css). */
-  --color-panel: rgba(23, 21, 28, 0.68);
-  --color-panel-border: rgba(244, 240, 246, 0.06);
+  --color-panel: rgba(22, 19, 29, 0.62);
+  --color-panel-border: rgba(255, 255, 255, 0.13);
   --ambience-1: #A78BFA;
   --ambience-2: #3B2F5C;
   --ambience-3: #C9A96E;
   --ambience-strength: 42%;
   --ambient-art-opacity: 0.6;
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 38%, transparent);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  --glass-sheen: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 30%,
+    rgba(255, 255, 255, 0.0) 65%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  --glass-edge: inset 0 1px 1px 0 rgba(255, 255, 255, 0.22),
+                inset 0 0 20px 0 rgba(255, 255, 255, 0.02),
+                inset 0 -1px 1px 0 rgba(0, 0, 0, 0.28);
 
   color-scheme: dark;
 }
@@ -160,15 +168,23 @@
   --color-success: #16A34A;
   --color-warning: #D97706;
 
-  --color-panel: rgba(248, 245, 236, 0.94); /* keeps secondary text at WCAG AA over any artwork */
-  --color-panel-border: rgba(32, 40, 32, 0.08);
+  --color-panel: rgba(248, 245, 236, 0.76); /* keeps secondary text at WCAG AA over any artwork */
+  --color-panel-border: rgba(255, 255, 255, 0.45);
   --ambience-1: #315E48;
   --ambience-2: #D8C9A8;
   --ambience-3: #D95342;
   --ambience-strength: 22%;
   --ambient-art-opacity: 0.4;
-  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.1) 38%, transparent);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  --glass-sheen: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.25) 30%,
+    rgba(255, 255, 255, 0.0) 65%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  --glass-edge: inset 0 1px 1px 0 rgba(255, 255, 255, 0.85),
+                inset 0 0 20px 0 rgba(255, 255, 255, 0.06),
+                inset 0 -1px 1px 0 rgba(0, 0, 0, 0.06);
 
   color-scheme: light;
 }

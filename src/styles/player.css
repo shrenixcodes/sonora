@@ -134,12 +134,15 @@
   background: var(--color-text);
   color: var(--color-bg);
   border-radius: var(--radius-full);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
   transition: transform var(--duration-fast) var(--ease-spring),
+              box-shadow var(--duration-fast) var(--ease-out),
               background var(--duration-fast) var(--ease-out);
 }
 
 .player__play-btn:hover {
   transform: scale(1.06);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .player__play-btn:active {
@@ -189,7 +192,8 @@
   content: "";
   position: absolute;
   inset: 6px 0;
-  background: var(--color-border);
+  background: color-mix(in oklab, var(--color-text) 14%, transparent);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-full);
 }
 
@@ -215,7 +219,7 @@
   height: 12px;
   border-radius: var(--radius-full);
   background: var(--color-text);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   transform: translate(-50%, -50%) scale(0);
   transition: transform var(--duration-fast) var(--ease-out);
 }

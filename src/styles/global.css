@@ -90,8 +90,8 @@ body {
   }
 }
 
-/* Shared look for the sidebar, content, queue and player panels: tinted
-   glass over the ambient glow, with a soft sheen and a lit top edge. */
+/* Shared look for the sidebar, content, queue and player panels: liquid
+   glass over the ambient glow, with a specular sheen and refractive edge. */
 .sidebar,
 .main,
 .queue-panel,
@@ -100,6 +100,8 @@ body {
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
   box-shadow: var(--glass-edge);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
 }
 
 /* ── Ambient mode ────────────────────────────────────────
@@ -113,6 +115,7 @@ body {
   inset: 0;
   z-index: -2;
   overflow: hidden;
+  contain: paint;
   pointer-events: none;
 }
 

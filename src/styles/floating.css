@@ -14,10 +14,9 @@ html[data-window="floating"] {
   --float-gap: 14px;
   --rail-width: 56px;
   --stage-radius: 26px;
-  /* Floating pieces are tinted by the artwork's dominant color, so they belong
-     to the same scene as the stage instead of sitting on it as grey pills. */
-  --float-fill: color-mix(in oklab, color-mix(in oklab, var(--color-bg) 78%, var(--ambience-2)) 88%, transparent);
-  --float-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.18);
+  /* Floating pieces: liquid glass tinted by the artwork's dominant color. */
+  --float-fill: color-mix(in oklab, color-mix(in oklab, var(--color-bg) 62%, var(--ambience-2)) 78%, transparent);
+  --float-shadow: 0 8px 24px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 html[data-window="floating"] #app {
@@ -48,9 +47,10 @@ html[data-window="floating"] #app::before {
   grid-column: 2 / -1;
   border-radius: var(--stage-radius);
   border: 1px solid var(--color-panel-border);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.25);
-  /* Same layering as the full layout (base, glow, panel tint), so contrast matches. */
+  box-shadow: var(--glass-edge), 0 16px 36px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.12);
+  /* Liquid glass layering with subtle backdrop translucency and specular sheen. */
   background:
+    var(--glass-sheen),
     linear-gradient(var(--color-panel), var(--color-panel)),
     radial-gradient(60% 70% at 12% 0%,
       color-mix(in oklab, var(--ambience-1) var(--ambience-strength), transparent), transparent 70%),
@@ -58,7 +58,9 @@ html[data-window="floating"] #app::before {
       color-mix(in oklab, var(--ambience-2) var(--ambience-strength), transparent), transparent 72%),
     radial-gradient(70% 60% at 55% 105%,
       color-mix(in oklab, var(--ambience-3) var(--ambience-strength), transparent), transparent 70%),
-    var(--color-bg);
+    color-mix(in oklab, var(--color-bg) 85%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(190%) contrast(102%);
+  backdrop-filter: blur(28px) saturate(190%) contrast(102%);
 }
 
 /* In the floating layout the artwork fills only the stage. */
@@ -67,6 +69,8 @@ html[data-window="floating"] .ambient-art {
   grid-row: 2 / 3;
   grid-column: 2 / -1;
   border-radius: var(--stage-radius);
+  overflow: hidden;
+  contain: paint;
 }
 
 /* The page sits straight on the stage here, without a panel tint, so a scrim
@@ -107,11 +111,11 @@ html[data-window="floating"] .titlebar__search,
 html[data-window="floating"] .sidebar,
 html[data-window="floating"] .player {
   background: var(--glass-sheen), var(--float-fill);
-  border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent);
+  border: 1px solid var(--color-panel-border);
   box-shadow: var(--glass-edge), var(--float-shadow);
-  /* Blurs the stage where a piece overlaps it; over the desktop there is nothing to blur. */
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
+  /* Liquid glass refraction */
+  -webkit-backdrop-filter: blur(24px) saturate(190%) contrast(104%);
+  backdrop-filter: blur(24px) saturate(190%) contrast(104%);
 }
 
 html[data-window="floating"] .titlebar__left,
@@ -127,7 +131,7 @@ html[data-window="floating"] .titlebar__search {
 }
 
 html[data-window="floating"] .titlebar__search:focus-within {
-  background: var(--color-bg);
+  background: var(--glass-sheen), color-mix(in oklab, var(--color-bg) 75%, transparent);
 }
 
 /* The right group's window buttons become round in the pill. */
