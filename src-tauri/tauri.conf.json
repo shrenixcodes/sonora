@@ -14,15 +14,16 @@
       {
         "title": "Sonora",
         "label": "main",
-        "width": 1280,
-        "height": 800,
+        "width": 1180,
+        "height": 780,
         "minWidth": 940,
         "minHeight": 600,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
+        "shadow": false,
         "center": true,
         "resizable": true,
-        "visible": true
+        "visible": false
       }
     ],
     "security": {

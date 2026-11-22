@@ -37,10 +37,11 @@ const bottomNav: NavItem[] = [
 function createNavLink(item: NavItem): HTMLElement {
   const link = el("a", {
     className: "sidebar__link",
-    attrs: { href: `#${item.path}`, "data-path": item.path },
+    // title gives the icon-only floating rail a tooltip
+    attrs: { href: `#${item.path}`, "data-path": item.path, title: item.label },
     children: [
       el("span", { className: "sidebar__link-icon", html: icon(item.icon) }),
-      el("span", { text: item.label }),
+      el("span", { className: "sidebar__link-label", text: item.label }),
     ],
   });
 

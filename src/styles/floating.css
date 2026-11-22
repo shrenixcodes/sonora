@@ -1,0 +1,191 @@
+/*
+ * Floating layout — the window at its normal (not maximized) size.
+ *
+ * The window is transparent. A single rounded stage holds the page and the
+ * "Up next" column, tinted by the current artwork. Navigation, search, window
+ * controls and the player float around it as separate pieces. Empty space is
+ * click-through (src/lib/window-mode.ts + src-tauri/src/window_mode.rs).
+ *
+ * Nothing here can blur the desktop behind the window, so floating pieces use
+ * nearly opaque fills to keep text readable over any wallpaper.
+ */
+
+html[data-window="floating"] {
+  --float-gap: 14px;
+  --rail-width: 56px;
+  --stage-radius: 26px;
+  --float-fill: color-mix(in oklab, var(--color-bg) 92%, transparent);
+  --float-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+html[data-window="floating"] #app {
+  grid-template-columns: var(--rail-width) 1fr;
+  grid-template-rows: 44px 1fr 64px;
+  grid-template-areas:
+    ".       titlebar"
+    "sidebar main"
+    ".       player";
+  gap: var(--float-gap);
+  padding: 10px 22px 16px 14px;
+  background: transparent;
+}
+
+html[data-window="floating"] #app.app--queue-open {
+  grid-template-columns: var(--rail-width) 1fr var(--queue-width);
+  grid-template-areas:
+    ".       titlebar titlebar"
+    "sidebar main     queue"
+    ".       player   player";
+}
+
+/* ── Stage: one surface behind the page and "Up next" ──── */
+
+html[data-window="floating"] #app::before {
+  inset: 0;
+  grid-row: 2 / 3; /* explicit end: "auto" would mean the container edge here */
+  grid-column: 2 / -1;
+  border-radius: var(--stage-radius);
+  border: 1px solid var(--color-panel-border);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.25);
+  /* Same layering as the full layout (base, glow, panel tint), so contrast matches. */
+  background:
+    linear-gradient(var(--color-panel), var(--color-panel)),
+    radial-gradient(60% 70% at 12% 0%,
+      color-mix(in oklab, var(--ambience-1) var(--ambience-strength), transparent), transparent 70%),
+    radial-gradient(55% 70% at 92% 18%,
+      color-mix(in oklab, var(--ambience-2) var(--ambience-strength), transparent), transparent 72%),
+    radial-gradient(70% 60% at 55% 105%,
+      color-mix(in oklab, var(--ambience-3) var(--ambience-strength), transparent), transparent 70%),
+    var(--color-bg);
+}
+
+html[data-window="floating"] .main,
+html[data-window="floating"] .queue-panel {
+  background: transparent;
+  border: 0;
+  border-radius: var(--stage-radius);
+}
+
+/* Close the gap so the stage reads (and clicks) as one surface. */
+html[data-window="floating"] .queue-panel {
+  margin-left: calc(var(--float-gap) * -1);
+  border-left: 1px solid var(--color-panel-border);
+  border-radius: 0 var(--stage-radius) var(--stage-radius) 0;
+}
+
+/* ── Floating pieces ─────────────────────────────────────── */
+
+html[data-window="floating"] .titlebar {
+  background: none;
+  padding: 0;
+  gap: var(--space-3);
+}
+
+html[data-window="floating"] .titlebar__left,
+html[data-window="floating"] .titlebar__right,
+html[data-window="floating"] .titlebar__search,
+html[data-window="floating"] .sidebar,
+html[data-window="floating"] .player {
+  background: var(--float-fill);
+  border: 1px solid var(--color-panel-border);
+  box-shadow: var(--float-shadow);
+}
+
+html[data-window="floating"] .titlebar__left,
+html[data-window="floating"] .titlebar__right {
+  height: 38px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  gap: 2px;
+}
+
+html[data-window="floating"] .titlebar__search {
+  height: 38px;
+}
+
+html[data-window="floating"] .titlebar__search:focus-within {
+  background: var(--color-bg);
+}
+
+/* The right group's window buttons become round in the pill. */
+html[data-window="floating"] .titlebar__window-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+}
+
+.titlebar__grip {
+  display: none;
+}
+
+html[data-window="floating"] .titlebar__grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 30px;
+  margin-left: var(--space-1);
+  color: var(--color-text-tertiary);
+  cursor: grab;
+}
+
+html[data-window="floating"] .titlebar__grip svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none; /* the span itself must receive the press to start a drag */
+}
+
+/* Navigation becomes an icon rail beside the stage. */
+html[data-window="floating"] .sidebar {
+  align-self: center;
+  height: auto;
+  max-height: 100%;
+  padding: var(--space-2) 0;
+  border-radius: calc(var(--rail-width) / 2);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+html[data-window="floating"] .sidebar__section {
+  padding: var(--space-1) var(--space-2);
+}
+
+html[data-window="floating"] .sidebar__section + .sidebar__section {
+  border-top: 1px solid var(--color-panel-border);
+}
+
+html[data-window="floating"] .sidebar__label,
+html[data-window="floating"] .sidebar__playlists:empty {
+  display: none;
+}
+
+html[data-window="floating"] .sidebar__link {
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: var(--radius-full);
+}
+
+/* Labels stay available to screen readers; the link title shows on hover. */
+html[data-window="floating"] .sidebar__link-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The player is a capsule under the stage. */
+html[data-window="floating"] .player {
+  justify-self: center;
+  width: min(820px, 100%);
+  height: 64px;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+html[data-window="floating"] .player__artwork {
+  border-radius: var(--radius-full);
+}

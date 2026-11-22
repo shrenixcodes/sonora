@@ -8,6 +8,8 @@ fn main() {
             "ytm_report",
             "ytm_control",
             "ytm_set_signin_visible",
+            "set_floating_regions",
+            "present_main_window",
         ]),
     ))
     .expect("failed to run tauri-build");

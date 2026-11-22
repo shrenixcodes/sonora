@@ -1,6 +1,7 @@
 use tauri::{Manager, WindowEvent};
 
 mod commands;
+mod window_mode;
 mod ytm;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -9,17 +10,22 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .manage(window_mode::FloatingRegions::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::get_platform_info,
             ytm::ytm_report,
             ytm::ytm_control,
             ytm::ytm_set_signin_visible,
+            window_mode::set_floating_regions,
+            window_mode::present_main_window,
         ])
         .setup(|app| {
             log::info!("Sonora v{} starting", app.package_info().version);
 
             ytm::create_window(app.handle())?;
+            window_mode::start_click_through_sampler(app.handle());
+            window_mode::show_main_window_if_frontend_stalls(app.handle());
 
             #[cfg(debug_assertions)]
             {

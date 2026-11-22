@@ -13,6 +13,8 @@
     "allow-get-app-info",
     "allow-get-platform-info",
     "allow-ytm-control",
-    "allow-ytm-set-signin-visible"
+    "allow-ytm-set-signin-visible",
+    "allow-set-floating-regions",
+    "allow-present-main-window"
   ]
 }

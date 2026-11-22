@@ -14,6 +14,7 @@ import { el } from "@/lib/dom";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
 import { applyAmbience } from "@/lib/ambience";
+import { initWindowMode } from "@/lib/window-mode";
 import { searchQuery } from "@/lib/search-query";
 
 // Views
@@ -51,6 +52,9 @@ function init(): void {
   app.appendChild(createQueuePanel());
   app.appendChild(player);
   queuePanel.init();
+
+  // Floating vs full layout; also reveals the window after first paint
+  initWindowMode().catch((err) => console.error("[main] window mode setup failed:", err));
 
   // Register routes
   router

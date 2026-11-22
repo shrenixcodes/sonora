@@ -12,6 +12,8 @@ import { icon } from "@/icons";
 import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
 
+const GRIP_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
+
 export function createTitlebar(): HTMLElement {
   // Window controls need the Tauri runtime; in a plain browser (UI development) they do nothing.
   const appWindow = isTauri() ? getCurrentWindow() : null;
@@ -25,6 +27,12 @@ export function createTitlebar(): HTMLElement {
       el("div", {
         className: "titlebar__left",
         children: [
+          // Drag handle for the floating layout, where the gaps around panels are click-through.
+          el("span", {
+            className: "titlebar__grip",
+            attrs: { "data-tauri-drag-region": "", title: "Drag to move", "aria-hidden": "true" },
+            html: GRIP_ICON,
+          }),
           el("div", {
             className: "titlebar__nav",
             children: [
