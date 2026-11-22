@@ -1,5 +1,5 @@
 /*
- * Settings — layout for settings page sections and rows.
+ * Settings & Appearance Studio Styles.
  */
 
 .settings__section {
@@ -18,7 +18,7 @@
 .settings__rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .settings__row {
@@ -26,18 +26,23 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  transition: background var(--duration-fast) var(--ease-out);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
 }
 
 .settings__row:hover {
-  background: var(--color-hover);
+  background: var(--color-surface-secondary);
+  border-color: var(--color-border);
 }
 
 .settings__row-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-width: 60%;
 }
 
 .settings__row-label {
@@ -60,16 +65,147 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out);
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .settings__btn:hover {
   background: var(--color-surface-secondary);
   border-color: var(--color-text-tertiary);
+  transform: translateY(-1px);
 }
 
-.settings__btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.settings__actions-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── Segmented Control ───────────────────────────────────── */
+
+.settings__segmented {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg);
+  padding: 3px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+}
+
+.settings__seg-btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-full);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.settings__seg-btn:hover {
+  color: var(--color-text);
+}
+
+.settings__seg-btn--active {
+  background: var(--color-text);
+  color: var(--color-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Accent Palette Swatches ─────────────────────────────── */
+
+.settings__accent-palette {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings__accent-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-spring),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.settings__accent-swatch:hover {
+  transform: scale(1.15);
+}
+
+.settings__accent-swatch--active {
+  border-color: var(--color-text);
+  transform: scale(1.2);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+/* ── Select Dropdown ─────────────────────────────────────── */
+
+.settings__select {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  outline: none;
+  cursor: pointer;
+}
+
+.settings__select:focus {
+  border-color: var(--color-accent);
+}
+
+/* ── Toggle Switch ───────────────────────────────────────── */
+
+.settings__toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  position: relative;
+  cursor: pointer;
+  padding: 2px;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.settings__toggle--active {
+  background: var(--color-accent);
+}
+
+.settings__toggle-handle {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+.settings__toggle--active .settings__toggle-handle {
+  transform: translateX(20px);
+}
+
+/* ── Keyboard Shortcut Badge ─────────────────────────────── */
+
+.settings__kbd {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-bottom: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* ── Tags ────────────────────────────────────────────────── */
+
+.settings__tag {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-hover);
+  color: var(--color-accent);
+  border: 1px solid var(--color-border-subtle);
 }
