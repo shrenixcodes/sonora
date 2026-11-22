@@ -9,6 +9,8 @@ import { el } from "@/lib/dom";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
 import { ytmBridge } from "@/lib/playback/ytm-bridge";
+import { account } from "@/lib/ytm/account";
+import { router } from "@/lib/router";
 import { storage } from "@/lib/storage";
 import type { UserSettings, AmbientVisualMode } from "@/types/music";
 
@@ -41,15 +43,7 @@ export function renderSettings(container: HTMLElement): void {
       }),
 
       // ── Account ──────────────────────────────────────────
-      createSettingsSection("Account", [
-        createSettingRow(
-          "YouTube Music",
-          ytmBridge.available
-            ? "Sign in on YouTube Music's own page for your library, likes and Premium. Close the window when you're done."
-            : "Signing in is available in the Sonora desktop app.",
-          createSignInButton(),
-        ),
-      ]),
+      createSettingsSection("Account", [createAccountRow()]),
 
       // ── Appearance Studio ────────────────────────────────
       createSettingsSection("Appearance Studio", [
@@ -115,22 +109,6 @@ export function renderSettings(container: HTMLElement): void {
       ]),
 
       // ── YouTube Music Service ────────────────────────────
-      createSettingsSection("Service & Account", [
-        createSettingRow(
-          "YouTube Music",
-          "Active session: Guest / Local Library Mode",
-          el("button", {
-            className: "settings__btn",
-            text: "Manage Account",
-            onClick: () => {
-              alert(
-                "Sonora is running in native guest mode with full YouTube catalog discovery and local library persistence.",
-              );
-            },
-          }),
-        ),
-      ]),
-
       // ── Keyboard Shortcuts ───────────────────────────────
       createSettingsSection("Keyboard Shortcuts", [
         createShortcutRow("Space", "Play / Pause playback"),
@@ -160,20 +138,67 @@ export function renderSettings(container: HTMLElement): void {
   container.appendChild(content);
 }
 
-function createSignInButton(): HTMLElement {
-  const button = el("button", {
-    className: "btn btn--secondary",
-    text: "Open sign-in",
-    attrs: { type: "button" },
-    onClick: () => {
-      ytmBridge.setSignInVisible(true).catch((err) => {
-        console.error("[settings] could not open YouTube Music sign-in:", err);
-        button.textContent = "Couldn't open sign-in";
-      });
-    },
+/** YouTube Music sign-in status with a Sign in / Sign out button that follows it. */
+function createAccountRow(): HTMLElement {
+  const description = el("span", { className: "settings__row-description" });
+  const button = el("button", { className: "btn btn--secondary", attrs: { type: "button" } });
+  let busy = false;
+
+  const render = () => {
+    if (!ytmBridge.available) {
+      description.textContent = "Signing in is available in the Sonora desktop app.";
+      button.textContent = "Sign in";
+      button.setAttribute("disabled", "");
+      return;
+    }
+    const signedIn = account.isSignedIn;
+    description.textContent =
+      signedIn === null
+        ? "Checking YouTube Music…"
+        : signedIn
+          ? "Signed in. Home, likes and Premium come from your account."
+          : "Sign in on YouTube Music's own page for your library, likes and Premium. The window closes by itself when you're done.";
+    button.textContent = signedIn ? "Sign out" : "Sign in";
+    button.toggleAttribute("disabled", busy || signedIn === null);
+  };
+
+  button.addEventListener("click", async () => {
+    busy = true;
+    render();
+    try {
+      if (account.isSignedIn) {
+        await ytmBridge.signOut();
+        account.update(false);
+      } else {
+        await ytmBridge.setSignInVisible(true);
+      }
+    } catch (err) {
+      console.error("[settings] YouTube Music account action failed:", err);
+      description.textContent = "That didn't work. Try again in a moment.";
+    } finally {
+      busy = false;
+      button.toggleAttribute("disabled", account.isSignedIn === null);
+    }
   });
-  if (!ytmBridge.available) button.setAttribute("disabled", "");
-  return button;
+
+  render();
+  const stopListening = account.on("change", render);
+  const stopNav = router.onNavigate((path) => {
+    if (path === "/settings") return;
+    stopListening();
+    stopNav();
+  });
+
+  return el("div", {
+    className: "settings__row",
+    children: [
+      el("div", {
+        className: "settings__row-info",
+        children: [el("span", { className: "settings__row-label", text: "YouTube Music" }), description],
+      }),
+      button,
+    ],
+  });
 }
 
 function createSettingsSection(

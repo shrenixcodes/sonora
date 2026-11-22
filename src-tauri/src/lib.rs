@@ -11,12 +11,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(window_mode::FloatingRegions::default())
+        .manage(ytm::AccountState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::get_platform_info,
             ytm::ytm_report,
             ytm::ytm_control,
             ytm::ytm_set_signin_visible,
+            ytm::ytm_sign_out,
             ytm::ytm_request,
             ytm::ytm_response,
             window_mode::set_floating_regions,

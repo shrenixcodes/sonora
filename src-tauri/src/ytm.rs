@@ -5,6 +5,8 @@
 //! state through a single command (`ytm_report`), and the main window controls
 //! playback through a fixed set of validated commands (`ytm_control`).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url, Webview, WebviewUrl, WebviewWindowBuilder};
 
@@ -38,6 +40,18 @@ pub struct YtmState {
     pub muted: bool,
     /// True while YouTube plays an ad; metadata then describes the ad, not a track.
     pub ad: bool,
+    /// YouTube Music's own signed-in flag for this page.
+    #[serde(default)]
+    pub signed_in: bool,
+}
+
+/// Last signed-in flag seen, to notice the moment a sign-in completes.
+#[derive(Default)]
+pub struct AccountState(AtomicBool);
+
+/// True when a report shows a sign-in that has just completed.
+fn sign_in_completed(was_signed_in: bool, state: &YtmState) -> bool {
+    !was_signed_in && state.signed_in
 }
 
 /// Commands the main window may send to the YouTube Music page.
@@ -124,11 +138,19 @@ pub fn ytm_report<R: Runtime>(
     app: AppHandle<R>,
     webview: Webview<R>,
     state: YtmState,
+    account: tauri::State<'_, AccountState>,
 ) -> Result<(), String> {
     if webview.label() != YTM_LABEL {
         return Err("playback state can only come from the YouTube Music window".into());
     }
     log::debug!("ytm state: {state:?}");
+
+    let was_signed_in = account.0.swap(state.signed_in, Ordering::SeqCst);
+    if sign_in_completed(was_signed_in, &state) {
+        // The user just finished signing in; put the window away again.
+        log::info!("signed in to YouTube Music");
+        let _ = ytm_set_signin_visible(app.clone(), false);
+    }
     app.emit_to("main", STATE_EVENT, state)
         .map_err(|e| e.to_string())
 }
@@ -157,12 +179,36 @@ pub fn ytm_set_signin_visible<R: Runtime>(app: AppHandle<R>, visible: bool) -> R
     let window = app
         .get_webview_window(YTM_LABEL)
         .ok_or("YouTube Music window is not available")?;
+    // A taskbar entry while open, so the sign-in window can't get lost behind others.
     let result = if visible {
-        window.show().and_then(|_| window.set_focus())
+        window
+            .set_skip_taskbar(false)
+            .and_then(|_| window.show())
+            .and_then(|_| window.set_focus())
     } else {
-        window.hide()
+        window.hide().and_then(|_| window.set_skip_taskbar(true))
     };
     result.map_err(|e| e.to_string())
+}
+
+/// Signs out by wiping the YouTube Music window's own browser profile (it is
+/// separate from Sonora's interface) and reloading YouTube Music.
+#[tauri::command]
+pub fn ytm_sign_out<R: Runtime>(
+    app: AppHandle<R>,
+    account: tauri::State<'_, AccountState>,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window(YTM_LABEL)
+        .ok_or("YouTube Music window is not available")?;
+    window
+        .clear_all_browsing_data()
+        .map_err(|e| e.to_string())?;
+    account.0.store(false, Ordering::SeqCst);
+    let home: Url = YTM_HOME.parse().expect("YTM_HOME is a valid URL");
+    window.navigate(home).map_err(|e| e.to_string())?;
+    log::info!("signed out of YouTube Music");
+    Ok(())
 }
 
 /// Catalog requests the main window may ask the YouTube Music page to make.
@@ -311,6 +357,40 @@ mod tests {
         assert!(command_script(&YtmCommand::Seek(-1.0)).is_none());
         assert!(command_script(&YtmCommand::Seek(f64::NAN)).is_none());
         assert!(command_script(&YtmCommand::Load("dQw4w9WgXcQ".into())).is_none());
+    }
+
+    #[test]
+    fn notices_only_the_moment_sign_in_completes() {
+        let state = |signed_in| YtmState {
+            reason: "ready".into(),
+            video_id: None,
+            title: None,
+            artist: None,
+            album: None,
+            artwork_url: None,
+            paused: true,
+            current_time: 0.0,
+            duration: 0.0,
+            volume: 1.0,
+            muted: false,
+            ad: false,
+            signed_in,
+        };
+        assert!(sign_in_completed(false, &state(true)));
+        assert!(!sign_in_completed(true, &state(true)));
+        assert!(!sign_in_completed(false, &state(false)));
+        assert!(!sign_in_completed(true, &state(false)));
+    }
+
+    #[test]
+    fn older_reports_without_the_flag_count_as_signed_out() {
+        let parsed: YtmState = serde_json::from_str(
+            r#"{"reason":"ready","videoId":null,"title":null,"artist":null,"album":null,
+                "artworkUrl":null,"paused":true,"currentTime":0,"duration":0,"volume":1,
+                "muted":false,"ad":false}"#,
+        )
+        .unwrap();
+        assert!(!parsed.signed_in);
     }
 
     #[test]

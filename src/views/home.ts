@@ -9,6 +9,7 @@
 import { el, formatTime } from "@/lib/dom";
 import { icon } from "@/icons";
 import { catalog, CatalogError, type HomeShelf } from "@/lib/ytm/catalog";
+import { account } from "@/lib/ytm/account";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
@@ -62,9 +63,12 @@ export function renderHome(container: HTMLElement): void {
   };
   markPlaying(playerEngine.currentTrack);
   const stopTrackListener = playerEngine.on("trackChange", markPlaying);
+  // Signing in or out changes what YouTube Music suggests.
+  const stopAccountListener = account.on("change", () => load(true));
   const stopNavListener = router.onNavigate((path) => {
     if (path === "/") return;
     stopTrackListener();
+    stopAccountListener();
     stopNavListener();
   });
 

@@ -25,6 +25,7 @@ function report(overrides: Partial<YtmState>): YtmState {
     volume: 1,
     muted: false,
     ad: false,
+    signedIn: false,
     ...overrides,
   };
 }

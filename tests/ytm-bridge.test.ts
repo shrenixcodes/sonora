@@ -62,7 +62,20 @@ describe("YouTube Music bridge script", () => {
     loadBridge();
 
     const [first] = reports();
-    expect(first).toMatchObject({ reason: "ready", videoId: "dQw4w9WgXcQ", ad: false, duration: 200 });
+    expect(first).toMatchObject({ reason: "ready", videoId: "dQw4w9WgXcQ", ad: false, duration: 200, signedIn: false });
+  });
+
+  it("reports YouTube Music's own signed-in flag", () => {
+    setupPage({ ad: false });
+    (window as unknown as { ytcfg: { get: (k: string) => unknown } }).ytcfg = {
+      get: (key) => (key === "LOGGED_IN" ? true : undefined),
+    };
+    try {
+      loadBridge();
+      expect(reports()[0]).toMatchObject({ signedIn: true });
+    } finally {
+      delete (window as unknown as { ytcfg?: unknown }).ytcfg;
+    }
   });
 
   it("controls the track when no ad is playing", () => {

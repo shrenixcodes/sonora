@@ -43,6 +43,7 @@
         volume: video ? video.volume : 1,
         muted: video ? video.muted : false,
         ad: isAdPlaying(),
+        signedIn: !!(window.ytcfg && window.ytcfg.get && window.ytcfg.get("LOGGED_IN")),
       },
     }).catch(() => {});
   };

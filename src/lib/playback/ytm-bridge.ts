@@ -24,6 +24,8 @@ export interface YtmState {
   muted: boolean;
   /** True while YouTube plays an ad; metadata then describes the ad. */
   ad: boolean;
+  /** YouTube Music's own signed-in flag. */
+  signedIn: boolean;
 }
 
 /** Mirrors `YtmCommand` in ytm.rs. */
@@ -44,6 +46,11 @@ export const ytmBridge = {
 
   onState(handler: (state: YtmState) => void): Promise<UnlistenFn> {
     return listen<YtmState>("ytm://state", (event) => handler(event.payload));
+  },
+
+  /** Clears the YouTube Music window's sign-in and reloads it signed out. */
+  signOut(): Promise<void> {
+    return invoke("ytm_sign_out");
   },
 
   /** Shows the YouTube Music window so the user can sign in, or hides it. */
