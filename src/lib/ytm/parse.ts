@@ -325,6 +325,45 @@ export function parseLibraryPlaylists(response: unknown): LibraryPlaylist[] {
   });
 }
 
+/** Albums saved in the library, as playable collections. */
+export function parseLibraryAlbums(response: unknown): LibraryPlaylist[] {
+  const seen = new Set<string>();
+  return findAll(response, "musicTwoRowItemRenderer").flatMap((item) => {
+    const album = parseCollectionItem(item);
+    if (!album || album.kind !== "album" || !album.playlistId || seen.has(album.playlistId)) return [];
+    seen.add(album.playlistId);
+    return [{ id: album.playlistId, title: album.title, subtitle: album.subtitle, artworkUrl: album.artworkUrl }];
+  });
+}
+
+/** An artist the user listens to or follows. */
+export interface LibraryArtist {
+  title: string;
+  subtitle: string;
+  artworkUrl: string;
+}
+
+/** Artists from the library's Artists page (song rows that link to an artist). */
+export function parseLibraryArtists(response: unknown): LibraryArtist[] {
+  const seen = new Set<string>();
+  return findAll(response, "musicResponsiveListItemRenderer").flatMap((item) => {
+    if (pageTypeOf(item.navigationEndpoint) !== "MUSIC_PAGE_TYPE_ARTIST") return [];
+    const columns = (Array.isArray(item.flexColumns) ? item.flexColumns : []).map((column) =>
+      joined(runsOf(get(column, "musicResponsiveListItemFlexColumnRenderer", "text"))),
+    );
+    const title = columns[0];
+    if (!title || seen.has(title)) return [];
+    seen.add(title);
+    return [
+      {
+        title,
+        subtitle: columns.slice(1).filter(Boolean).join(SEPARATOR),
+        artworkUrl: artworkUrl(get(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
+      },
+    ];
+  });
+}
+
 /** Token for the next page of a long list, if there is one. */
 export function parseContinuation(response: unknown): string | null {
   const command = findAll(response, "continuationCommand").find((c) => typeof c.token === "string");

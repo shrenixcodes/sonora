@@ -68,7 +68,6 @@ function init(): void {
     .route("/", renderHome)
     .route("/explore", renderExplore)
     .route("/search", renderSearch)
-    .route("/library", renderLibrary)
     .route("/liked", renderLibrary)
     .route("/playlists", renderLibrary)
     .route("/albums", renderLibrary)

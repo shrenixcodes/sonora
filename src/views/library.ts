@@ -10,31 +10,32 @@ import { el, formatTime } from "@/lib/dom";
 import { icon } from "@/icons";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
-import { catalog, CatalogError, type LibraryPlaylist } from "@/lib/ytm/catalog";
+import { catalog, CatalogError, type LibraryArtist, type LibraryPlaylist } from "@/lib/ytm/catalog";
+import { router } from "@/lib/router";
+import { searchQuery } from "@/lib/search-query";
 import { catalogAvailable } from "@/lib/ytm/client";
 import { account } from "@/lib/ytm/account";
 import { dedupeById } from "@/lib/tracks";
 import type { Track, Playlist } from "@/types/music";
 
 export function renderLibrary(container: HTMLElement): void {
-  const hash = window.location.hash.slice(1) || "/library";
+  const hash = window.location.hash.slice(1);
   const content = el("div", { className: "main__content" });
 
-  if (hash === "/liked") {
-    renderLikedSongs(content);
-  } else if (hash === "/history") {
+  if (hash === "/history") {
     renderHistory(content);
   } else if (hash === "/playlists") {
     renderPlaylists(content);
+  } else if (hash === "/albums") {
+    renderAlbums(content);
+  } else if (hash === "/artists") {
+    renderArtists(content);
   } else {
-    renderMainLibrary(content);
+    renderLikedSongs(content);
   }
 
   container.appendChild(content);
 }
-
-/** The account can only be read in the desktop app, and only while signed in. */
-const canReadYtmLibrary = () => catalogAvailable() && account.isSignedIn !== false;
 
 function libraryNotice(err: unknown, what: string): HTMLElement {
   const message = err instanceof CatalogError ? err.message : `Couldn't load your ${what} from YouTube Music.`;
@@ -356,29 +357,96 @@ function renderPlaylists(container: HTMLElement): void {
 }
 
 function loadYtmPlaylists(host: HTMLElement): void {
-  const title = el("div", {
-    className: "section__header",
-    children: [el("h2", { className: "section__title", text: "From YouTube Music" })],
-  });
+  loadYtmCards(host, "playlists", "From YouTube Music", () => catalog.getLibraryPlaylists(), createYtmPlaylistCard);
+}
+
+/** Loads one kind of library item from YouTube Music into `host` as a card grid. */
+function loadYtmCards<T>(
+  host: HTMLElement,
+  what: string,
+  heading: string | null,
+  load: () => Promise<T[]>,
+  card: (item: T) => HTMLElement,
+): void {
+  const title = heading
+    ? [el("div", { className: "section__header", children: [el("h2", { className: "section__title", text: heading })] })]
+    : [];
+  if (!catalogAvailable()) {
+    host.replaceChildren(
+      ...title,
+      el("p", { className: "home__hint", text: `Your ${what} show up in the Sonora desktop app.` }),
+    );
+    return;
+  }
   if (account.isSignedIn === false) {
-    host.replaceChildren(title, signInHint("playlists"));
+    host.replaceChildren(...title, signInHint(what));
     return;
   }
 
   host.setAttribute("aria-busy", "true");
-  host.replaceChildren(title, el("p", { className: "home__hint", text: "Loading your playlists…" }));
-  catalog
-    .getLibraryPlaylists()
+  host.replaceChildren(...title, el("p", { className: "home__hint", text: `Loading your ${what}…` }));
+  load()
     .then((items) => {
+      if (!host.isConnected) return;
       host.replaceChildren(
-        title,
+        ...title,
         items.length > 0
-          ? el("div", { className: "card-grid", children: items.map(createYtmPlaylistCard) })
-          : el("p", { className: "home__hint", text: "No playlists saved in your YouTube Music library yet." }),
+          ? el("div", { className: "card-grid", children: items.map(card) })
+          : el("p", { className: "home__hint", text: `No ${what} saved in your YouTube Music library yet.` }),
       );
     })
-    .catch((err) => host.replaceChildren(title, libraryNotice(err, "playlists")))
+    .catch((err) => host.isConnected && host.replaceChildren(...title, libraryNotice(err, what)))
     .finally(() => host.removeAttribute("aria-busy"));
+}
+
+function libraryPage(container: HTMLElement, title: string, subtitle: string): HTMLElement {
+  const body = el("div", { className: "section", attrs: { "aria-live": "polite" } });
+  container.append(
+    el("div", {
+      className: "page-header",
+      children: [
+        el("h1", { className: "page-header__title", text: title }),
+        el("p", { className: "page-header__subtitle", text: subtitle }),
+      ],
+    }),
+    body,
+  );
+  return body;
+}
+
+function renderAlbums(container: HTMLElement): void {
+  const body = libraryPage(container, "Albums", "Albums saved in your YouTube Music library");
+  loadYtmCards(body, "albums", null, () => catalog.getLibraryAlbums(), createYtmPlaylistCard);
+}
+
+function renderArtists(container: HTMLElement): void {
+  const body = libraryPage(container, "Artists", "Artists in your YouTube Music library");
+  loadYtmCards(body, "artists", null, () => catalog.getLibraryArtists(), createArtistCard);
+}
+
+/** Artists have no page in Sonora yet, so a click searches for their songs. */
+function createArtistCard(artist: LibraryArtist): HTMLElement {
+  return el("button", {
+    className: "card card--artist",
+    attrs: { type: "button", title: `Find songs by ${artist.title}` },
+    children: [
+      el("div", {
+        className: "card__artwork card__artwork--round",
+        children: [el("img", { attrs: { src: artist.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" } })],
+      }),
+      el("div", {
+        className: "card__info",
+        children: [
+          el("span", { className: "card__title truncate", text: artist.title }),
+          el("span", { className: "card__subtitle truncate", text: artist.subtitle }),
+        ],
+      }),
+    ],
+    onClick: () => {
+      searchQuery.set(artist.title);
+      router.navigate("/search");
+    },
+  });
 }
 
 /** Plays the playlist from the top; its songs are fetched when clicked. */
@@ -417,117 +485,6 @@ function createYtmPlaylistCard(playlist: LibraryPlaylist): HTMLElement {
         loading = false;
       }
     },
-  });
-}
-
-function renderMainLibrary(container: HTMLElement): void {
-  const liked = storage.getLikedTracks();
-  const history = storage.getHistory();
-  const playlists = storage.getPlaylists();
-
-  const likedSubtitle = el("span", { className: "card__subtitle truncate", text: `${liked.length} songs` });
-  const playlistsSubtitle = el("span", {
-    className: "card__subtitle truncate",
-    text: `${playlists.length} playlists`,
-  });
-
-  const header = el("div", {
-    className: "page-header",
-    children: [
-      el("h1", { className: "page-header__title", text: "Your Library" }),
-      el("p", {
-        className: "page-header__subtitle",
-        text: "Quick overview of your music collection",
-      }),
-    ],
-  });
-
-  const summarySection = el("div", {
-    className: "section",
-    children: [
-      el("div", {
-        className: "card-grid",
-        children: [
-          createLibraryFolderCard("Liked Music", likedSubtitle, "heart", "#/liked"),
-          createLibraryFolderCard("Playlists", playlistsSubtitle, "playlist", "#/playlists"),
-          createLibraryFolderCard(
-            "Listening History",
-            el("span", { className: "card__subtitle truncate", text: `${history.length} songs played` }),
-            "history",
-            "#/history",
-          ),
-        ],
-      }),
-    ],
-  });
-
-  container.appendChild(header);
-  container.appendChild(summarySection);
-
-  if (canReadYtmLibrary()) {
-    catalog
-      .getLikedSongs()
-      .then((remote) => {
-        likedSubtitle.textContent = `${dedupeById([...liked, ...remote]).length} songs`;
-      })
-      .catch(() => {});
-    catalog
-      .getLibraryPlaylists()
-      .then((remote) => {
-        playlistsSubtitle.textContent = `${playlists.length + remote.length} playlists`;
-      })
-      .catch(() => {});
-  }
-
-  if (liked.length > 0) {
-    const likedSection = el("div", {
-      className: "section",
-      children: [
-        el("div", {
-          className: "section__header",
-          children: [
-            el("h2", { className: "section__title", text: "Liked songs" }),
-          ],
-        }),
-        el("div", {
-          className: "track-list",
-          children: liked
-            .slice(0, 5)
-            .map((t, idx) => createTrackRow(t, idx + 1, liked)),
-        }),
-      ],
-    });
-    container.appendChild(likedSection);
-  }
-}
-
-function createLibraryFolderCard(
-  title: string,
-  subtitle: HTMLElement,
-  iconName: any,
-  href: string,
-): HTMLElement {
-  return el("a", {
-    className: "card card--folder",
-    attrs: { href },
-    children: [
-      el("div", {
-        className: "card__artwork card__artwork--folder",
-        children: [
-          el("div", {
-            className: "card__folder-icon",
-            html: icon(iconName),
-          }),
-        ],
-      }),
-      el("div", {
-        className: "card__info",
-        children: [
-          el("span", { className: "card__title truncate", text: title }),
-          subtitle,
-        ],
-      }),
-    ],
   });
 }
 

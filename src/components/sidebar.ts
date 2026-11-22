@@ -22,7 +22,6 @@ const mainNav: NavItem[] = [
 ];
 
 const libraryNav: NavItem[] = [
-  { label: "Library", icon: "library", path: "/library" },
   { label: "Liked Music", icon: "heart", path: "/liked" },
   { label: "Playlists", icon: "playlist", path: "/playlists" },
   { label: "Albums", icon: "album", path: "/albums" },

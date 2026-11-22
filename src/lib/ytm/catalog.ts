@@ -12,6 +12,8 @@ import {
   parseContinuation,
   parseHomeChips,
   parseHomeShelves,
+  parseLibraryAlbums,
+  parseLibraryArtists,
   parseLibraryPlaylists,
   parsePlaylistTracks,
   parseSearchSongs,
@@ -22,12 +24,13 @@ import {
   type HomeItem,
   type HomePage,
   type HomeShelf,
+  type LibraryArtist,
   type LibraryPlaylist,
 } from "@/lib/ytm/parse";
 import { dedupeById } from "@/lib/tracks";
 import type { Track } from "@/types/music";
 
-export type { AccountProfile, HomeChip, HomeCollection, HomeItem, HomePage, HomeShelf, LibraryPlaylist };
+export type { AccountProfile, HomeChip, HomeCollection, HomeItem, HomePage, HomeShelf, LibraryArtist, LibraryPlaylist };
 export { CatalogError };
 
 const HOME_TTL_MS = 5 * 60_000;
@@ -119,6 +122,16 @@ export class Catalog {
   /** Playlists saved in the signed-in user's library. */
   async getLibraryPlaylists(): Promise<LibraryPlaylist[]> {
     return parseLibraryPlaylists(await this.fetch({ kind: "libraryPlaylists" }));
+  }
+
+  /** Albums saved in the signed-in user's library. */
+  async getLibraryAlbums(): Promise<LibraryPlaylist[]> {
+    return parseLibraryAlbums(await this.fetch({ kind: "libraryAlbums" }));
+  }
+
+  /** Artists in the signed-in user's library. */
+  async getLibraryArtists(): Promise<LibraryArtist[]> {
+    return parseLibraryArtists(await this.fetch({ kind: "libraryArtists" }));
   }
 
   /** Songs of a playlist, album or mix; mixes without a playlist page fall back to their watch queue. */

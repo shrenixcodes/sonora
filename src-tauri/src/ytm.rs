@@ -252,6 +252,8 @@ pub enum YtmRequest {
     Search { query: String },
     LikedSongs,
     LibraryPlaylists,
+    LibraryAlbums,
+    LibraryArtists,
     AccountInfo,
     Explore,
     Playlist { id: String },
@@ -275,6 +277,8 @@ impl YtmRequest {
             YtmRequest::Home { params: None }
             | YtmRequest::LikedSongs
             | YtmRequest::LibraryPlaylists
+            | YtmRequest::LibraryAlbums
+            | YtmRequest::LibraryArtists
             | YtmRequest::AccountInfo
             | YtmRequest::Explore => {
                 Ok(())

@@ -110,6 +110,10 @@
   position: relative;
 }
 
+.card--artist .card__info {
+  text-align: center;
+}
+
 .card__artwork img {
   width: 100%;
   height: 100%;
@@ -361,23 +365,10 @@
   text-align: right;
 }
 
-/* ── Artist round cards & Folders ────────────────────────── */
+/* ── Artist round cards ──────────────────────────────────── */
 
 .card__artwork--round {
   border-radius: var(--radius-full);
-}
-
-.card--folder .card__artwork--folder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-surface-secondary);
-  color: var(--color-accent);
-}
-
-.card__folder-icon svg {
-  width: 36px;
-  height: 36px;
 }
 
 /* ── Mood & Genre Grid ───────────────────────────────────── */

@@ -6,6 +6,8 @@ import {
   parseContinuation,
   parseHomeChips,
   parseHomeShelves,
+  parseLibraryAlbums,
+  parseLibraryArtists,
   parseLibraryPlaylists,
   parseWatchPlaylist,
   parsePlaylistTracks,
@@ -362,5 +364,37 @@ describe("parseAccountProfile", () => {
       photoUrl: "https://yt3.ggpht.com/abc=s176-c-k-c0x00ffffff-no-rj",
     });
     expect(parseAccountProfile({})).toBeNull();
+  });
+});
+
+describe("library albums and artists", () => {
+  it("reads saved albums with the playlist that plays them", () => {
+    const album = (title: string, playlistId?: string) => ({
+      musicTwoRowItemRenderer: {
+        title: { runs: [{ text: title }] },
+        subtitle: { runs: [{ text: "Album" }, SEP, { text: "2016" }] },
+        navigationEndpoint: browse("MPREb_" + title, "MUSIC_PAGE_TYPE_ALBUM"),
+        ...(playlistId
+          ? { thumbnailOverlay: { musicItemThumbnailOverlayRenderer: { content: { musicPlayButtonRenderer: { playNavigationEndpoint: { watchPlaylistEndpoint: { playlistId } } } } } } }
+          : {}),
+      },
+    });
+    expect(parseLibraryAlbums({ items: [album("Starboy", "OLAK1"), album("NoPlay")] })).toEqual([
+      { id: "OLAK1", title: "Starboy", subtitle: "Album • 2016", artworkUrl: "" },
+    ]);
+  });
+
+  it("reads artist rows and skips rows that aren't artists", () => {
+    const row = (title: string, pageType: string) => ({
+      musicResponsiveListItemRenderer: {
+        navigationEndpoint: browse("UC" + title, pageType),
+        flexColumns: [column({ text: title }), column({ text: "12 songs" })],
+        thumbnail: thumbs("https://lh3.googleusercontent.com/" + title),
+      },
+    });
+    const artists = parseLibraryArtists({ items: [row("Talwiinder", "MUSIC_PAGE_TYPE_ARTIST"), row("Song", "MUSIC_PAGE_TYPE_ALBUM")] });
+    expect(artists).toHaveLength(1);
+    expect(artists[0]).toMatchObject({ title: "Talwiinder", subtitle: "12 songs" });
+    expect(artists[0].artworkUrl).toContain("=w544-h544");
   });
 });
