@@ -32,8 +32,10 @@
   margin-bottom: var(--space-8);
 }
 
+/* Hierarchy follows Apple Music: a large bold title, bold section headers,
+   quiet secondary text. Inter's Display optical size does the tightening. */
 .page-header__title {
-  font-size: var(--text-3xl);
+  font-size: var(--text-4xl);
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
@@ -60,8 +62,9 @@
 }
 
 .section__title {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
   color: var(--color-text);
 }
 
@@ -411,8 +414,10 @@
 }
 
 .mood-card__title {
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
   color: var(--color-text);
 }
 
@@ -569,6 +574,7 @@
 
 .shelf-card__subtitle {
   font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-secondary);
 }
 

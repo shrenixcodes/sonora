@@ -3,12 +3,15 @@
  * Layout structure, scrollbar styling, and base element appearance.
  */
 
+/* Inter 4.1 variable (SIL OFL, see public/fonts/Inter-LICENSE.txt). One file
+   covers weights 100–900 and an optical-size axis: large headings get the
+   tighter Display cut automatically, small text the roomier Text cut. */
 @font-face {
   font-family: "Inter";
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url("/fonts/Inter-Variable.woff2") format("woff2");
+  src: url("/fonts/InterVariable.woff2") format("woff2");
 }
 
 html,
@@ -18,6 +21,8 @@ body {
   font-family: var(--font-family);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
   color: var(--color-text);
   /* The window is transparent; #app paints the background (see floating.css). */
   background: transparent;
