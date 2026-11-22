@@ -244,6 +244,9 @@ describe("helpers", () => {
       "https://i.ytimg.com/vi/x/hqdefault.jpg",
     );
     expect(artworkUrl([])).toBe("");
+    expect(artworkUrl([{ url: "//www.gstatic.com/ytm/liked.png", width: 192 }])).toBe(
+      "https://www.gstatic.com/ytm/liked.png",
+    );
   });
 });
 

@@ -30,6 +30,8 @@ import { renderNowPlaying } from "@/views/now-playing";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
 
+const ARTWORK_PLACEHOLDER = "/artwork-placeholder.svg";
+
 function init(): void {
   const app = document.getElementById("app");
   if (!app) return;
@@ -82,6 +84,18 @@ function init(): void {
   playerEngine.on("paletteChange", (palette) => applyAmbience(palette));
   playerEngine.on("trackChange", (track) => ambientArtwork.set(track?.artworkUrl || null));
   ambientArtwork.set(playerEngine.currentTrack?.artworkUrl || null);
+
+  // Artwork that fails to load shows the placeholder instead of a broken image
+  document.addEventListener(
+    "error",
+    (e) => {
+      const img = e.target;
+      if (!(img instanceof HTMLImageElement) || img.closest(".ambient-art")) return;
+      if (img.getAttribute("src") === ARTWORK_PLACEHOLDER) return;
+      img.src = ARTWORK_PLACEHOLDER;
+    },
+    true,
+  );
 
   // Confirm which Google account a sign-in from Settings ended up using
   account.on("signInComplete", showSignInConfirmation);

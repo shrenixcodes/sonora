@@ -81,7 +81,10 @@ export function artworkUrl(thumbnails: unknown): string {
   const largest = thumbnails
     .filter(isObject)
     .reduce<Json | null>((best, t) => (!best || Number(t.width) > Number(best.width) ? t : best), null);
-  const url = typeof largest?.url === "string" ? largest.url : "";
+  let url = typeof largest?.url === "string" ? largest.url : "";
+  // Some covers (Liked Music, auto playlists) come without a scheme, which
+  // would resolve against the app's own origin instead of the web.
+  if (url.startsWith("//")) url = `https:${url}`;
   return url.replace(/=w\d+-h\d+/, `=w${ARTWORK_SIZE}-h${ARTWORK_SIZE}`);
 }
 
