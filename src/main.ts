@@ -16,6 +16,8 @@ import { playerEngine } from "@/lib/playback/engine";
 import { applyAmbience } from "@/lib/ambience";
 import { initWindowMode } from "@/lib/window-mode";
 import { searchQuery } from "@/lib/search-query";
+import { account } from "@/lib/ytm/account";
+import { showSignInConfirmation } from "@/components/sign-in-confirm";
 
 // Views
 import { renderHome } from "@/views/home";
@@ -75,6 +77,9 @@ function init(): void {
 
   // Tint the shell with the current artwork
   playerEngine.on("paletteChange", (palette) => applyAmbience(palette));
+
+  // Confirm which Google account a sign-in from Settings ended up using
+  account.on("signInComplete", showSignInConfirmation);
 
   // Register desktop keyboard shortcuts
   setupGlobalShortcuts();

@@ -244,3 +244,68 @@
 .settings__avatar[hidden] {
   display: none;
 }
+
+/* ── Sign-in confirmation ───────────────────────────────── */
+
+.signin-confirm {
+  margin: auto;
+  width: min(380px, calc(100vw - 48px));
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-2xl);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+.signin-confirm::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.signin-confirm__avatar {
+  display: block;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto var(--space-4);
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  box-shadow: 0 0 0 3px var(--color-accent);
+}
+
+.signin-confirm__avatar[hidden] {
+  display: none;
+}
+
+.signin-confirm__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-3);
+}
+
+.signin-confirm__name {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.signin-confirm__detail,
+.signin-confirm__hint,
+.signin-confirm__status {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.signin-confirm__hint {
+  margin-top: var(--space-4);
+}
+
+.signin-confirm__status:empty {
+  display: none;
+}
+
+.signin-confirm__actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
