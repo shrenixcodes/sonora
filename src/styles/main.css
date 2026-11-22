@@ -196,3 +196,216 @@
   color: var(--color-text-secondary);
   max-width: 320px;
 }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-full);
+  transition: transform var(--duration-fast) var(--ease-spring),
+              background var(--duration-fast) var(--ease-out),
+              opacity var(--duration-fast) var(--ease-out);
+}
+
+.btn:hover {
+  transform: scale(1.02);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn--primary {
+  background: var(--color-accent);
+  color: #FFFFFF;
+}
+
+.btn--secondary {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.btn--secondary:hover {
+  background: var(--color-surface-secondary);
+}
+
+.btn__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* ── Track List & Rows ───────────────────────────────────── */
+
+.track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.track-row {
+  display: grid;
+  grid-template-columns: 32px 40px 1fr 1fr 36px 48px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.track-row:hover {
+  background: var(--color-hover);
+}
+
+.track-row__index {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.track-row:hover .track-row__index {
+  display: none;
+}
+
+.track-row__play-icon {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+}
+
+.track-row__play-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.track-row:hover .track-row__play-icon {
+  display: flex;
+}
+
+.track-row__art {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--color-surface-secondary);
+}
+
+.track-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.track-row__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.track-row__artist {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.track-row__album {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.track-row__like-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-full);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.track-row__like-btn:hover {
+  color: var(--color-accent);
+}
+
+.track-row__like-btn--active {
+  color: var(--color-accent);
+}
+
+.track-row__like-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.track-row__duration {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
+  text-align: right;
+}
+
+/* ── Artist round cards & Folders ────────────────────────── */
+
+.card__artwork--round {
+  border-radius: var(--radius-full);
+}
+
+.card--folder .card__artwork--folder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-secondary);
+  color: var(--color-accent);
+}
+
+.card__folder-icon svg {
+  width: 36px;
+  height: 36px;
+}
+
+/* ── Mood & Genre Grid ───────────────────────────────────── */
+
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.mood-card {
+  height: 100px;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--color-surface), var(--color-surface-secondary));
+  border: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-spring),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.mood-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-accent);
+}
+
+.mood-card__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
