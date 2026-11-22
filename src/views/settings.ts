@@ -141,6 +141,8 @@ export function renderSettings(container: HTMLElement): void {
 /** YouTube Music sign-in status with a Sign in / Sign out button that follows it. */
 function createAccountRow(): HTMLElement {
   const description = el("span", { className: "settings__row-description" });
+  const label = el("span", { className: "settings__row-label", text: "YouTube Music" });
+  const avatar = el("img", { className: "settings__avatar", attrs: { alt: "", hidden: "" } });
   const button = el("button", { className: "btn btn--secondary", attrs: { type: "button" } });
   let busy = false;
 
@@ -152,12 +154,18 @@ function createAccountRow(): HTMLElement {
       return;
     }
     const signedIn = account.isSignedIn;
+    const profile = signedIn ? account.profile : null;
+    label.textContent = profile ? profile.name : "YouTube Music";
+    avatar.toggleAttribute("hidden", !profile?.photoUrl);
+    if (profile?.photoUrl) avatar.setAttribute("src", profile.photoUrl);
     description.textContent =
       signedIn === null
         ? "Checking YouTube Music…"
-        : signedIn
-          ? "Signed in. Home, likes and Premium come from your account."
-          : "Sign in on YouTube Music's own page for your library, likes and Premium. The window closes by itself when you're done.";
+        : profile
+          ? [profile.email ?? profile.handle, "Signed in to YouTube Music"].filter(Boolean).join(" · ")
+          : signedIn
+            ? "Signed in. Home, likes and Premium come from your account."
+            : "Sign in on YouTube Music's own page for your library, likes and Premium. The window closes by itself when you're done.";
     button.textContent = signedIn ? "Sign out" : "Sign in";
     // Still offer sign-in while the status is unknown, so a slow page can't lock the button.
     button.toggleAttribute("disabled", busy);
@@ -171,6 +179,7 @@ function createAccountRow(): HTMLElement {
         await ytmBridge.signOut();
         account.update(false);
       } else {
+        account.beginSignIn();
         await ytmBridge.setSignInVisible(true);
       }
     } catch (err) {
@@ -184,9 +193,11 @@ function createAccountRow(): HTMLElement {
 
   render();
   const stopListening = account.on("change", render);
+  const stopProfile = account.on("profile", render);
   const stopNav = router.onNavigate((path) => {
     if (path === "/settings") return;
     stopListening();
+    stopProfile();
     stopNav();
   });
 
@@ -194,8 +205,11 @@ function createAccountRow(): HTMLElement {
     className: "settings__row",
     children: [
       el("div", {
-        className: "settings__row-info",
-        children: [el("span", { className: "settings__row-label", text: "YouTube Music" }), description],
+        className: "settings__account",
+        children: [
+          avatar,
+          el("div", { className: "settings__row-info", children: [label, description] }),
+        ],
       }),
       button,
     ],

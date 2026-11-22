@@ -252,6 +252,7 @@ pub enum YtmRequest {
     Search { query: String },
     LikedSongs,
     LibraryPlaylists,
+    AccountInfo,
     Playlist { id: String },
     WatchPlaylist { id: String },
     /// Next page of a list the page already returned.
@@ -270,7 +271,10 @@ fn is_token_text(value: &str, max: usize, extra: &[char]) -> bool {
 impl YtmRequest {
     fn validate(&self) -> Result<(), String> {
         match self {
-            YtmRequest::Home { params: None } | YtmRequest::LikedSongs | YtmRequest::LibraryPlaylists => {
+            YtmRequest::Home { params: None }
+            | YtmRequest::LikedSongs
+            | YtmRequest::LibraryPlaylists
+            | YtmRequest::AccountInfo => {
                 Ok(())
             }
             YtmRequest::Home { params: Some(params) } => {

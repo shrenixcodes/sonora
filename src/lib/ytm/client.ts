@@ -14,6 +14,7 @@ export type CatalogRequest =
   | { kind: "search"; query: string }
   | { kind: "likedSongs" }
   | { kind: "libraryPlaylists" }
+  | { kind: "accountInfo" }
   | { kind: "playlist"; id: string }
   | { kind: "watchPlaylist"; id: string }
   | { kind: "continuation"; token: string };

@@ -329,3 +329,27 @@ export function parseContinuation(response: unknown): string | null {
   const next = findAll(response, "nextContinuationData").find((c) => typeof c.continuation === "string");
   return next ? (next.continuation as string) : null;
 }
+
+/** The signed-in Google account, as shown in YouTube Music's account menu. */
+export interface AccountProfile {
+  name: string;
+  /** Channel handle such as "@someone", when the account has one. */
+  handle?: string;
+  email?: string;
+  photoUrl: string;
+}
+
+export function parseAccountProfile(response: unknown): AccountProfile | null {
+  const header = findAll(response, "activeAccountHeaderRenderer")[0];
+  if (!header) return null;
+  const name = joined(runsOf(header.accountName));
+  if (!name) return null;
+  const handle = joined(runsOf(header.channelHandle));
+  const email = joined(runsOf(header.email));
+  return {
+    name,
+    ...(handle ? { handle } : {}),
+    ...(email ? { email } : {}),
+    photoUrl: artworkUrl(get(header, "accountPhoto", "thumbnails")).replace(/=s\d+/, "=s176"),
+  };
+}

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   artworkUrl,
+  parseAccountProfile,
   parseDuration,
   parseContinuation,
   parseHomeChips,
@@ -328,5 +329,35 @@ describe("parseWatchPlaylist", () => {
         artworkUrl: "https://i.ytimg.com/a=w544-h544",
       },
     ]);
+  });
+});
+
+describe("parseAccountProfile", () => {
+  it("reads the account name, handle and a sharper photo", () => {
+    const response = {
+      actions: [
+        {
+          openPopupAction: {
+            popup: {
+              multiPageMenuRenderer: {
+                header: {
+                  activeAccountHeaderRenderer: {
+                    accountName: { runs: [{ text: "Alex Rivera" }] },
+                    channelHandle: { runs: [{ text: "@alex" }] },
+                    accountPhoto: { thumbnails: [{ url: "https://yt3.ggpht.com/abc=s108-c-k-c0x00ffffff-no-rj", width: 108 }] },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
+    expect(parseAccountProfile(response)).toEqual({
+      name: "Alex Rivera",
+      handle: "@alex",
+      photoUrl: "https://yt3.ggpht.com/abc=s176-c-k-c0x00ffffff-no-rj",
+    });
+    expect(parseAccountProfile({})).toBeNull();
   });
 });

@@ -219,3 +219,28 @@
   color: var(--color-accent);
   border: 1px solid var(--color-border-subtle);
 }
+
+/* Signed-in Google account: profile picture beside the name. */
+.settings__account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.settings__account .settings__row-info {
+  max-width: none;
+}
+
+.settings__avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  background: var(--color-surface-secondary);
+}
+
+.settings__avatar[hidden] {
+  display: none;
+}

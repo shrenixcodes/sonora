@@ -8,6 +8,7 @@
 
 import { CatalogError, requestCatalog, type CatalogRequest } from "@/lib/ytm/client";
 import {
+  parseAccountProfile,
   parseContinuation,
   parseHomeChips,
   parseHomeShelves,
@@ -15,6 +16,7 @@ import {
   parsePlaylistTracks,
   parseSearchSongs,
   parseWatchPlaylist,
+  type AccountProfile,
   type HomeChip,
   type HomeCollection,
   type HomeItem,
@@ -25,7 +27,7 @@ import {
 import { dedupeById } from "@/lib/tracks";
 import type { Track } from "@/types/music";
 
-export type { HomeChip, HomeCollection, HomeItem, HomePage, HomeShelf, LibraryPlaylist };
+export type { AccountProfile, HomeChip, HomeCollection, HomeItem, HomePage, HomeShelf, LibraryPlaylist };
 export { CatalogError };
 
 const HOME_TTL_MS = 5 * 60_000;
@@ -87,6 +89,11 @@ export class Catalog {
     const trimmed = query.trim();
     if (!trimmed) return [];
     return parseSearchSongs(await this.fetch({ kind: "search", query: trimmed }));
+  }
+
+  /** Name and picture of the signed-in Google account. */
+  async getAccountProfile(): Promise<AccountProfile | null> {
+    return parseAccountProfile(await this.fetch({ kind: "accountInfo" }));
   }
 
   /** Songs on the signed-in user's Liked Music playlist. */
