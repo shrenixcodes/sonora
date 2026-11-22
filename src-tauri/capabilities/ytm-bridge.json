@@ -1,0 +1,9 @@
+{
+  "identifier": "ytm-bridge",
+  "description": "Lets the YouTube Music page report playback state, and nothing else",
+  "windows": ["ytm"],
+  "remote": {
+    "urls": ["https://music.youtube.com/*"]
+  },
+  "permissions": ["allow-ytm-report"]
+}

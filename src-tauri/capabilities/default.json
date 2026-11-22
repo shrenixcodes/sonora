@@ -4,6 +4,10 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    "allow-get-app-info",
+    "allow-get-platform-info",
+    "allow-ytm-control",
+    "allow-ytm-set-signin-visible"
   ]
 }
