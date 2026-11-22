@@ -90,7 +90,8 @@ body {
   }
 }
 
-/* Shared look for the sidebar, content, queue and player panels. */
+/* Shared look for the sidebar, content, queue and player panels: frosted
+   glass over the artwork backdrop, with only a light blur. */
 .sidebar,
 .main,
 .queue-panel,
@@ -98,6 +99,43 @@ body {
   background: var(--color-panel);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+
+/* ── Artwork backdrop ────────────────────────────────────
+ * The playing track's artwork, lightly blurred, fills the window behind the
+ * panels (src/lib/ambience.ts). Above the solid background, below the color glow.
+ */
+
+.ambient-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-art__layer {
+  position: absolute;
+  /* Overscan so the blur never shows soft edges. */
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  object-fit: cover;
+  filter: blur(var(--ambient-art-blur)) saturate(130%);
+  opacity: 0;
+  transition: opacity var(--duration-ambience) var(--ease-in-out);
+}
+
+.ambient-art__layer.is-visible {
+  opacity: var(--ambient-art-opacity);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-art__layer {
+    transition: none;
+  }
 }
 
 /* ── Scrollbar ───────────────────────────────────────────── */

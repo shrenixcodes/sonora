@@ -74,6 +74,9 @@
   --duration-slow: 320ms;
   --duration-slower: 500ms;
   --duration-ambience: 1200ms;
+  /* Light blur: the artwork stays recognisable behind the glass panels. */
+  --ambient-art-blur: 18px;
+  --glass-blur: 10px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
@@ -129,6 +132,7 @@
   --ambience-2: #3B2F5C;
   --ambience-3: #C9A96E;
   --ambience-strength: 42%;
+  --ambient-art-opacity: 0.55;
 
   color-scheme: dark;
 }
@@ -161,6 +165,7 @@
   --ambience-2: #D8C9A8;
   --ambience-3: #D95342;
   --ambience-strength: 22%;
+  --ambient-art-opacity: 0.35;
 
   color-scheme: light;
 }

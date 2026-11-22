@@ -59,6 +59,23 @@ html[data-window="floating"] #app::before {
     var(--color-bg);
 }
 
+/* In the floating layout the artwork fills only the stage. */
+html[data-window="floating"] .ambient-art {
+  z-index: -1;
+  grid-row: 2 / 3;
+  grid-column: 2 / -1;
+  border-radius: var(--stage-radius);
+}
+
+/* The page sits straight on the stage here, without a panel tint, so a scrim
+   keeps text readable over bright artwork. */
+html[data-window="floating"] .ambient-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--color-bg) 50%, transparent);
+}
+
 html[data-window="floating"] .main,
 html[data-window="floating"] .queue-panel {
   background: transparent;

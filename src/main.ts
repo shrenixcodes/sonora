@@ -13,7 +13,7 @@ import { router } from "@/lib/router";
 import { el } from "@/lib/dom";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
-import { applyAmbience } from "@/lib/ambience";
+import { AmbientArtwork, applyAmbience } from "@/lib/ambience";
 import { initWindowMode } from "@/lib/window-mode";
 import { searchQuery } from "@/lib/search-query";
 import { account } from "@/lib/ytm/account";
@@ -48,6 +48,9 @@ function init(): void {
   const main = el("main", { className: "main" });
   const player = createPlayer();
 
+  // Blurred artwork of the playing track sits behind every panel
+  const ambientArtwork = new AmbientArtwork();
+  app.appendChild(ambientArtwork.element);
   app.appendChild(titlebar);
   app.appendChild(sidebar);
   app.appendChild(main);
@@ -77,6 +80,8 @@ function init(): void {
 
   // Tint the shell with the current artwork
   playerEngine.on("paletteChange", (palette) => applyAmbience(palette));
+  playerEngine.on("trackChange", (track) => ambientArtwork.set(track?.artworkUrl || null));
+  ambientArtwork.set(playerEngine.currentTrack?.artworkUrl || null);
 
   // Confirm which Google account a sign-in from Settings ended up using
   account.on("signInComplete", showSignInConfirmation);
