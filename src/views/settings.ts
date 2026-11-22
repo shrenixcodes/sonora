@@ -7,6 +7,7 @@
 
 import { el } from "@/lib/dom";
 import { themeManager } from "@/lib/theme";
+import { applyAccent } from "@/lib/accent";
 import { storage } from "@/lib/storage";
 import type { UserSettings, AmbientVisualMode } from "@/types/music";
 
@@ -227,23 +228,32 @@ function createThemeSelector(): HTMLElement {
   return container;
 }
 
-function createAccentPalette(currentAccent: string): HTMLElement {
+function createAccentPalette(currentAccent: string | null): HTMLElement {
   const container = el("div", { className: "settings__accent-palette" });
 
-  ACCENT_COLORS.forEach(({ name, hex }) => {
+  // null = each theme's own accent (purple on charcoal, green on bone)
+  const options: Array<{ name: string; hex: string | null }> = [
+    { name: "Theme default", hex: null },
+    ...ACCENT_COLORS,
+  ];
+
+  options.forEach(({ name, hex }) => {
+    const isActive = currentAccent === hex;
     const swatch = el("button", {
-      className: `settings__accent-swatch${currentAccent === hex ? " settings__accent-swatch--active" : ""}`,
-      attrs: { title: name, "aria-label": name },
+      className: `settings__accent-swatch${hex ? "" : " settings__accent-swatch--default"}${isActive ? " settings__accent-swatch--active" : ""}`,
+      attrs: { title: name, "aria-label": name, "aria-pressed": String(isActive) },
       onClick: () => {
         container.querySelectorAll(".settings__accent-swatch").forEach((s) => {
           s.classList.remove("settings__accent-swatch--active");
+          s.setAttribute("aria-pressed", "false");
         });
         swatch.classList.add("settings__accent-swatch--active");
-        document.documentElement.style.setProperty("--color-accent", hex);
+        swatch.setAttribute("aria-pressed", "true");
+        applyAccent(hex, themeManager.theme);
         storage.saveSettings({ accentColor: hex });
       },
     });
-    swatch.style.backgroundColor = hex;
+    if (hex) swatch.style.backgroundColor = hex;
     container.appendChild(swatch);
   });
 
@@ -396,15 +406,10 @@ function createThemeImportExport(): HTMLElement {
                 const text = await input.files[0].text();
                 const json = JSON.parse(text);
                 storage.saveSettings(json);
-                if (json.accentColor) {
-                  document.documentElement.style.setProperty(
-                    "--color-accent",
-                    json.accentColor,
-                  );
-                }
-                if (json.theme) {
+                if (json.theme === "dark" || json.theme === "light") {
                   themeManager.set(json.theme);
                 }
+                applyAccent(storage.getSettings().accentColor, themeManager.theme);
                 alert("Theme configuration imported successfully!");
               } catch {
                 alert("Failed to parse theme JSON file.");

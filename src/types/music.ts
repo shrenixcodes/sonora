@@ -91,7 +91,8 @@ export type AmbientVisualMode = "aurora" | "fluid" | "glow" | "cinematic" | "min
 
 export interface UserSettings {
   theme: "dark" | "light";
-  accentColor: string;
+  /** null uses the current theme's own accent. */
+  accentColor: string | null;
   ambientMode: AmbientVisualMode;
   ambientFpsLimit: 15 | 30 | 60;
   ambientIntensity: number; // 0.1 to 1.0

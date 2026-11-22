@@ -132,6 +132,16 @@
   transform: scale(1.15);
 }
 
+/* Half charcoal-purple, half bone-green: "follow the theme". */
+.settings__accent-swatch--default {
+  background: linear-gradient(135deg, #A78BFA 0 50%, #315E48 50% 100%);
+}
+
+.settings__accent-swatch:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
 .settings__accent-swatch--active {
   border-color: var(--color-text);
   transform: scale(1.2);

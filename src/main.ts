@@ -24,8 +24,8 @@ import { renderLibrary } from "@/views/library";
 import { renderSettings } from "@/views/settings";
 import { renderNowPlaying } from "@/views/now-playing";
 
-// Initialize the theme system (side-effect import)
-import "@/lib/theme";
+import { themeManager } from "@/lib/theme";
+import { applyAccent } from "@/lib/accent";
 
 function init(): void {
   const app = document.getElementById("app");
@@ -33,9 +33,8 @@ function init(): void {
 
   // Apply saved appearance preferences
   const settings = storage.getSettings();
-  if (settings.accentColor) {
-    document.documentElement.style.setProperty("--color-accent", settings.accentColor);
-  }
+  applyAccent(settings.accentColor, themeManager.theme);
+  themeManager.onChange((theme) => applyAccent(storage.getSettings().accentColor, theme));
   if (settings.density === "compact") {
     document.body.classList.add("density-compact");
   }

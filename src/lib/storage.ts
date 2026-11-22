@@ -15,7 +15,7 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: "dark",
-  accentColor: "#A78BFA",
+  accentColor: null,
   ambientMode: "aurora",
   ambientFpsLimit: 30,
   ambientIntensity: 0.8,
