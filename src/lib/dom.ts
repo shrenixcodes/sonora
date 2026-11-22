@@ -15,6 +15,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
     html?: string;
     children?: (HTMLElement | string)[];
     onClick?: (e: Event) => void;
+    onKeyDown?: (e: KeyboardEvent) => void;
   },
 ): HTMLElementTagNameMap[K] {
   const element = document.createElement(tag);
@@ -47,6 +48,10 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 
   if (options?.onClick) {
     element.addEventListener("click", options.onClick);
+  }
+
+  if (options?.onKeyDown) {
+    element.addEventListener("keydown", (e) => options.onKeyDown!(e as KeyboardEvent));
   }
 
   return element;

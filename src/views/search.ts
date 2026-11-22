@@ -75,6 +75,7 @@ export function renderSearch(container: HTMLElement): void {
           ],
         }),
       );
+      markPlaying(playerEngine.currentTrack);
     } catch (err) {
       if (query !== searchQuery.value || !results.isConnected) return;
       const message = err instanceof CatalogError ? err.message : "Something went wrong while searching.";
@@ -98,10 +99,21 @@ export function renderSearch(container: HTMLElement): void {
     debounceTimer = window.setTimeout(() => search(query), DEBOUNCE_MS);
   }
 
+  const markPlaying = (track: Track | null) => {
+    results.querySelectorAll<HTMLElement>("[data-track-id]").forEach((node) => {
+      const isCurrent = node.dataset.trackId === track?.id;
+      node.classList.toggle("is-playing", isCurrent);
+      if (isCurrent) node.setAttribute("aria-current", "true");
+      else node.removeAttribute("aria-current");
+    });
+  };
+  const stopTrackListener = playerEngine.on("trackChange", markPlaying);
+
   const stopListening = searchQuery.on("change", runQuery);
   const stopNavListener = router.onNavigate((path) => {
     if (path === "/search") return;
     stopListening();
+    stopTrackListener();
     stopNavListener();
     if (debounceTimer !== null) window.clearTimeout(debounceTimer);
   });
@@ -117,23 +129,32 @@ export function renderSearch(container: HTMLElement): void {
 function createTrackRow(track: Track, index: number, queue: Track[]): HTMLElement {
   const play = () => playerEngine.playTrack(track, queue);
   const liked = storage.isLiked(track.id);
+  const isPlaying = playerEngine.currentTrack?.id === track.id;
 
-  return el("div", {
-    className: "track-row",
-    // The whole row is a mouse target; keyboard users get the Play button.
+  const row = el("div", {
+    className: `track-row${isPlaying ? " is-playing" : ""}`,
+    attrs: {
+      role: "button",
+      tabindex: "0",
+      "data-track-id": track.id,
+      "aria-label": `Play ${track.title} by ${track.artist}`,
+      ...(isPlaying ? { "aria-current": "true" } : {}),
+    },
     onClick: play,
+    onKeyDown: (e) => {
+      if (e.target === row && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        play();
+      }
+    },
     children: [
       el("div", { className: "track-row__index", text: String(index) }),
-      el("button", {
+      el("div", {
         className: "track-row__play-icon",
         html: icon("play"),
-        attrs: { type: "button", "aria-label": `Play ${track.title} by ${track.artist}` },
-        onClick: (e) => {
-          e.stopPropagation();
-          play();
-        },
+        attrs: { "aria-hidden": "true" },
       }),
-      el("img", { className: "track-row__art", attrs: { src: track.artworkUrl, alt: "", loading: "lazy" } }),
+      el("img", { className: "track-row__art", attrs: { src: track.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" } }),
       el("div", {
         className: "track-row__info",
         children: [
@@ -157,4 +178,6 @@ function createTrackRow(track: Track, index: number, queue: Track[]): HTMLElemen
       el("span", { className: "track-row__duration", text: track.duration ? formatTime(track.duration) : "" }),
     ],
   });
+
+  return row;
 }

@@ -35,6 +35,23 @@ export function renderLibrary(container: HTMLElement): void {
   }
 
   container.appendChild(content);
+
+  const markPlaying = (track: Track | null) => {
+    content.querySelectorAll<HTMLElement>("[data-track-id]").forEach((node) => {
+      const isCurrent = node.dataset.trackId === track?.id;
+      node.classList.toggle("is-playing", isCurrent);
+      if (isCurrent) node.setAttribute("aria-current", "true");
+      else node.removeAttribute("aria-current");
+    });
+  };
+  markPlaying(playerEngine.currentTrack);
+  const stopTrack = playerEngine.on("trackChange", markPlaying);
+  const currentHash = hash;
+  const stopNav = router.onNavigate((path) => {
+    if (path === currentHash) return;
+    stopTrack();
+    stopNav();
+  });
 }
 
 function libraryNotice(err: unknown, what: string): HTMLElement {
@@ -317,8 +334,9 @@ function renderPlaylists(container: HTMLElement): void {
   const grid = el("div", {
     className: "card-grid",
     children: playlists.map((pl) =>
-      el("div", {
+      el("button", {
         className: "card",
+        attrs: { type: "button", title: `Play ${pl.title}` },
         children: [
           el("div", {
             className: "card__artwork",
@@ -500,15 +518,35 @@ function createTrackRow(
   likedOnYtm = false,
 ): HTMLElement {
   const isLiked = likedOnYtm || storage.isLiked(track.id);
+  const isPlaying = playerEngine.currentTrack?.id === track.id;
+  const play = () => playerEngine.playTrack(track, queueContext);
 
-  return el("div", {
-    className: "track-row",
+  const row = el("div", {
+    className: `track-row${isPlaying ? " is-playing" : ""}`,
+    attrs: {
+      role: "button",
+      tabindex: "0",
+      "data-track-id": track.id,
+      "aria-label": `Play ${track.title} by ${track.artist}`,
+      ...(isPlaying ? { "aria-current": "true" } : {}),
+    },
+    onClick: play,
+    onKeyDown: (e) => {
+      if (e.target === row && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        play();
+      }
+    },
     children: [
       el("div", { className: "track-row__index", text: String(index) }),
-      el("div", { className: "track-row__play-icon", html: icon("play") }),
+      el("div", {
+        className: "track-row__play-icon",
+        html: icon("play"),
+        attrs: { "aria-hidden": "true" },
+      }),
       el("img", {
         className: "track-row__art",
-        attrs: { src: track.artworkUrl, alt: track.title, loading: "lazy" },
+        attrs: { src: track.artworkUrl || "/artwork-placeholder.svg", alt: track.title, loading: "lazy" },
       }),
       el("div", {
         className: "track-row__info",
@@ -527,13 +565,14 @@ function createTrackRow(
         // Likes from the account can't be changed from Sonora yet.
         attrs: likedOnYtm
           ? { "aria-label": "Liked on YouTube Music", title: "Liked on YouTube Music", disabled: "" }
-          : { "aria-label": "Like", title: "Like track" },
+          : { "aria-label": `Like ${track.title}`, title: "Like track", "aria-pressed": String(isLiked) },
         onClick: (e) => {
           e.stopPropagation();
           if (likedOnYtm) return;
           const liked = storage.toggleLike(track);
           const btn = e.currentTarget as HTMLElement;
           btn.classList.toggle("track-row__like-btn--active", liked);
+          btn.setAttribute("aria-pressed", String(liked));
           if (onToggleLike) onToggleLike();
         },
       }),
@@ -542,8 +581,7 @@ function createTrackRow(
         text: formatTime(track.duration || 0),
       }),
     ],
-    onClick: () => {
-      playerEngine.playTrack(track, queueContext);
-    },
   });
+
+  return row;
 }
