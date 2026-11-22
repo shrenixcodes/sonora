@@ -8,6 +8,7 @@
 import { createTitlebar } from "@/components/titlebar";
 import { createSidebar } from "@/components/sidebar";
 import { createPlayer } from "@/components/player";
+import { createQueuePanel, queuePanel } from "@/components/queue-panel";
 import { router } from "@/lib/router";
 import { el } from "@/lib/dom";
 import { storage } from "@/lib/storage";
@@ -48,7 +49,9 @@ function init(): void {
   app.appendChild(titlebar);
   app.appendChild(sidebar);
   app.appendChild(main);
+  app.appendChild(createQueuePanel());
   app.appendChild(player);
+  queuePanel.init();
 
   // Register routes
   router

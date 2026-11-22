@@ -93,6 +93,7 @@
   --player-height: 80px;
   --scrollbar-width: 6px;
   --shell-gap: 8px;
+  --queue-width: 300px;
 }
 
 /* ── Dark theme (default) ──────────────────────────────── */

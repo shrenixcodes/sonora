@@ -9,6 +9,7 @@ import { icon } from "@/icons";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
+import { queuePanel } from "@/components/queue-panel";
 import type { Track, PlaybackState } from "@/types/music";
 
 class PlayerBar {
@@ -135,6 +136,17 @@ class PlayerBar {
     });
 
     // ── Extras ────────────────────────────────────────────
+    const queueBtn = el("button", {
+      className: "player__extra-btn",
+      html: icon("queue"),
+      attrs: { "aria-label": "Up next", title: "Up next", "aria-pressed": String(queuePanel.isOpen) },
+      onClick: () => queuePanel.toggle(),
+    });
+    queuePanel.on("change", (open) => {
+      queueBtn.setAttribute("aria-pressed", String(open));
+      queueBtn.classList.toggle("player__extra-btn--active", open);
+    });
+
     const lyricsBtn = el("button", {
       className: "player__extra-btn",
       html: icon("lyrics"),
@@ -185,6 +197,7 @@ class PlayerBar {
               className: "player__volume",
               children: [volumeBtn, volumeBar],
             }),
+            queueBtn,
             lyricsBtn,
             nowPlayingBtn,
           ],

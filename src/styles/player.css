@@ -269,3 +269,7 @@
   width: 16px;
   height: 16px;
 }
+
+.player__extra-btn--active {
+  color: var(--color-accent);
+}

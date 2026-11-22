@@ -70,6 +70,11 @@ class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     return [...this.queue];
   }
 
+  /** Tracks after the current one, in the order next() will play them. */
+  get upcoming(): Track[] {
+    return this.queue.slice(this.currentQueueIndex + 1);
+  }
+
   private initYouTubeApi(): void {
     // Hidden container for the YouTube player
     let container = document.getElementById("sonora-yt-player");

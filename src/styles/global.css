@@ -66,9 +66,25 @@ body::before {
   overflow: hidden;
 }
 
-/* Shared look for the sidebar, content and player panels. */
+/* With "Up next" open, a third column joins the middle row. */
+#app.app--queue-open {
+  grid-template-columns: var(--sidebar-width) 1fr var(--queue-width);
+  grid-template-areas:
+    "titlebar titlebar titlebar"
+    "sidebar  main     queue"
+    "player   player   player";
+}
+
+@media (max-width: 1100px) {
+  #app.app--queue-open {
+    --queue-width: 260px;
+  }
+}
+
+/* Shared look for the sidebar, content, queue and player panels. */
 .sidebar,
 .main,
+.queue-panel,
 .player {
   background: var(--color-panel);
   border: 1px solid var(--color-panel-border);
