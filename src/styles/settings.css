@@ -1,0 +1,75 @@
+/*
+ * Settings — layout for settings page sections and rows.
+ */
+
+.settings__section {
+  margin-bottom: var(--space-8);
+}
+
+.settings__section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.settings__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.settings__row:hover {
+  background: var(--color-hover);
+}
+
+.settings__row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings__row-label {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.settings__row-description {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.settings__btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.settings__btn:hover {
+  background: var(--color-surface-secondary);
+  border-color: var(--color-text-tertiary);
+}
+
+.settings__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

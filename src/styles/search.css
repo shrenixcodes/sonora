@@ -1,0 +1,44 @@
+/*
+ * Search — search bar and results layout.
+ */
+
+.search__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-8);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.search__bar:focus-within {
+  border-color: var(--color-accent);
+}
+
+.search__icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.search__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.search__input {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  outline: none;
+}
+
+.search__input::placeholder {
+  color: var(--color-text-tertiary);
+}

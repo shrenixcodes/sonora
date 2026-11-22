@@ -1,0 +1,38 @@
+{
+  "name": "sonora",
+  "version": "0.1.0",
+  "description": "An immersive YouTube Music desktop client for Windows",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": [
+    "music",
+    "youtube-music",
+    "desktop",
+    "tauri"
+  ],
+  "author": "Shreyan Bag",
+  "license": "MIT",
+  "packageManager": "pnpm@12.21.0",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

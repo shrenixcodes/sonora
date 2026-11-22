@@ -1,0 +1,145 @@
+/*
+ * Design tokens — the single source of truth for Sonora's visual language.
+ *
+ * Colors, typography, spacing, radii, shadows, transitions, and z-index
+ * are all defined here as CSS custom properties.
+ *
+ * Themes switch by changing the [data-theme] attribute on <html>.
+ */
+
+:root {
+  /* ── Spacing (4px grid) ────────────────────────────────── */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ── Typography ────────────────────────────────────────── */
+  --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+
+  --text-xs: 0.6875rem;    /* 11px */
+  --text-sm: 0.75rem;      /* 12px */
+  --text-base: 0.8125rem;  /* 13px */
+  --text-md: 0.875rem;     /* 14px */
+  --text-lg: 1rem;         /* 16px */
+  --text-xl: 1.25rem;      /* 20px */
+  --text-2xl: 1.5rem;      /* 24px */
+  --text-3xl: 1.875rem;    /* 30px */
+  --text-4xl: 2.25rem;     /* 36px */
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.02em;
+
+  /* ── Radii ─────────────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ───────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.16);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.24);
+
+  /* ── Transitions ───────────────────────────────────────── */
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 320ms;
+  --duration-slower: 500ms;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Z-index scale ─────────────────────────────────────── */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-nav: 100;
+  --z-titlebar: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  /* ── Layout ────────────────────────────────────────────── */
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+  --titlebar-height: 40px;
+  --player-height: 80px;
+  --scrollbar-width: 6px;
+}
+
+/* ── Dark theme (default) ──────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --color-bg: #17151C;
+  --color-surface: #211E29;
+  --color-surface-secondary: #292532;
+  --color-text: #F4F0F6;
+  --color-text-secondary: #A9A3B3;
+  --color-text-tertiary: #736D7E;
+  --color-accent: #A78BFA;
+  --color-accent-hover: #B9A2FB;
+  --color-accent-secondary: #C9A96E;
+  --color-border: #393342;
+  --color-border-subtle: #2E2938;
+  --color-hover: rgba(167, 139, 250, 0.08);
+  --color-active: rgba(167, 139, 250, 0.14);
+  --color-overlay: rgba(23, 21, 28, 0.75);
+  --color-scrollbar: #393342;
+  --color-scrollbar-hover: #4A4356;
+  --color-danger: #EF4444;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+
+  color-scheme: dark;
+}
+
+/* ── Light theme ───────────────────────────────────────── */
+[data-theme="light"] {
+  --color-bg: #F0EBDD;
+  --color-surface: #F8F5EC;
+  --color-surface-secondary: #E7E2D4;
+  --color-text: #202820;
+  --color-text-secondary: #6C7169;
+  --color-text-tertiary: #8E9389;
+  --color-accent: #315E48;
+  --color-accent-hover: #3D7459;
+  --color-accent-secondary: #D95342;
+  --color-border: #D8D1C3;
+  --color-border-subtle: #E0DBD0;
+  --color-hover: rgba(49, 94, 72, 0.08);
+  --color-active: rgba(49, 94, 72, 0.14);
+  --color-overlay: rgba(240, 235, 221, 0.75);
+  --color-scrollbar: #D8D1C3;
+  --color-scrollbar-hover: #C5BEAF;
+  --color-danger: #DC2626;
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+
+  color-scheme: light;
+}

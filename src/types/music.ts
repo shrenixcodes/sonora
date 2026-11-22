@@ -1,0 +1,103 @@
+/**
+ * Core domain types for Sonora music player.
+ */
+
+export interface Track {
+  id: string; // YouTube videoId or unique identifier
+  title: string;
+  artist: string;
+  artistId?: string;
+  album?: string;
+  albumId?: string;
+  duration: number; // in seconds
+  artworkUrl: string;
+  thumbnailUrl?: string;
+  isLiked?: boolean;
+  streamUrl?: string;
+  addedAt?: number;
+}
+
+export interface Artist {
+  id: string;
+  name: string;
+  thumbnailUrl?: string;
+  description?: string;
+  subscribers?: string;
+  albums?: Album[];
+  topTracks?: Track[];
+}
+
+export interface Album {
+  id: string;
+  title: string;
+  artist: string;
+  artistId?: string;
+  year?: string | number;
+  artworkUrl: string;
+  trackCount?: number;
+  tracks?: Track[];
+}
+
+export interface Playlist {
+  id: string;
+  title: string;
+  description?: string;
+  author?: string;
+  artworkUrl?: string;
+  trackCount: number;
+  tracks: Track[];
+  isCustom?: boolean; // User created
+  updatedAt?: number;
+}
+
+export type PlaybackStatus = "idle" | "loading" | "playing" | "paused" | "error";
+
+export type RepeatMode = "off" | "all" | "one";
+
+export interface PlaybackState {
+  currentTrack: Track | null;
+  status: PlaybackStatus;
+  currentTime: number;
+  duration: number;
+  volume: number; // 0 to 1
+  isMuted: boolean;
+  shuffle: boolean;
+  repeat: RepeatMode;
+  playbackRate: number;
+  error?: string;
+}
+
+export interface LyricsLine {
+  timeMs: number;
+  text: string;
+}
+
+export interface LyricsData {
+  trackId: string;
+  isSynced: boolean;
+  lines: LyricsLine[];
+  plainLyrics?: string;
+  source?: string;
+}
+
+export interface SearchResult {
+  tracks: Track[];
+  artists: Artist[];
+  albums: Album[];
+  playlists: Playlist[];
+}
+
+export type AmbientVisualMode = "aurora" | "fluid" | "glow" | "cinematic" | "minimal" | "none";
+
+export interface UserSettings {
+  theme: "dark" | "light";
+  accentColor: string;
+  ambientMode: AmbientVisualMode;
+  ambientFpsLimit: 15 | 30 | 60;
+  ambientIntensity: number; // 0.1 to 1.0
+  density: "comfortable" | "compact";
+  volume: number;
+  normalizeVolume: boolean;
+  autoPlayNext: boolean;
+  enableDiscordRpc: boolean;
+}
