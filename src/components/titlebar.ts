@@ -5,12 +5,14 @@
  * minimize/maximize/close controls using the Tauri window API.
  */
 
+import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
 
 export function createTitlebar(): HTMLElement {
-  const appWindow = getCurrentWindow();
+  // Window controls need the Tauri runtime; in a plain browser (UI development) they do nothing.
+  const appWindow = isTauri() ? getCurrentWindow() : null;
 
   const titlebar = el("header", {
     className: "titlebar",
@@ -64,19 +66,19 @@ export function createTitlebar(): HTMLElement {
             className: "titlebar__window-btn",
             html: icon("minimize"),
             attrs: { "aria-label": "Minimize" },
-            onClick: () => appWindow.minimize(),
+            onClick: () => appWindow?.minimize(),
           }),
           el("button", {
             className: "titlebar__window-btn",
             html: icon("maximize"),
             attrs: { "aria-label": "Maximize" },
-            onClick: () => appWindow.toggleMaximize(),
+            onClick: () => appWindow?.toggleMaximize(),
           }),
           el("button", {
             className: "titlebar__window-btn titlebar__window-btn--close",
             html: icon("close"),
             attrs: { "aria-label": "Close" },
-            onClick: () => appWindow.close(),
+            onClick: () => appWindow?.close(),
           }),
         ],
       }),
