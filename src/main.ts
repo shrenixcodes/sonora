@@ -13,6 +13,7 @@ import { el } from "@/lib/dom";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
 import { applyAmbience } from "@/lib/ambience";
+import { searchQuery } from "@/lib/search-query";
 
 // Views
 import { renderHome } from "@/views/home";
@@ -78,6 +79,13 @@ function init(): void {
 
 function setupGlobalShortcuts(): void {
   window.addEventListener("keydown", (e: KeyboardEvent) => {
+    // Ctrl+K reaches search from anywhere, including other text fields
+    if (e.ctrlKey && e.code === "KeyK") {
+      e.preventDefault();
+      searchQuery.requestFocus();
+      return;
+    }
+
     // Avoid capturing keys when user is typing in a text field
     const active = document.activeElement;
     if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {

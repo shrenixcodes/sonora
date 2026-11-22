@@ -8,6 +8,7 @@ import { el } from "@/lib/dom";
 import { ytmService } from "@/lib/playback/ytm-api";
 import { playerEngine } from "@/lib/playback/engine";
 import { router } from "@/lib/router";
+import { searchQuery } from "@/lib/search-query";
 
 interface MoodCategory {
   title: string;
@@ -173,15 +174,8 @@ function createMoodCard(mood: MoodCategory): HTMLElement {
       el("span", { className: "mood-card__title", text: mood.title }),
     ],
     onClick: () => {
-      router.navigate(`/search`);
-      // Fill search input on arrival
-      requestAnimationFrame(() => {
-        const input = document.querySelector<HTMLInputElement>(".search__input");
-        if (input) {
-          input.value = mood.query;
-          input.dispatchEvent(new Event("input"));
-        }
-      });
+      searchQuery.set(mood.query);
+      router.navigate("/search");
     },
   });
 }

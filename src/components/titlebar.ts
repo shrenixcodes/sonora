@@ -1,14 +1,16 @@
 /**
  * Custom window titlebar.
  *
- * Provides drag-to-move (via data-tauri-drag-region), back/forward navigation, and
- * minimize/maximize/close controls using the Tauri window API.
+ * Provides drag-to-move (via data-tauri-drag-region), back/forward navigation,
+ * the app-wide search field, and minimize/maximize/close controls.
  */
 
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
+import { router } from "@/lib/router";
+import { searchQuery } from "@/lib/search-query";
 
 export function createTitlebar(): HTMLElement {
   // Window controls need the Tauri runtime; in a plain browser (UI development) they do nothing.
@@ -49,17 +51,11 @@ export function createTitlebar(): HTMLElement {
         ],
       }),
 
-      // Center: app title
+      // Center: search
       el("div", {
         className: "titlebar__center",
         attrs: { "data-tauri-drag-region": "" },
-        children: [
-          el("span", {
-            className: "titlebar__title",
-            attrs: { "data-tauri-drag-region": "" },
-            text: "Sonora",
-          }),
-        ],
+        children: [createSearchField()],
       }),
 
       // Right: window controls
@@ -90,4 +86,51 @@ export function createTitlebar(): HTMLElement {
   });
 
   return titlebar;
+}
+
+/** The app's single search field; typing opens the search view with live results. */
+function createSearchField(): HTMLElement {
+  const input = el("input", {
+    className: "titlebar__search-input",
+    attrs: {
+      type: "search",
+      placeholder: "What do you want to play?",
+      "aria-label": "Search songs, albums and artists",
+      autocomplete: "off",
+      spellcheck: "false",
+    },
+  }) as HTMLInputElement;
+
+  input.addEventListener("input", () => {
+    searchQuery.set(input.value.trim());
+    if (router.current !== "/search") router.navigate("/search");
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      // Chromium clears search fields on Escape without an input event; keep the text in sync instead.
+      e.preventDefault();
+      input.blur();
+    }
+    if (e.key === "Enter" && router.current !== "/search") router.navigate("/search");
+  });
+
+  // Reflect queries set elsewhere (e.g. Explore's mood cards)
+  searchQuery.on("change", (query) => {
+    if (input.value.trim() !== query) input.value = query;
+  });
+
+  searchQuery.on("focusRequest", () => {
+    input.focus();
+    input.select();
+  });
+
+  return el("label", {
+    className: "titlebar__search",
+    children: [
+      el("span", { className: "titlebar__search-icon", html: icon("search") }),
+      input,
+      el("kbd", { className: "titlebar__search-hint", text: "Ctrl K", attrs: { "aria-hidden": "true" } }),
+    ],
+  });
 }

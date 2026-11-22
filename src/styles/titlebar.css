@@ -49,18 +49,88 @@
   pointer-events: none;
 }
 
-.titlebar__title {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-secondary);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-}
-
 .titlebar__center {
   flex: 1;
   display: flex;
   justify-content: center;
+  align-self: stretch;
+  align-items: center;
+}
+
+/* ── Search pill ─────────────────────────────────────────── */
+
+.titlebar__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(440px, 42vw);
+  height: 30px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--color-text) 7%, transparent);
+  border: 1px solid var(--color-panel-border);
+  color: var(--color-text-secondary);
+  cursor: text;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.titlebar__search:hover {
+  background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+
+.titlebar__search:focus-within {
+  background: var(--color-panel);
+  border-color: color-mix(in oklab, var(--color-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 22%, transparent);
+  color: var(--color-text);
+}
+
+.titlebar__search-icon {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.titlebar__search-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.titlebar__search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: none;
+  border: 0;
+  outline: none;
+  font-size: var(--text-base);
+  color: var(--color-text);
+}
+
+.titlebar__search-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+/* The pill already offers a way out (Escape); hide the native clear button. */
+.titlebar__search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.titlebar__search-hint {
+  flex-shrink: 0;
+  font-family: var(--font-family);
+  font-size: var(--text-xs);
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--color-text) 8%, transparent);
+  color: var(--color-text-secondary);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.titlebar__search:focus-within .titlebar__search-hint {
+  opacity: 0;
 }
 
 .titlebar__right {

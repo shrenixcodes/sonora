@@ -9,6 +9,8 @@ import { icon } from "@/icons";
 import { ytmService } from "@/lib/playback/ytm-api";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
+import { router } from "@/lib/router";
+import { searchQuery } from "@/lib/search-query";
 import type { Track, SearchResult } from "@/types/music";
 
 export function renderSearch(container: HTMLElement): void {
@@ -26,16 +28,6 @@ export function renderSearch(container: HTMLElement): void {
       createFilterChip("albums", "Albums"),
       createFilterChip("artists", "Artists"),
     ],
-  });
-
-  const searchInput = el("input", {
-    className: "search__input",
-    attrs: {
-      type: "text",
-      placeholder: "Search songs, albums, artists from YouTube Music...",
-      autocomplete: "off",
-      spellcheck: "false",
-    },
   });
 
   function createFilterChip(
@@ -262,9 +254,8 @@ export function renderSearch(container: HTMLElement): void {
     return row;
   }
 
-  // Live input handler
-  searchInput.addEventListener("input", () => {
-    const query = searchInput.value.trim();
+  // Results follow the titlebar search field
+  function runQuery(query: string): void {
     if (debounceTimer !== null) {
       window.clearTimeout(debounceTimer);
     }
@@ -276,8 +267,17 @@ export function renderSearch(container: HTMLElement): void {
 
     debounceTimer = window.setTimeout(async () => {
       const res = await ytmService.search(query);
-      renderResults(res);
+      // Ignore responses that arrive after the query has moved on
+      if (query === searchQuery.value) renderResults(res);
     }, 250);
+  }
+
+  const stopListening = searchQuery.on("change", runQuery);
+  const stopNavListener = router.onNavigate((path) => {
+    if (path === "/search") return;
+    stopListening();
+    stopNavListener();
+    if (debounceTimer !== null) window.clearTimeout(debounceTimer);
   });
 
   function showDefaultPrompt(): void {
@@ -293,7 +293,7 @@ export function renderSearch(container: HTMLElement): void {
           }),
           el("p", {
             className: "empty-state__description",
-            text: "Search for songs, albums, artists, and playlists from YouTube Music.",
+            text: "Type in the search bar above to find songs, albums and artists.",
           }),
         ],
       }),
@@ -309,20 +309,17 @@ export function renderSearch(container: HTMLElement): void {
           el("h1", { className: "page-header__title", text: "Search" }),
         ],
       }),
-      el("div", {
-        className: "search__bar",
-        children: [
-          el("span", { className: "search__icon", html: icon("search") }),
-          searchInput,
-        ],
-      }),
       filterRow,
       resultsContainer,
     ],
   });
 
   container.appendChild(content);
-  showDefaultPrompt();
 
-  requestAnimationFrame(() => searchInput.focus());
+  if (searchQuery.value) {
+    runQuery(searchQuery.value);
+  } else {
+    showDefaultPrompt();
+    requestAnimationFrame(() => searchQuery.requestFocus());
+  }
 }
