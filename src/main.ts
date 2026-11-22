@@ -17,6 +17,7 @@ import { renderExplore } from "@/views/explore";
 import { renderSearch } from "@/views/search";
 import { renderLibrary } from "@/views/library";
 import { renderSettings } from "@/views/settings";
+import { renderNowPlaying } from "@/views/now-playing";
 
 // Initialize the theme system (side-effect import)
 import "@/lib/theme";
@@ -47,7 +48,8 @@ function init(): void {
     .route("/albums", renderLibrary)
     .route("/artists", renderLibrary)
     .route("/history", renderLibrary)
-    .route("/settings", renderSettings);
+    .route("/settings", renderSettings)
+    .route("/now-playing", renderNowPlaying);
 
   // Start the router
   router.start(main);
