@@ -563,6 +563,15 @@
   margin-inline: var(--space-2);
 }
 
+/* Shelf scrollbars only appear while the pointer is over the shelf. */
+.shelf::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.shelf:hover::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar);
+}
+
 .shelf-card {
   display: flex;
   flex-direction: column;

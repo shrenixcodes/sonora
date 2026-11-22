@@ -56,7 +56,7 @@ export function createTitlebar(): HTMLElement {
                 onClick: () => window.history.forward(),
               }),
               el("button", {
-                className: "titlebar__nav-btn",
+                className: "titlebar__nav-btn titlebar__nav-btn--refresh",
                 html: icon("refresh"),
                 attrs: {
                   "aria-label": "Refresh",

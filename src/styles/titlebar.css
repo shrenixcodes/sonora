@@ -44,6 +44,12 @@
   color: var(--color-text);
 }
 
+/* The refresh glyph fills its box, unlike the chevrons; match their visual size. */
+.titlebar__nav-btn--refresh svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* One turn of the refresh icon as feedback for a click. */
 .titlebar__nav-btn.is-spinning svg {
   animation: titlebar-spin var(--duration-slower) var(--ease-out);

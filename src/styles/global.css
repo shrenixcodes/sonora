@@ -158,6 +158,14 @@ body {
   background: transparent;
 }
 
+/* Panels have large rounded corners; keep their scrollbars clear of them so
+   the thumb never runs past the curve. */
+.sidebar::-webkit-scrollbar-track,
+.main::-webkit-scrollbar-track,
+.queue-panel__list::-webkit-scrollbar-track {
+  margin-block: var(--radius-2xl);
+}
+
 /* ── Selection ───────────────────────────────────────────── */
 
 ::selection {
