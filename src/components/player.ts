@@ -18,6 +18,8 @@ class PlayerBar {
     playBtn: HTMLElement;
     shuffleBtn: HTMLElement;
     repeatBtn: HTMLElement;
+    skipBackBtn: HTMLElement;
+    skipFwdBtn: HTMLElement;
     title: HTMLElement;
     artist: HTMLElement;
     artwork: HTMLElement;
@@ -210,6 +212,8 @@ class PlayerBar {
       playBtn,
       shuffleBtn,
       repeatBtn,
+      skipBackBtn,
+      skipFwdBtn,
       title,
       artist,
       artwork,
@@ -317,6 +321,23 @@ class PlayerBar {
       const isPlaying = state.status === "playing";
       this.elements.playBtn.innerHTML = icon(isPlaying ? "pause" : "play");
       this.elements.playBtn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+
+      // Status line: ads, loading and errors replace the artist until they clear
+      const track = state.currentTrack;
+      const status = state.error
+        ? state.error
+        : state.isAd
+          ? "Ad · your song plays after this"
+          : state.status === "loading"
+            ? "Loading…"
+            : (track?.artist ?? "Select a song to start listening");
+      this.elements.artist.textContent = status;
+      this.elements.root.classList.toggle("player--ad", state.isAd);
+      this.elements.root.classList.toggle("player--error", Boolean(state.error));
+      // Ads must play out: no seeking or skipping until they end
+      for (const btn of [this.elements.skipBackBtn, this.elements.skipFwdBtn]) {
+        btn.toggleAttribute("disabled", state.isAd);
+      }
 
       // Shuffle & Repeat state
       this.elements.shuffleBtn.classList.toggle("player__btn--active", state.shuffle);

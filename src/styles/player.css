@@ -273,3 +273,18 @@
 .player__extra-btn--active {
   color: var(--color-accent);
 }
+
+/* Ads play out in full: the progress bar can't be dragged and skip buttons are off. */
+.player--ad .player__progress {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.player__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.player--error .player__artist {
+  color: var(--color-danger);
+}

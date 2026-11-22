@@ -1,16 +1,19 @@
 /**
- * Sonora Core Playback Engine.
+ * Sonora playback engine.
  *
- * Coordinates playback, YouTube IFrame Player integration, queue management,
- * Windows System Media Transport Controls (SMTC via MediaSession), and audio state.
+ * Owns the play queue and the playback state the interface shows. Audio comes
+ * from the official YouTube Music web app through the bridge in ytm-bridge.ts:
+ * the engine sends it commands and mirrors the state it reports. Windows media
+ * keys and the media overlay are handled by that page's own media session.
  */
 
-import type { Track, PlaybackState, RepeatMode } from "@/types/music";
+import type { LyricsData, PlaybackState, RepeatMode, Track } from "@/types/music";
 import { EventEmitter } from "@/lib/events";
 import { storage } from "@/lib/storage";
 import { extractPalette, type ArtworkPalette } from "@/lib/visuals/color-extractor";
 import { lyricsService } from "@/lib/lyrics/providers";
-import type { LyricsData } from "@/types/music";
+import { PlayQueue } from "@/lib/playback/queue";
+import { ytmBridge, type YtmCommand, type YtmState } from "@/lib/playback/ytm-bridge";
 
 export interface PlaybackEvents {
   stateChange: PlaybackState;
@@ -21,14 +24,21 @@ export interface PlaybackEvents {
   lyricsChange: LyricsData | null;
 }
 
-declare global {
-  interface Window {
-    YT: any;
-    onYouTubeIframeAPIReady: () => void;
-  }
+/** The part of the bridge the engine needs; swapped for a fake in tests. */
+export interface PlaybackBridge {
+  readonly available: boolean;
+  control(command: YtmCommand): Promise<void>;
+  onState(handler: (state: YtmState) => void): Promise<unknown>;
 }
 
-class PlaybackEngine extends EventEmitter<PlaybackEvents> {
+const TICK_MS = 250;
+const RESTART_THRESHOLD_S = 3;
+const UNAVAILABLE_MESSAGE = "Playback works in the Sonora desktop app.";
+/** A page that never reports back (unavailable video, network trouble) must not leave "Loading…" forever. */
+const LOAD_TIMEOUT_MS = 15_000;
+const LOAD_FAILED_MESSAGE = "YouTube Music couldn't play this song.";
+
+export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   private state: PlaybackState = {
     currentTrack: null,
     status: "idle",
@@ -39,23 +49,23 @@ class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     shuffle: false,
     repeat: "off",
     playbackRate: 1.0,
+    isAd: false,
   };
 
-  private queue: Track[] = [];
-  private history: Track[] = [];
-  private shuffledIndices: number[] = [];
-  private currentQueueIndex = -1;
+  private readonly queue = new PlayQueue();
+  /** Track we asked the page to load; its first report confirms it. */
+  private pendingId: string | null = null;
+  /** Position reported last, and when, to move the progress bar smoothly between reports. */
+  private lastReport = { time: 0, at: 0 };
+  private ticker: number | null = null;
+  private loadTimer: number | null = null;
 
-  private ytPlayer: any = null;
-  private isYtReady = false;
-  private timeUpdateTimer: number | null = null;
-
-  constructor() {
+  constructor(private readonly bridge: PlaybackBridge = ytmBridge) {
     super();
-    const settings = storage.getSettings();
-    this.state.volume = settings.volume;
-    this.initYouTubeApi();
-    this.setupMediaSession();
+    this.state.volume = storage.getSettings().volume;
+    if (bridge.available) {
+      bridge.onState((s) => this.handleBridgeState(s)).catch((err) => this.fail(err));
+    }
   }
 
   get currentState(): PlaybackState {
@@ -67,397 +77,270 @@ class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   }
 
   get currentQueue(): Track[] {
-    return [...this.queue];
+    return this.queue.all;
   }
 
   /** Tracks after the current one, in the order next() will play them. */
   get upcoming(): Track[] {
-    return this.queue.slice(this.currentQueueIndex + 1);
+    return this.queue.upcoming;
   }
 
-  private initYouTubeApi(): void {
-    // Hidden container for the YouTube player
-    let container = document.getElementById("sonora-yt-player");
-    if (!container) {
-      container = document.createElement("div");
-      container.id = "sonora-yt-player";
-      container.style.position = "absolute";
-      container.style.width = "1px";
-      container.style.height = "1px";
-      container.style.top = "-9999px";
-      container.style.left = "-9999px";
-      container.style.opacity = "0";
-      container.style.pointerEvents = "none";
-      document.body.appendChild(container);
-    }
-
-    if (window.YT && window.YT.Player) {
-      this.createPlayer();
-    } else {
-      window.onYouTubeIframeAPIReady = () => {
-        this.createPlayer();
-      };
-
-      const tag = document.createElement("script");
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName("script")[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-    }
-  }
-
-  private createPlayer(): void {
-    try {
-      this.ytPlayer = new window.YT.Player("sonora-yt-player", {
-        height: "200",
-        width: "200",
-        playerVars: {
-          autoplay: 1,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
-          modestbranding: 1,
-          rel: 0,
-          origin: window.location.origin,
-        },
-        events: {
-          onReady: () => {
-            this.isYtReady = true;
-            this.ytPlayer.setVolume(Math.round(this.state.volume * 100));
-          },
-          onStateChange: (event: { data: number }) => {
-            this.handleYtStateChange(event.data);
-          },
-          onError: (err: any) => {
-            console.warn("[PlaybackEngine] YouTube Player Error:", err);
-            this.state.status = "error";
-            this.state.error = "Error streaming track from YouTube";
-            this.emit("stateChange", this.currentState);
-          },
-        },
-      });
-    } catch (e) {
-      console.warn("[PlaybackEngine] Failed to create YouTube Player:", e);
-    }
-  }
-
-  private handleYtStateChange(ytState: number): void {
-    // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-    switch (ytState) {
-      case 1: // playing
-        this.state.status = "playing";
-        this.startTimeTracker();
-        this.updateMediaSessionState();
-        break;
-      case 2: // paused
-        this.state.status = "paused";
-        this.stopTimeTracker();
-        this.updateMediaSessionState();
-        break;
-      case 3: // buffering
-        this.state.status = "loading";
-        break;
-      case 0: // ended
-        this.handleTrackEnded();
-        break;
-      default:
-        break;
-    }
-    this.emit("stateChange", this.currentState);
-  }
-
-  private startTimeTracker(): void {
-    this.stopTimeTracker();
-    this.timeUpdateTimer = window.setInterval(() => {
-      if (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === "function") {
-        const currentTime = this.ytPlayer.getCurrentTime() || 0;
-        const duration = this.ytPlayer.getDuration() || this.state.duration || 0;
-
-        this.state.currentTime = currentTime;
-        this.state.duration = duration;
-
-        this.emit("timeUpdate", { currentTime, duration });
-        this.updateMediaSessionPosition();
-      }
-    }, 250);
-  }
-
-  private stopTimeTracker(): void {
-    if (this.timeUpdateTimer !== null) {
-      clearInterval(this.timeUpdateTimer);
-      this.timeUpdateTimer = null;
-    }
-  }
+  /* ── Commands ─────────────────────────────────────────── */
 
   async playTrack(track: Track, newQueue?: Track[]): Promise<void> {
     if (newQueue) {
-      this.setQueue(newQueue, track);
+      this.queue.set(newQueue, track);
+      this.emit("queueChange", this.queue.all);
+    } else if (!this.queue.jumpTo(track.id)) {
+      this.queue.set([track], track);
+      this.emit("queueChange", this.queue.all);
     }
-
-    this.state.currentTrack = track;
-    this.state.currentTime = 0;
-    this.state.duration = track.duration || 0;
-    this.state.status = "loading";
-
-    this.emit("trackChange", track);
-    this.emit("stateChange", this.currentState);
-
-    storage.addToHistory(track);
-
-    // Concurrently load artwork palette and lyrics
-    this.fetchArtworkAndLyrics(track);
-
-    // Play in YouTube player
-    if (this.isYtReady && this.ytPlayer && typeof this.ytPlayer.loadVideoById === "function") {
-      this.ytPlayer.loadVideoById(track.id);
-      this.ytPlayer.playVideo();
-    } else {
-      // If player not yet ready, retry shortly
-      const checkInterval = setInterval(() => {
-        if (this.isYtReady && this.ytPlayer) {
-          clearInterval(checkInterval);
-          this.ytPlayer.loadVideoById(track.id);
-          this.ytPlayer.playVideo();
-        }
-      }, 200);
-      setTimeout(() => clearInterval(checkInterval), 4000);
-    }
-
-    this.updateMediaSessionMetadata(track);
-  }
-
-  private async fetchArtworkAndLyrics(track: Track): Promise<void> {
-    // 1. Color extraction
-    extractPalette(track.artworkUrl).then((palette) => {
-      this.emit("paletteChange", palette);
-    });
-
-    // 2. Lyrics lookup
-    lyricsService.getLyrics(track).then((lyrics) => {
-      this.emit("lyricsChange", lyrics);
-    });
+    this.load(track);
   }
 
   setQueue(tracks: Track[], startTrack?: Track): void {
-    this.queue = [...tracks];
-    if (startTrack) {
-      this.currentQueueIndex = this.queue.findIndex((t) => t.id === startTrack.id);
-    } else {
-      this.currentQueueIndex = 0;
-    }
-
-    if (this.state.shuffle) {
-      this.generateShuffleOrder();
-    }
-
-    this.emit("queueChange", this.queue);
+    this.queue.set(tracks, startTrack);
+    this.emit("queueChange", this.queue.all);
   }
 
   togglePlay(): void {
     if (!this.state.currentTrack) {
-      if (this.queue.length > 0) {
-        this.playTrack(this.queue[0]);
-      }
+      const first = this.queue.current ?? this.queue.all[0];
+      if (first) this.playTrack(first);
       return;
     }
-
-    if (this.state.status === "playing") {
-      this.pause();
-    } else {
-      this.resume();
-    }
+    this.send({ action: this.state.status === "playing" ? "pause" : "play" });
   }
 
   resume(): void {
-    if (this.ytPlayer && typeof this.ytPlayer.playVideo === "function") {
-      this.ytPlayer.playVideo();
-    }
+    this.send({ action: "play" });
   }
 
   pause(): void {
-    if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === "function") {
-      this.ytPlayer.pauseVideo();
-    }
+    this.send({ action: "pause" });
   }
 
   next(): void {
-    if (this.queue.length === 0) return;
-
-    if (this.state.currentTrack) {
-      this.history.push(this.state.currentTrack);
-    }
-
-    let nextIndex = this.currentQueueIndex + 1;
-    if (nextIndex >= this.queue.length) {
-      if (this.state.repeat === "all") {
-        nextIndex = 0;
-      } else {
-        return; // End of queue
-      }
-    }
-
-    this.currentQueueIndex = nextIndex;
-    const nextTrack = this.queue[this.currentQueueIndex];
-    if (nextTrack) {
-      this.playTrack(nextTrack);
+    const track = this.queue.next(this.state.repeat);
+    if (track) {
+      this.load(track);
+    } else if (this.state.currentTrack) {
+      // Past the end of Sonora's list, let YouTube Music continue with its own radio.
+      this.send({ action: "next" });
     }
   }
 
   previous(): void {
-    // If more than 3 seconds in, restart track
-    if (this.state.currentTime > 3) {
+    if (this.state.currentTime > RESTART_THRESHOLD_S) {
       this.seekTo(0);
       return;
     }
-
-    if (this.history.length > 0) {
-      const prevTrack = this.history.pop()!;
-      this.currentQueueIndex = this.queue.findIndex((t) => t.id === prevTrack.id);
-      this.playTrack(prevTrack);
-      return;
-    }
-
-    let prevIndex = this.currentQueueIndex - 1;
-    if (prevIndex < 0) {
-      if (this.state.repeat === "all") {
-        prevIndex = this.queue.length - 1;
-      } else {
-        prevIndex = 0;
-      }
-    }
-
-    this.currentQueueIndex = prevIndex;
-    const prevTrack = this.queue[this.currentQueueIndex];
-    if (prevTrack) {
-      this.playTrack(prevTrack);
-    }
+    const track = this.queue.previous(this.state.repeat);
+    if (track) this.load(track);
+    else this.seekTo(0);
   }
 
   seekTo(seconds: number): void {
+    if (this.state.isAd) return; // ads play out in full
     const clamped = Math.max(0, Math.min(seconds, this.state.duration || seconds));
-    this.state.currentTime = clamped;
-
-    if (this.ytPlayer && typeof this.ytPlayer.seekTo === "function") {
-      this.ytPlayer.seekTo(clamped, true);
-    }
-
-    this.emit("timeUpdate", { currentTime: clamped, duration: this.state.duration });
+    this.setTime(clamped);
+    this.send({ action: "seek", value: clamped });
   }
 
-  setVolume(vol: number): void {
-    const clamped = Math.max(0, Math.min(1, vol));
+  setVolume(volume: number): void {
+    const clamped = Math.max(0, Math.min(1, volume));
     this.state.volume = clamped;
     this.state.isMuted = clamped === 0;
-
-    if (this.ytPlayer && typeof this.ytPlayer.setVolume === "function") {
-      this.ytPlayer.setVolume(Math.round(clamped * 100));
-    }
-
     storage.saveSettings({ volume: clamped });
+    this.send({ action: "volume", value: clamped });
     this.emit("stateChange", this.currentState);
   }
 
   toggleMute(): void {
-    if (this.state.isMuted) {
-      this.setVolume(this.state.volume || 0.8);
-    } else {
-      if (this.ytPlayer && typeof this.ytPlayer.mute === "function") {
-        this.ytPlayer.mute();
-      }
-      this.state.isMuted = true;
-      this.emit("stateChange", this.currentState);
-    }
+    // Muting sets the page's volume to zero and keeps the chosen level to restore.
+    this.state.isMuted = !this.state.isMuted;
+    this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume || 0.8 });
+    this.emit("stateChange", this.currentState);
   }
 
   toggleShuffle(): void {
     this.state.shuffle = !this.state.shuffle;
-    if (this.state.shuffle) {
-      this.generateShuffleOrder();
-    }
+    this.queue.setShuffle(this.state.shuffle);
     this.emit("stateChange", this.currentState);
+    this.emit("queueChange", this.queue.all);
   }
 
   cycleRepeat(): void {
     const modes: RepeatMode[] = ["off", "all", "one"];
-    const nextIdx = (modes.indexOf(this.state.repeat) + 1) % modes.length;
-    this.state.repeat = modes[nextIdx];
+    this.state.repeat = modes[(modes.indexOf(this.state.repeat) + 1) % modes.length];
     this.emit("stateChange", this.currentState);
   }
 
-  private generateShuffleOrder(): void {
-    this.shuffledIndices = Array.from({ length: this.queue.length }, (_, i) => i);
-    // Fisher-Yates shuffle
-    for (let i = this.shuffledIndices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [this.shuffledIndices[i], this.shuffledIndices[j]] = [
-        this.shuffledIndices[j],
-        this.shuffledIndices[i],
-      ];
+  /* ── Bridge state ─────────────────────────────────────── */
+
+  /** Applies a report from the YouTube Music page. Public for tests. */
+  handleBridgeState(report: YtmState): void {
+    this.state.isAd = report.ad;
+
+    if (report.videoId) {
+      if (report.videoId === this.pendingId) {
+        // Confirmed, even if an ad plays first: the page URL already names our track.
+        this.pendingId = null;
+        this.clearLoadTimer();
+        // Loading reloads the page, which falls back to its own saved volume.
+        this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume });
+      } else if (
+        !report.ad &&
+        !this.pendingId &&
+        report.videoId !== this.state.currentTrack?.id &&
+        report.title
+      ) {
+        // The page moved on by itself (its radio, or media keys): follow it.
+        this.adoptTrack(report);
+      }
+    }
+
+    if (this.reportCorrectsCurrentTrack(report)) {
+      const current = this.state.currentTrack!;
+      this.setCurrent({
+        ...current,
+        title: report.title!,
+        artist: report.artist ?? current.artist,
+        artworkUrl: report.artworkUrl ?? current.artworkUrl,
+        duration: report.duration > 0 ? Math.round(report.duration) : current.duration,
+      });
+    }
+
+    if (report.reason === "ended" && !report.ad) {
+      if (this.state.repeat === "one") {
+        this.send({ action: "seek", value: 0 });
+        this.send({ action: "play" });
+      } else {
+        this.next();
+      }
+      return;
+    }
+
+    if (!this.pendingId) {
+      this.state.status = report.paused ? "paused" : "playing";
+      this.state.error = undefined;
+      if (!report.ad && report.duration > 0) this.state.duration = report.duration;
+      this.setTime(report.ad ? 0 : report.currentTime);
+      if (report.paused) this.stopTicker();
+      else this.startTicker();
+    }
+    this.emit("stateChange", this.currentState);
+  }
+
+  /**
+   * YouTube Music's own title and artist are the truth for what is playing.
+   * Only settled reports count: the first "play" of an ad can arrive before
+   * the player marks itself as showing an ad.
+   */
+  private reportCorrectsCurrentTrack(report: YtmState): boolean {
+    const current = this.state.currentTrack;
+    return (
+      !report.ad &&
+      (report.reason === "track" || report.reason === "time") &&
+      !!current &&
+      report.videoId === current.id &&
+      !!report.title &&
+      (report.title !== current.title || (!!report.artist && report.artist !== current.artist))
+    );
+  }
+
+  private adoptTrack(report: YtmState): void {
+    const known = this.queue.all.find((t) => t.id === report.videoId);
+    if (known) {
+      this.queue.jumpTo(known.id);
+      this.setCurrent(known);
+      return;
+    }
+    this.setCurrent({
+      id: report.videoId!,
+      title: report.title!,
+      artist: report.artist ?? "",
+      album: report.album ?? undefined,
+      duration: Math.round(report.duration),
+      artworkUrl: report.artworkUrl ?? "",
+    });
+  }
+
+  /* ── Internals ────────────────────────────────────────── */
+
+  private load(track: Track): void {
+    this.setCurrent(track);
+    this.state.status = "loading";
+    this.state.duration = track.duration || 0;
+    this.setTime(0);
+    this.emit("stateChange", this.currentState);
+
+    if (!this.bridge.available) {
+      this.fail(UNAVAILABLE_MESSAGE);
+      return;
+    }
+    this.pendingId = track.id;
+    this.clearLoadTimer();
+    this.loadTimer = window.setTimeout(() => {
+      if (this.pendingId === track.id) this.fail(LOAD_FAILED_MESSAGE);
+    }, LOAD_TIMEOUT_MS);
+    this.send({ action: "load", value: track.id });
+  }
+
+  private setCurrent(track: Track): void {
+    this.state.currentTrack = track;
+    storage.addToHistory(track);
+    this.emit("trackChange", track);
+    this.emit("queueChange", this.queue.all);
+
+    extractPalette(track.artworkUrl).then((palette) => this.emit("paletteChange", palette));
+    lyricsService.getLyrics(track).then((lyrics) => this.emit("lyricsChange", lyrics));
+  }
+
+  private send(command: YtmCommand): void {
+    if (!this.bridge.available) return;
+    this.bridge.control(command).catch((err) => this.fail(err));
+  }
+
+  private clearLoadTimer(): void {
+    if (this.loadTimer !== null) {
+      window.clearTimeout(this.loadTimer);
+      this.loadTimer = null;
     }
   }
 
-  private handleTrackEnded(): void {
-    if (this.state.repeat === "one") {
-      this.seekTo(0);
-      this.resume();
-    } else {
-      this.next();
-    }
+  private fail(err: unknown): void {
+    console.error("[PlaybackEngine]", err);
+    this.pendingId = null;
+    this.clearLoadTimer();
+    this.stopTicker();
+    this.state.status = "error";
+    this.state.error = typeof err === "string" ? err : "YouTube Music did not respond. Try again.";
+    this.emit("stateChange", this.currentState);
   }
 
-  /* ── Windows System Media Transport Controls (SMTC) ─────────────────── */
-
-  private setupMediaSession(): void {
-    if (!("mediaSession" in navigator)) return;
-
-    const ms = navigator.mediaSession;
-    ms.setActionHandler("play", () => this.resume());
-    ms.setActionHandler("pause", () => this.pause());
-    ms.setActionHandler("previoustrack", () => this.previous());
-    ms.setActionHandler("nexttrack", () => this.next());
-    ms.setActionHandler("seekto", (details) => {
-      if (details.seekTime !== undefined) {
-        this.seekTo(details.seekTime);
-      }
-    });
-    ms.setActionHandler("seekbackward", (details) => {
-      this.seekTo(this.state.currentTime - (details.seekOffset || 10));
-    });
-    ms.setActionHandler("seekforward", (details) => {
-      this.seekTo(this.state.currentTime + (details.seekOffset || 10));
-    });
+  private setTime(seconds: number): void {
+    this.state.currentTime = seconds;
+    this.lastReport = { time: seconds, at: performance.now() };
+    this.emit("timeUpdate", { currentTime: seconds, duration: this.state.duration });
   }
 
-  private updateMediaSessionMetadata(track: Track): void {
-    if (!("mediaSession" in navigator)) return;
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title,
-      artist: track.artist,
-      album: track.album || "Sonora",
-      artwork: [
-        { src: track.artworkUrl, sizes: "512x512", type: "image/jpeg" },
-      ],
-    });
+  /** The page reports about once a second; fill in between so the progress bar moves smoothly. */
+  private startTicker(): void {
+    if (this.ticker !== null) return;
+    this.ticker = window.setInterval(() => {
+      if (this.state.status !== "playing" || this.state.isAd) return;
+      const elapsed = (performance.now() - this.lastReport.at) / 1000;
+      const time = Math.min(this.lastReport.time + elapsed, this.state.duration || Infinity);
+      this.state.currentTime = time;
+      this.emit("timeUpdate", { currentTime: time, duration: this.state.duration });
+    }, TICK_MS);
   }
 
-  private updateMediaSessionState(): void {
-    if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.playbackState =
-      this.state.status === "playing" ? "playing" : "paused";
-  }
-
-  private updateMediaSessionPosition(): void {
-    if (!("mediaSession" in navigator) || !("setPositionState" in navigator.mediaSession)) return;
-    try {
-      if (this.state.duration > 0) {
-        navigator.mediaSession.setPositionState({
-          duration: this.state.duration,
-          playbackRate: this.state.playbackRate,
-          position: Math.min(this.state.currentTime, this.state.duration),
-        });
-      }
-    } catch {
-      // Ignore if state is changing rapidly
+  private stopTicker(): void {
+    if (this.ticker !== null) {
+      window.clearInterval(this.ticker);
+      this.ticker = null;
     }
   }
 }

@@ -64,6 +64,8 @@ export interface PlaybackState {
   shuffle: boolean;
   repeat: RepeatMode;
   playbackRate: number;
+  /** True while YouTube Music plays an ad; seeking and skipping are unavailable. */
+  isAd: boolean;
   error?: string;
 }
 

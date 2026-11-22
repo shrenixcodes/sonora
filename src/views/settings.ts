@@ -8,6 +8,7 @@
 import { el } from "@/lib/dom";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
+import { ytmBridge } from "@/lib/playback/ytm-bridge";
 import { storage } from "@/lib/storage";
 import type { UserSettings, AmbientVisualMode } from "@/types/music";
 
@@ -38,6 +39,17 @@ export function renderSettings(container: HTMLElement): void {
           }),
         ],
       }),
+
+      // ── Account ──────────────────────────────────────────
+      createSettingsSection("Account", [
+        createSettingRow(
+          "YouTube Music",
+          ytmBridge.available
+            ? "Sign in on YouTube Music's own page for your library, likes and Premium. Close the window when you're done."
+            : "Signing in is available in the Sonora desktop app.",
+          createSignInButton(),
+        ),
+      ]),
 
       // ── Appearance Studio ────────────────────────────────
       createSettingsSection("Appearance Studio", [
@@ -146,6 +158,22 @@ export function renderSettings(container: HTMLElement): void {
   });
 
   container.appendChild(content);
+}
+
+function createSignInButton(): HTMLElement {
+  const button = el("button", {
+    className: "btn btn--secondary",
+    text: "Open sign-in",
+    attrs: { type: "button" },
+    onClick: () => {
+      ytmBridge.setSignInVisible(true).catch((err) => {
+        console.error("[settings] could not open YouTube Music sign-in:", err);
+        button.textContent = "Couldn't open sign-in";
+      });
+    },
+  });
+  if (!ytmBridge.available) button.setAttribute("disabled", "");
+  return button;
 }
 
 function createSettingsSection(
