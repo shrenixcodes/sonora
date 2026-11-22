@@ -169,7 +169,12 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   toggleMute(): void {
     // Muting sets the page's volume to zero and keeps the chosen level to restore.
     this.state.isMuted = !this.state.isMuted;
-    this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume || 0.8 });
+    if (!this.state.isMuted && this.state.volume === 0) {
+      this.state.volume = 0.8;
+      storage.saveSettings({ volume: 0.8 });
+    }
+    const target = this.state.isMuted ? 0 : this.state.volume;
+    this.send({ action: "volume", value: target });
     this.emit("stateChange", this.currentState);
   }
 
