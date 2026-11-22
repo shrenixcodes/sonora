@@ -48,6 +48,13 @@ pub fn run() {
             }
             // The hidden YouTube Music window would otherwise keep the app alive.
             ("main", WindowEvent::Destroyed) => window.app_handle().exit(0),
+            // When the main window loses focus (such as when minimized), ensure click-through is disabled
+            // so taskbar restoration and window focus work reliably.
+            ("main", WindowEvent::Focused(focused)) => {
+                if !focused {
+                    let _ = window.set_ignore_cursor_events(false);
+                }
+            }
             _ => {}
         })
         .run(tauri::generate_context!())

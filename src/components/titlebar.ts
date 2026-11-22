@@ -91,7 +91,12 @@ export function createTitlebar(): HTMLElement {
             className: "titlebar__window-btn",
             html: icon("minimize"),
             attrs: { "aria-label": "Minimize" },
-            onClick: () => appWindow?.minimize(),
+            onClick: async () => {
+              if (appWindow) {
+                await appWindow.setIgnoreCursorEvents(false).catch(() => {});
+                await appWindow.minimize();
+              }
+            },
           }),
           el("button", {
             className: "titlebar__window-btn",
