@@ -253,6 +253,7 @@ pub enum YtmRequest {
     LikedSongs,
     LibraryPlaylists,
     AccountInfo,
+    Explore,
     Playlist { id: String },
     WatchPlaylist { id: String },
     /// Next page of a list the page already returned.
@@ -274,7 +275,8 @@ impl YtmRequest {
             YtmRequest::Home { params: None }
             | YtmRequest::LikedSongs
             | YtmRequest::LibraryPlaylists
-            | YtmRequest::AccountInfo => {
+            | YtmRequest::AccountInfo
+            | YtmRequest::Explore => {
                 Ok(())
             }
             YtmRequest::Home { params: Some(params) } => {

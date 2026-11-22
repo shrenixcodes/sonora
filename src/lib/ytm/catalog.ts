@@ -50,6 +50,7 @@ type Fetcher = (request: CatalogRequest, timeoutMs: number) => Promise<unknown>;
 
 export class Catalog {
   private home: { page: HomePage; at: number } | null = null;
+  private explore: { shelves: HomeShelf[]; at: number } | null = null;
   private inFlight = new Map<string, Promise<unknown>>();
 
   constructor(
@@ -83,6 +84,14 @@ export class Catalog {
     }
     if (!filtered) this.home = { page, at: this.now() };
     return page;
+  }
+
+  /** YouTube Music's Explore page: new releases, charts and trending. */
+  async getExplore(): Promise<HomeShelf[]> {
+    if (this.explore && this.now() - this.explore.at < HOME_TTL_MS) return this.explore.shelves;
+    const shelves = parseHomeShelves(await this.fetch({ kind: "explore" }));
+    this.explore = { shelves, at: this.now() };
+    return shelves;
   }
 
   async searchSongs(query: string): Promise<Track[]> {

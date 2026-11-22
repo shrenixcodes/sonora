@@ -140,6 +140,8 @@
         body = { browseId: "FEmusic_liked_videos" };
       } else if (request.kind === "libraryPlaylists") {
         body = { browseId: "FEmusic_liked_playlists" };
+      } else if (request.kind === "explore") {
+        body = { browseId: "FEmusic_explore" };
       } else if (request.kind === "accountInfo") {
         endpoint = "account/account_menu";
         body = {};

@@ -1,12 +1,17 @@
 /**
  * Explore view.
  *
- * Mood and genre shortcuts; each one runs a YouTube Music search.
+ * Mood and genre shortcuts that run a YouTube Music search, each showing
+ * artwork from songs it finds, followed by YouTube Music's own Explore
+ * shelves (new releases, charts, trending).
  */
 
 import { el } from "@/lib/dom";
 import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
+import { catalog, CatalogError } from "@/lib/ytm/catalog";
+import { catalogAvailable } from "@/lib/ytm/client";
+import { placeholderShelf, renderShelves } from "@/components/shelves";
 
 interface MoodCategory {
   title: string;
@@ -25,7 +30,26 @@ const MOODS: MoodCategory[] = [
   { title: "Late Night Drive", color: "#1A202C", query: "night drive moody beats" },
 ];
 
+const MOSAIC_SIZE = 4;
+/** Artwork per mood, kept for the session so revisiting Explore doesn't search again. */
+const moodArtwork = new Map<string, Promise<string[]>>();
+
+function artworkFor(mood: MoodCategory): Promise<string[]> {
+  let pending = moodArtwork.get(mood.query);
+  if (!pending) {
+    pending = catalog
+      .searchSongs(mood.query)
+      .then((tracks) => tracks.map((t) => t.artworkUrl).filter(Boolean).slice(0, MOSAIC_SIZE));
+    // A failed lookup is retried on the next visit.
+    pending.catch(() => moodArtwork.delete(mood.query));
+    moodArtwork.set(mood.query, pending);
+  }
+  return pending;
+}
+
 export function renderExplore(container: HTMLElement): void {
+  const shelvesHost = el("div", { className: "explore__shelves", attrs: { "aria-live": "polite" } });
+
   const content = el("div", {
     className: "main__content",
     children: [
@@ -35,11 +59,11 @@ export function renderExplore(container: HTMLElement): void {
           el("h1", { className: "page-header__title", text: "Explore" }),
           el("p", {
             className: "page-header__subtitle",
-            text: "Pick a mood to search YouTube Music for it",
+            text: "Moods, new releases and what's trending on YouTube Music",
           }),
         ],
       }),
-      el("div", {
+      el("section", {
         className: "section",
         children: [
           el("div", {
@@ -52,22 +76,68 @@ export function renderExplore(container: HTMLElement): void {
           }),
         ],
       }),
+      shelvesHost,
     ],
   });
 
   container.appendChild(content);
+  if (catalogAvailable()) loadShelves(shelvesHost);
+}
+
+async function loadShelves(host: HTMLElement): Promise<void> {
+  host.setAttribute("aria-busy", "true");
+  host.replaceChildren(placeholderShelf("Loading Explore from YouTube Music"));
+  try {
+    const shelves = await catalog.getExplore();
+    if (!host.isConnected) return;
+    host.replaceChildren(...(shelves.length > 0 ? renderShelves(shelves, "") : []));
+  } catch (err) {
+    if (!host.isConnected) return;
+    const message = err instanceof CatalogError ? err.message : "Couldn't load Explore from YouTube Music.";
+    host.replaceChildren(
+      el("div", {
+        className: "home__notice",
+        children: [
+          el("p", { className: "home__hint", text: message }),
+          el("button", {
+            className: "btn btn--secondary",
+            text: "Try again",
+            attrs: { type: "button" },
+            onClick: () => loadShelves(host),
+          }),
+        ],
+      }),
+    );
+  } finally {
+    host.removeAttribute("aria-busy");
+  }
 }
 
 function createMoodCard(mood: MoodCategory): HTMLElement {
-  return el("button", {
+  const mosaic = el("span", { className: "mood-card__art", attrs: { "aria-hidden": "true" } });
+  const card = el("button", {
     className: "mood-card",
-    attrs: { type: "button", "aria-label": `Search for ${mood.title}` },
-    children: [
-      el("span", { className: "mood-card__title", text: mood.title }),
-    ],
+    attrs: { type: "button", "aria-label": `Search for ${mood.title}`, style: `--mood-color: ${mood.color}` },
+    children: [mosaic, el("span", { className: "mood-card__title", text: mood.title })],
     onClick: () => {
       searchQuery.set(mood.query);
       router.navigate("/search");
     },
   });
+
+  if (catalogAvailable()) {
+    artworkFor(mood)
+      .then((urls) => {
+        if (urls.length === 0) return;
+        mosaic.classList.toggle("mood-card__art--single", urls.length < MOSAIC_SIZE);
+        mosaic.replaceChildren(
+          ...urls
+            .slice(0, urls.length < MOSAIC_SIZE ? 1 : MOSAIC_SIZE)
+            .map((src) => el("img", { attrs: { src, alt: "", loading: "lazy" } })),
+        );
+        card.classList.add("mood-card--has-art");
+      })
+      .catch(() => {});
+  }
+  return card;
 }

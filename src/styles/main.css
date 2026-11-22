@@ -384,23 +384,58 @@
 
 .mood-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--space-4);
 }
 
+/* Artwork from the mood's songs fills the card; its color tints the lower half
+   so the title stays readable over any artwork. */
 .mood-card {
-  height: 100px;
+  position: relative;
+  isolation: isolate;
+  aspect-ratio: 16 / 9;
   display: flex;
   align-items: flex-end;
   padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--color-surface), var(--color-surface-secondary));
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--mood-color), color-mix(in oklab, var(--mood-color) 45%, #000));
   border: 1px solid var(--color-border-subtle);
-  color: var(--color-text);
+  box-shadow: var(--shadow-md);
   text-align: left;
   cursor: pointer;
   transition: transform var(--duration-fast) var(--ease-spring),
-              border-color var(--duration-fast) var(--ease-out);
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.mood-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top,
+    color-mix(in oklab, var(--mood-color) 85%, #000) 0%,
+    color-mix(in oklab, var(--mood-color) 45%, transparent) 55%,
+    transparent 100%);
+}
+
+.mood-card__art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.mood-card__art--single {
+  grid-template-columns: 1fr;
+}
+
+.mood-card__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--duration-slow) var(--ease-out);
 }
 
 .mood-card:focus-visible {
@@ -410,7 +445,11 @@
 
 .mood-card:hover {
   transform: translateY(-2px);
-  border-color: var(--color-accent);
+  box-shadow: var(--shadow-lg);
+}
+
+.mood-card:hover .mood-card__art img {
+  transform: scale(1.06);
 }
 
 .mood-card__title {
@@ -418,7 +457,8 @@
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
-  color: var(--color-text);
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
 }
 
 /* ── Home: quick-pick tiles ──────────────────────────────── */
