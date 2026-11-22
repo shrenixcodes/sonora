@@ -74,9 +74,6 @@
   --duration-slow: 320ms;
   --duration-slower: 500ms;
   --duration-ambience: 1200ms;
-  /* Light blur: the artwork stays recognisable behind the glass panels. */
-  --ambient-art-blur: 18px;
-  --glass-blur: 10px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);

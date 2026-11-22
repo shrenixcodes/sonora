@@ -50,7 +50,7 @@ function init(): void {
   const main = el("main", { className: "main" });
   const player = createPlayer();
 
-  // Blurred artwork of the playing track sits behind every panel
+  // Artwork of the playing track sits behind every panel
   const ambientArtwork = new AmbientArtwork();
   app.appendChild(ambientArtwork.element);
   app.appendChild(titlebar);

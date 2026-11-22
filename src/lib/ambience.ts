@@ -31,7 +31,7 @@ export function applyAmbience(
 const ARTWORK_FADE_MS = 1200;
 
 /**
- * The current artwork, softly blurred, behind the whole app. Two layers
+ * The current artwork behind the whole app. Two layers
  * cross-fade so a track change never flashes the bare background.
  */
 export class AmbientArtwork {

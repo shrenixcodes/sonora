@@ -90,8 +90,8 @@ body {
   }
 }
 
-/* Shared look for the sidebar, content, queue and player panels: frosted
-   glass over the artwork backdrop, with only a light blur. */
+/* Shared look for the sidebar, content, queue and player panels: tinted
+   glass over the artwork backdrop. */
 .sidebar,
 .main,
 .queue-panel,
@@ -99,12 +99,10 @@ body {
   background: var(--color-panel);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
 }
 
 /* ── Artwork backdrop ────────────────────────────────────
- * The playing track's artwork, lightly blurred, fills the window behind the
+ * The playing track's artwork fills the window behind the
  * panels (src/lib/ambience.ts). Above the solid background, below the color glow.
  */
 
@@ -118,12 +116,10 @@ body {
 
 .ambient-art__layer {
   position: absolute;
-  /* Overscan so the blur never shows soft edges. */
-  inset: -6%;
-  width: 112%;
-  height: 112%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  filter: blur(var(--ambient-art-blur)) saturate(130%);
   opacity: 0;
   transition: opacity var(--duration-ambience) var(--ease-in-out);
 }
