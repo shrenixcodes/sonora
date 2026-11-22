@@ -12,6 +12,7 @@ import { playerEngine } from "@/lib/playback/engine";
 import { LyricsController } from "@/lib/lyrics/synced-lyrics";
 import { AmbientVisualRenderer } from "@/lib/visuals/ambient-renderer";
 import { storage } from "@/lib/storage";
+import { router } from "@/lib/router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AmbientVisualMode, Track } from "@/types/music";
 
@@ -47,7 +48,11 @@ export function renderNowPlaying(container: HTMLElement): void {
     html: icon("chevronLeft"),
     attrs: { "aria-label": "Close Now Playing", title: "Back to library" },
     onClick: () => {
-      window.history.back();
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        router.navigate("/");
+      }
     },
   });
 
@@ -81,7 +86,6 @@ export function renderNowPlaying(container: HTMLElement): void {
   });
 
   // Fullscreen button
-  let isFullscreen = false;
   const fullscreenBtn = el("button", {
     className: "now-playing__fs-btn",
     html: icon("fullscreen"),
@@ -89,8 +93,8 @@ export function renderNowPlaying(container: HTMLElement): void {
     onClick: async () => {
       try {
         const appWindow = getCurrentWindow();
-        isFullscreen = !isFullscreen;
-        await appWindow.setFullscreen(isFullscreen);
+        const current = await appWindow.isFullscreen();
+        await appWindow.setFullscreen(!current);
       } catch {
         // Fallback to DOM fullscreen API
         if (!document.fullscreenElement) {
@@ -196,13 +200,19 @@ export function renderNowPlaying(container: HTMLElement): void {
     }),
   );
 
-  // Clean up when this view is replaced / unmounted
-  const checkInterval = setInterval(() => {
-    if (!document.body.contains(nowPlayingRoot)) {
-      clearInterval(checkInterval);
-      visualEngine.destroy();
-      lyricsController.destroy();
-      unsubs.forEach((unsub) => unsub());
-    }
-  }, 500);
+  // Clean up immediately when leaving Now Playing
+  let destroyed = false;
+  const destroy = () => {
+    if (destroyed) return;
+    destroyed = true;
+    visualEngine.destroy();
+    lyricsController.destroy();
+    unsubs.forEach((unsub) => unsub());
+  };
+
+  const stopNav = router.onNavigate((path) => {
+    if (path === "/now-playing") return;
+    destroy();
+    stopNav();
+  });
 }
