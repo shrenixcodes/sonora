@@ -408,3 +408,179 @@
   font-weight: var(--weight-semibold);
   color: var(--color-text);
 }
+
+/* ── Home: quick-pick tiles ──────────────────────────────── */
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-2);
+}
+
+.quick-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 56px;
+  padding-right: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--color-text) 6%, transparent);
+  text-align: left;
+  overflow: hidden;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.quick-tile:hover,
+.quick-tile:focus-visible {
+  background: color-mix(in oklab, var(--color-text) 11%, transparent);
+}
+
+.quick-tile__art {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: var(--color-surface-secondary);
+}
+
+.quick-tile__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quick-tile__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.quick-tile__subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.quick-tile__play,
+.shelf-card__play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
+}
+
+.quick-tile__play svg,
+.shelf-card__play svg {
+  width: 16px;
+  height: 16px;
+}
+
+.quick-tile:hover .quick-tile__play,
+.quick-tile:focus-visible .quick-tile__play,
+.shelf-card:hover .shelf-card__play,
+.shelf-card:focus-visible .shelf-card__play {
+  opacity: 1;
+  transform: none;
+}
+
+/* The playing track keeps an accent title instead of the play button. */
+.quick-tile.is-playing .quick-tile__title,
+.shelf-card.is-playing .shelf-card__title {
+  color: var(--color-accent);
+}
+
+/* ── Home: "Jump back in" shelf ──────────────────────────── */
+
+.shelf {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 160px;
+  gap: var(--space-4);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: var(--space-2);
+  margin: 0 calc(var(--space-2) * -1);
+  padding-inline: var(--space-2);
+}
+
+.shelf-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2);
+  margin: calc(var(--space-2) * -1);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  scroll-snap-align: start;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.shelf-card:hover,
+.shelf-card:focus-visible {
+  background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.shelf-card__art {
+  position: relative;
+  aspect-ratio: 1;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-secondary);
+  box-shadow: var(--shadow-md);
+}
+
+.shelf-card__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shelf-card__play {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+}
+
+.shelf-card__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.shelf-card__subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.home__hint {
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+}
+
+/* Keyboard focus is always visible, never just a hover look. */
+.quick-tile:focus-visible,
+.shelf-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-tile__play,
+  .shelf-card__play {
+    transform: none;
+    transition: opacity var(--duration-fast) linear;
+  }
+}

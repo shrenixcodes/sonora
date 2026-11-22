@@ -1,8 +1,8 @@
 /**
  * Home view.
  *
- * Rich landing experience featuring dynamic greeting, quick picks,
- * recently played history, and featured albums.
+ * Greeting, compact quick-pick tiles, and a "Jump back in" shelf built from
+ * local listening history. Every tile is a real button that plays its track.
  */
 
 import { el, formatTime } from "@/lib/dom";
@@ -10,195 +10,127 @@ import { icon } from "@/icons";
 import { ytmService } from "@/lib/playback/ytm-api";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
-import type { Track, Album } from "@/types/music";
+import { router } from "@/lib/router";
+import { greetingFor } from "@/lib/greeting";
+import { dedupeById } from "@/lib/tracks";
+import type { Track } from "@/types/music";
+
+const RECENT_LIMIT = 10;
 
 export function renderHome(container: HTMLElement): void {
   const quickPicks = ytmService.getQuickPicks();
-  const featuredAlbums = ytmService.getFeaturedAlbums();
-  const recentHistory = storage.getHistory().slice(0, 6);
-
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const recent = dedupeById(storage.getHistory()).slice(0, RECENT_LIMIT);
 
   const content = el("div", {
-    className: "main__content",
+    className: "main__content home",
     children: [
       el("div", {
         className: "page-header",
-        children: [
-          el("h1", { className: "page-header__title", text: greeting }),
-          el("p", {
-            className: "page-header__subtitle",
-            text: "Your daily soundtrack on Sonora",
-          }),
-        ],
+        children: [el("h1", { className: "page-header__title", text: greetingFor(new Date()) })],
       }),
 
-      // ── Quick Picks ──────────────────────────────────────
-      el("div", {
-        className: "section",
-        children: [
-          el("div", {
-            className: "section__header",
-            children: [
-              el("h2", {
-                className: "section__title",
-                text: "Quick picks",
-              }),
-            ],
-          }),
-          el("div", {
-            className: "card-grid",
-            children: quickPicks.map((track) => createTrackCard(track, quickPicks)),
-          }),
-        ],
-      }),
+      section(
+        "Quick picks",
+        el("div", {
+          className: "quick-grid",
+          children: quickPicks.map((track) => createQuickTile(track, quickPicks)),
+        }),
+      ),
 
-      // ── Recently Played ──────────────────────────────────
-      el("div", {
-        className: "section",
-        children: [
-          el("div", {
-            className: "section__header",
-            children: [
-              el("h2", {
-                className: "section__title",
-                text: "Recently played",
-              }),
-            ],
-          }),
-          recentHistory.length > 0
-            ? el("div", {
-                className: "card-grid",
-                children: recentHistory.map((track) =>
-                  createTrackCard(track, recentHistory),
-                ),
-              })
-            : el("div", {
-                className: "empty-state",
-                children: [
-                  el("div", {
-                    className: "empty-state__icon",
-                    html: icon("history"),
-                  }),
-                  el("h3", {
-                    className: "empty-state__title",
-                    text: "No recent activity",
-                  }),
-                  el("p", {
-                    className: "empty-state__description",
-                    text: "Tracks you listen to will automatically appear here for quick access.",
-                  }),
-                ],
-              }),
-        ],
-      }),
-
-      // ── Featured Albums ──────────────────────────────────
-      el("div", {
-        className: "section",
-        children: [
-          el("div", {
-            className: "section__header",
-            children: [
-              el("h2", {
-                className: "section__title",
-                text: "Featured albums & collections",
-              }),
-            ],
-          }),
-          el("div", {
-            className: "card-grid",
-            children: featuredAlbums.map((album) => createAlbumCard(album)),
-          }),
-        ],
-      }),
+      section(
+        "Jump back in",
+        recent.length > 0
+          ? el("div", {
+              className: "shelf",
+              children: recent.map((track) => createShelfCard(track, recent)),
+            })
+          : el("p", {
+              className: "home__hint",
+              text: "Songs you play will show up here so you can get back to them quickly.",
+            }),
+      ),
     ],
   });
 
   container.appendChild(content);
-}
 
-function createTrackCard(track: Track, queueContext: Track[]): HTMLElement {
-  const card = el("div", {
-    className: "card",
-    children: [
-      el("div", {
-        className: "card__artwork",
-        children: [
-          el("img", {
-            attrs: {
-              src: track.artworkUrl,
-              alt: track.title,
-              loading: "lazy",
-            },
-          }),
-          el("div", {
-            className: "card__play-overlay",
-            children: [
-              el("div", {
-                className: "card__play-btn",
-                html: icon("play"),
-              }),
-            ],
-          }),
-        ],
-      }),
-      el("div", {
-        className: "card__info",
-        children: [
-          el("span", {
-            className: "card__title truncate",
-            text: track.title,
-            attrs: { title: track.title },
-          }),
-          el("span", {
-            className: "card__subtitle truncate",
-            text: `${track.artist}${track.duration ? " • " + formatTime(track.duration) : ""}`,
-            attrs: { title: track.artist },
-          }),
-        ],
-      }),
-    ],
-    onClick: () => {
-      playerEngine.playTrack(track, queueContext);
-    },
+  // Highlight the playing track; stop listening once the user leaves Home.
+  const markPlaying = (track: Track | null) => {
+    content.querySelectorAll<HTMLElement>("[data-track-id]").forEach((node) => {
+      const isCurrent = node.dataset.trackId === track?.id;
+      node.classList.toggle("is-playing", isCurrent);
+      if (isCurrent) node.setAttribute("aria-current", "true");
+      else node.removeAttribute("aria-current");
+    });
+  };
+  markPlaying(playerEngine.currentTrack);
+  const stopTrackListener = playerEngine.on("trackChange", markPlaying);
+  const stopNavListener = router.onNavigate((path) => {
+    if (path === "/") return;
+    stopTrackListener();
+    stopNavListener();
   });
-
-  return card;
 }
 
-function createAlbumCard(album: Album): HTMLElement {
-  return el("div", {
-    className: "card",
+function section(title: string, body: HTMLElement): HTMLElement {
+  return el("section", {
+    className: "section",
     children: [
       el("div", {
-        className: "card__artwork",
-        children: [
-          el("img", {
-            attrs: {
-              src: album.artworkUrl,
-              alt: album.title,
-              loading: "lazy",
-            },
-          }),
-        ],
+        className: "section__header",
+        children: [el("h2", { className: "section__title", text: title })],
       }),
-      el("div", {
-        className: "card__info",
-        children: [
-          el("span", {
-            className: "card__title truncate",
-            text: album.title,
-            attrs: { title: album.title },
-          }),
-          el("span", {
-            className: "card__subtitle truncate",
-            text: `${album.artist}${album.year ? " • " + album.year : ""}`,
-          }),
-        ],
-      }),
+      body,
     ],
+  });
+}
+
+function createQuickTile(track: Track, queue: Track[]): HTMLElement {
+  return el("button", {
+    className: "quick-tile",
+    attrs: {
+      type: "button",
+      "data-track-id": track.id,
+      "aria-label": `Play ${track.title} by ${track.artist}`,
+    },
+    children: [
+      el("img", {
+        className: "quick-tile__art",
+        attrs: { src: track.artworkUrl, alt: "", loading: "lazy" },
+      }),
+      el("span", {
+        className: "quick-tile__meta",
+        children: [
+          el("span", { className: "quick-tile__title truncate", text: track.title }),
+          el("span", { className: "quick-tile__subtitle truncate", text: track.artist }),
+        ],
+      }),
+      el("span", { className: "quick-tile__play", html: icon("play"), attrs: { "aria-hidden": "true" } }),
+    ],
+    onClick: () => playerEngine.playTrack(track, queue),
+  });
+}
+
+function createShelfCard(track: Track, queue: Track[]): HTMLElement {
+  const subtitle = track.duration ? `${track.artist} · ${formatTime(track.duration)}` : track.artist;
+  return el("button", {
+    className: "shelf-card",
+    attrs: {
+      type: "button",
+      "data-track-id": track.id,
+      "aria-label": `Play ${track.title} by ${track.artist}`,
+    },
+    children: [
+      el("span", {
+        className: "shelf-card__art",
+        children: [
+          el("img", { attrs: { src: track.artworkUrl, alt: "", loading: "lazy" } }),
+          el("span", { className: "shelf-card__play", html: icon("play"), attrs: { "aria-hidden": "true" } }),
+        ],
+      }),
+      el("span", { className: "shelf-card__title truncate", text: track.title }),
+      el("span", { className: "shelf-card__subtitle truncate", text: subtitle }),
+    ],
+    onClick: () => playerEngine.playTrack(track, queue),
   });
 }

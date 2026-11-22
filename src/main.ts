@@ -72,9 +72,6 @@ function init(): void {
 
   // Register desktop keyboard shortcuts
   setupGlobalShortcuts();
-
-  // Update greeting based on time of day
-  updateGreeting();
 }
 
 function setupGlobalShortcuts(): void {
@@ -132,20 +129,6 @@ function setupGlobalShortcuts(): void {
         break;
     }
   });
-}
-
-function updateGreeting(): void {
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-
-  const hash = window.location.hash;
-  if (hash === "" || hash === "#/") {
-    const title = document.querySelector(".page-header__title");
-    if (title) {
-      title.textContent = greeting;
-    }
-  }
 }
 
 // Initialize when DOM is ready
