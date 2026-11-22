@@ -120,9 +120,15 @@ function setupGlobalShortcuts(): void {
       return;
     }
 
-    // Avoid capturing keys when user is typing in a text field
+    // Avoid capturing keys when user is typing in a text field or navigating a dropdown
     const active = document.activeElement;
-    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {
+    if (
+      active &&
+      (active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        active.tagName === "SELECT" ||
+        (active as HTMLElement).isContentEditable)
+    ) {
       return;
     }
 
