@@ -17,18 +17,20 @@ html[data-window="floating"] {
   /* Floating pieces: liquid glass tinted by the artwork's dominant color. */
   --float-fill: color-mix(in oklab, color-mix(in oklab, var(--color-bg) 62%, var(--ambience-2)) 78%, transparent);
 
-  /* The shared elevation tokens pair a tight contact shadow with a wide, soft
-     ambient one. The ambient layer needs a window background to settle on; here
-     it spreads past the transparent edges and darkens the desktop around every
-     piece. Keep the contact layer only, so each piece still lifts off what is
-     behind it without casting a halo. */
-  --elevation-2: 0 1px 3px rgba(0, 0, 0, 0.22);
-  --elevation-3: 0 2px 6px rgba(0, 0, 0, 0.26);
+  /* Shadows for the pieces that sit straight on the transparent window. The
+     shared elevation tokens pair a contact shadow with a wide, soft ambient
+     one, and that ambient layer needs a window background to settle on: here
+     it spreads past the edges and darkens the desktop around every piece.
+     These keep the contact layer only, so a piece still lifts off whatever is
+     behind it without casting a halo. Surfaces that bring their own backdrop,
+     such as a modal dialog, keep the full elevation. */
+  --float-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  --float-stage-shadow: 0 2px 6px rgba(0, 0, 0, 0.26);
 }
 
 html[data-window="floating"][data-theme="light"] {
-  --elevation-2: 0 1px 3px rgba(31, 41, 20, 0.10);
-  --elevation-3: 0 2px 6px rgba(31, 41, 20, 0.12);
+  --float-shadow: 0 1px 3px rgba(31, 41, 20, 0.10);
+  --float-stage-shadow: 0 2px 6px rgba(31, 41, 20, 0.12);
 }
 
 html[data-window="floating"] #app {
@@ -59,7 +61,7 @@ html[data-window="floating"] #app::before {
   grid-column: 2 / -1;
   border-radius: var(--stage-radius);
   border: 1px solid var(--color-panel-border);
-  box-shadow: var(--glass-edge), var(--elevation-3);
+  box-shadow: var(--glass-edge), var(--float-stage-shadow);
   /* Liquid glass layering with subtle backdrop translucency and specular sheen. */
   background:
     var(--glass-sheen),
@@ -124,7 +126,7 @@ html[data-window="floating"] .sidebar,
 html[data-window="floating"] .player {
   background: var(--glass-sheen), var(--float-fill);
   border: 1px solid var(--color-panel-border);
-  box-shadow: var(--glass-edge), var(--elevation-2);
+  box-shadow: var(--glass-edge), var(--float-shadow);
   /* Liquid glass refraction */
   -webkit-backdrop-filter: var(--glass-backdrop-strong);
   backdrop-filter: var(--glass-backdrop-strong);
