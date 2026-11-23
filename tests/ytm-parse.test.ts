@@ -11,6 +11,7 @@ import {
   parseLibraryPlaylists,
   parseWatchPlaylist,
   parsePlaylistTracks,
+  parseSearchCollections,
   parseSearchSongs,
 } from "../src/lib/ytm/parse";
 
@@ -123,6 +124,98 @@ describe("parseSearchSongs", () => {
   it("returns nothing for an unexpected shape instead of throwing", () => {
     expect(parseSearchSongs({})).toEqual([]);
     expect(parseSearchSongs(null)).toEqual([]);
+  });
+});
+
+describe("parseSearchCollections", () => {
+  it("parses albums, playlists, and artists from search results", () => {
+    const response = {
+      contents: {
+        musicShelfRenderer: {
+          contents: [
+            {
+              musicResponsiveListItemRenderer: {
+                thumbnail: thumbs("https://lh3.googleusercontent.com/album1"),
+                flexColumns: [
+                  column({
+                    text: "Greatest Hits",
+                    navigationEndpoint: {
+                      browseEndpoint: {
+                        browseId: "MPREb_123",
+                        browseEndpointContextSupportedConfigs: {
+                          browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_ALBUM" },
+                        },
+                      },
+                    },
+                  }),
+                  column({ text: "Album • Artist • 2021" }),
+                ],
+              },
+            },
+            {
+              musicResponsiveListItemRenderer: {
+                thumbnail: thumbs("https://lh3.googleusercontent.com/artist1"),
+                flexColumns: [
+                  column({
+                    text: "Queen",
+                    navigationEndpoint: {
+                      browseEndpoint: {
+                        browseId: "UC123",
+                        browseEndpointContextSupportedConfigs: {
+                          browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_ARTIST" },
+                        },
+                      },
+                    },
+                  }),
+                  column({ text: "Artist • 10M subscribers" }),
+                ],
+              },
+            },
+            {
+              musicResponsiveListItemRenderer: {
+                thumbnail: thumbs("https://lh3.googleusercontent.com/pl1"),
+                flexColumns: [
+                  column({
+                    text: "Rock Classics",
+                    navigationEndpoint: {
+                      browseEndpoint: {
+                        browseId: "VLPL_rock",
+                        browseEndpointContextSupportedConfigs: {
+                          browseEndpointContextMusicConfig: { pageType: "MUSIC_PAGE_TYPE_PLAYLIST" },
+                        },
+                      },
+                    },
+                  }),
+                  column({ text: "Playlist • YouTube Music" }),
+                ],
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const results = parseSearchCollections(response);
+    expect(results).toHaveLength(3);
+    expect(results[0]).toMatchObject({
+      kind: "album",
+      title: "Greatest Hits",
+      playlistId: "MPREb_123",
+    });
+    expect(results[1]).toMatchObject({
+      kind: "artist",
+      title: "Queen",
+    });
+    expect(results[2]).toMatchObject({
+      kind: "playlist",
+      title: "Rock Classics",
+      playlistId: "PL_rock",
+    });
+  });
+
+  it("handles empty or malformed collections gracefully", () => {
+    expect(parseSearchCollections({})).toEqual([]);
+    expect(parseSearchCollections(null)).toEqual([]);
   });
 });
 

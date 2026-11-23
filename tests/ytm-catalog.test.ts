@@ -211,4 +211,21 @@ describe("Catalog", () => {
     await catalog.rateTrack("song1", false);
     expect(fetcher).toHaveBeenCalledWith({ kind: "rate", videoId: "song1", rating: "INDIFFERENT" }, expect.any(Number));
   });
+
+  it("passes search filters and parameters to the fetcher", async () => {
+    const fetcher = vi.fn(async () => ({}));
+    const catalog = new Catalog(fetcher);
+
+    await catalog.search("Queen", "albums");
+    expect(fetcher).toHaveBeenCalledWith(
+      { kind: "search", query: "Queen", params: "EgWKAQIBAWoKEAkQBRAKEAMQBA%3D%3D" },
+      expect.any(Number),
+    );
+
+    await catalog.search("Queen", "playlists");
+    expect(fetcher).toHaveBeenCalledWith(
+      { kind: "search", query: "Queen", params: "EgWKAQIoAWoKEAkQBRAKEAMQBA%3D%3D" },
+      expect.any(Number),
+    );
+  });
 });

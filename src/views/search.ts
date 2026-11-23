@@ -7,18 +7,64 @@
 
 import { el, formatTime } from "@/lib/dom";
 import { icon } from "@/icons";
-import { catalog, CatalogError } from "@/lib/ytm/catalog";
+import { catalog, CatalogError, type SearchFilter } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
+import { createCollectionCard } from "@/components/shelves";
 import type { Track } from "@/types/music";
 
 const DEBOUNCE_MS = 300;
 
+interface FilterOption {
+  id: SearchFilter;
+  label: string;
+}
+
+const SEARCH_FILTERS: FilterOption[] = [
+  { id: "songs", label: "Songs" },
+  { id: "albums", label: "Albums" },
+  { id: "artists", label: "Artists" },
+  { id: "playlists", label: "Playlists" },
+  { id: "videos", label: "Videos" },
+];
+
 export function renderSearch(container: HTMLElement): void {
   let debounceTimer: number | null = null;
+  let activeFilter: SearchFilter = "songs";
   const results = el("div", { className: "search__results", attrs: { "aria-live": "polite" } });
+
+  const filterButtons: Map<SearchFilter, HTMLElement> = new Map();
+  const filterBar = el("div", {
+    className: "search__filters",
+    attrs: { role: "radiogroup", "aria-label": "Search categories" },
+    children: SEARCH_FILTERS.map((f) => {
+      const btn = el("button", {
+        className: `search__filter-chip${f.id === activeFilter ? " search__filter-chip--active" : ""}`,
+        text: f.label,
+        attrs: {
+          type: "button",
+          role: "radio",
+          "aria-checked": String(f.id === activeFilter),
+        },
+        onClick: () => {
+          if (activeFilter === f.id) return;
+          activeFilter = f.id;
+          for (const [id, chip] of filterButtons.entries()) {
+            const isActive = id === activeFilter;
+            chip.classList.toggle("search__filter-chip--active", isActive);
+            chip.setAttribute("aria-checked", String(isActive));
+          }
+          if (searchQuery.value) {
+            search(searchQuery.value);
+          }
+        },
+      });
+      filterButtons.set(f.id, btn);
+      return btn;
+    }),
+  });
 
   container.appendChild(
     el("div", {
@@ -28,6 +74,7 @@ export function renderSearch(container: HTMLElement): void {
           className: "page-header",
           children: [el("h1", { className: "page-header__title", text: "Search" })],
         }),
+        filterBar,
         results,
       ],
     }),
@@ -52,30 +99,58 @@ export function renderSearch(container: HTMLElement): void {
     results.setAttribute("aria-busy", "true");
     results.replaceChildren(el("p", { className: "empty-state__description", text: `Searching YouTube Music for “${query}”…` }));
     try {
-      const songs = await catalog.searchSongs(query);
-      // Ignore answers that arrive after the query has moved on
-      if (query !== searchQuery.value || !results.isConnected) return;
-      if (songs.length === 0) {
-        showState("No songs found", "Try different words, or the artist's name.");
-        return;
+      const filterAtStart = activeFilter;
+      const res = await catalog.search(query, filterAtStart);
+      // Ignore answers that arrive after the query or filter has moved on
+      if (query !== searchQuery.value || filterAtStart !== activeFilter || !results.isConnected) return;
+
+      const filterOption = SEARCH_FILTERS.find((f) => f.id === filterAtStart)!;
+      if (filterAtStart === "songs" || filterAtStart === "videos") {
+        const songs = res.tracks ?? [];
+        if (songs.length === 0) {
+          showState(`No ${filterOption.label.toLowerCase()} found`, "Try different words, or check your spelling.");
+          return;
+        }
+        results.removeAttribute("aria-busy");
+        results.replaceChildren(
+          el("section", {
+            className: "section",
+            children: [
+              el("div", {
+                className: "section__header",
+                children: [el("h2", { className: "section__title", text: filterOption.label })],
+              }),
+              el("div", {
+                className: "track-list",
+                children: songs.map((song, i) => createTrackRow(song, i + 1, songs)),
+              }),
+            ],
+          }),
+        );
+        markPlaying(playerEngine.currentTrack);
+      } else {
+        const collections = res.collections ?? [];
+        if (collections.length === 0) {
+          showState(`No ${filterOption.label.toLowerCase()} found`, "Try different words, or check your spelling.");
+          return;
+        }
+        results.removeAttribute("aria-busy");
+        results.replaceChildren(
+          el("section", {
+            className: "section",
+            children: [
+              el("div", {
+                className: "section__header",
+                children: [el("h2", { className: "section__title", text: filterOption.label })],
+              }),
+              el("div", {
+                className: "card-grid",
+                children: collections.map((col) => createCollectionCard(col)),
+              }),
+            ],
+          }),
+        );
       }
-      results.removeAttribute("aria-busy");
-      results.replaceChildren(
-        el("section", {
-          className: "section",
-          children: [
-            el("div", {
-              className: "section__header",
-              children: [el("h2", { className: "section__title", text: "Songs" })],
-            }),
-            el("div", {
-              className: "track-list",
-              children: songs.map((song, i) => createTrackRow(song, i + 1, songs)),
-            }),
-          ],
-        }),
-      );
-      markPlaying(playerEngine.currentTrack);
     } catch (err) {
       if (query !== searchQuery.value || !results.isConnected) return;
       const message = err instanceof CatalogError ? err.message : "Something went wrong while searching.";

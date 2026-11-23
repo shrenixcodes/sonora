@@ -16,6 +16,7 @@ import {
   parseLibraryArtists,
   parseLibraryPlaylists,
   parsePlaylistTracks,
+  parseSearchCollections,
   parseSearchSongs,
   parseWatchPlaylist,
   type AccountProfile,
@@ -32,6 +33,22 @@ import type { Track } from "@/types/music";
 
 export type { AccountProfile, HomeChip, HomeCollection, HomeItem, HomePage, HomeShelf, LibraryArtist, LibraryPlaylist };
 export { CatalogError };
+
+export type SearchFilter = "songs" | "albums" | "artists" | "playlists" | "videos";
+
+export const SEARCH_FILTER_PARAMS: Record<SearchFilter, string> = {
+  songs: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
+  albums: "EgWKAQIBAWoKEAkQBRAKEAMQBA%3D%3D",
+  artists: "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D",
+  playlists: "EgWKAQIoAWoKEAkQBRAKEAMQBA%3D%3D",
+  videos: "EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D",
+};
+
+export interface SearchResults {
+  filter: SearchFilter;
+  tracks?: Track[];
+  collections?: HomeCollection[];
+}
 
 const HOME_TTL_MS = 5 * 60_000;
 /** Playlists change rarely; a short cache makes playing one again instant. */
@@ -144,10 +161,20 @@ export class Catalog {
     return shelves;
   }
 
-  async searchSongs(query: string): Promise<Track[]> {
+  async search(query: string, filter: SearchFilter = "songs"): Promise<SearchResults> {
     const trimmed = query.trim();
-    if (!trimmed) return [];
-    return parseSearchSongs(await this.fetch({ kind: "search", query: trimmed }));
+    if (!trimmed) return { filter, tracks: [], collections: [] };
+    const params = SEARCH_FILTER_PARAMS[filter];
+    const response = await this.fetch({ kind: "search", query: trimmed, params });
+    if (filter === "songs" || filter === "videos") {
+      return { filter, tracks: parseSearchSongs(response) };
+    }
+    return { filter, collections: parseSearchCollections(response) };
+  }
+
+  async searchSongs(query: string): Promise<Track[]> {
+    const results = await this.search(query, "songs");
+    return results.tracks ?? [];
   }
 
   /** Name and picture of the signed-in Google account. */
