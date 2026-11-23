@@ -74,8 +74,11 @@ export function renderNowPlaying(container: HTMLElement): void {
     immersive = on;
     if (on) document.documentElement.dataset.immersive = "";
     else delete document.documentElement.dataset.immersive;
+    fullscreenBtn.innerHTML = icon(on ? "minimize" : "fullscreen");
     fullscreenBtn.setAttribute("aria-pressed", String(on));
-    fullscreenBtn.setAttribute("title", on ? "Leave fullscreen lyrics" : "Fullscreen lyrics");
+    const label = on ? "Leave fullscreen lyrics" : "Fullscreen lyrics";
+    fullscreenBtn.setAttribute("title", label);
+    fullscreenBtn.setAttribute("aria-label", label);
 
     try {
       if (isTauri()) {

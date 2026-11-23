@@ -157,14 +157,34 @@ class PlayerBar {
       className: "player__extra-btn",
       html: icon("lyrics"),
       attrs: { "aria-label": "Lyrics", title: "Lyrics" },
-      onClick: () => router.navigate("/now-playing"),
+      onClick: () => {
+        if (router.current === "/now-playing") {
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            router.navigate("/");
+          }
+        } else {
+          router.navigate("/now-playing");
+        }
+      },
     });
 
     const nowPlayingBtn = el("button", {
       className: "player__extra-btn",
       html: icon("fullscreen"),
       attrs: { "aria-label": "Now Playing", title: "Now Playing" },
-      onClick: () => router.navigate("/now-playing"),
+      onClick: () => {
+        if (router.current === "/now-playing") {
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            router.navigate("/");
+          }
+        } else {
+          router.navigate("/now-playing");
+        }
+      },
     });
 
     const root = el("div", {
@@ -235,6 +255,7 @@ class PlayerBar {
 
     this.setupInteractivity();
     this.subscribeToEngine();
+    this.subscribeToRouter();
 
     return root;
   }
@@ -362,6 +383,25 @@ class PlayerBar {
         this.progressSlider?.setValue(currentTime / duration);
       }
     });
+  }
+
+  private subscribeToRouter(): void {
+    const updateRoute = (path: string) => {
+      if (!this.elements) return;
+      const isNowPlaying = path === "/now-playing";
+      this.elements.nowPlayingBtn.innerHTML = icon(isNowPlaying ? "minimize" : "fullscreen");
+      const npLabel = isNowPlaying ? "Minimize Now Playing" : "Now Playing";
+      this.elements.nowPlayingBtn.setAttribute("aria-label", npLabel);
+      this.elements.nowPlayingBtn.setAttribute("title", npLabel);
+      this.elements.nowPlayingBtn.setAttribute("aria-pressed", String(isNowPlaying));
+      this.elements.nowPlayingBtn.classList.toggle("player__extra-btn--active", isNowPlaying);
+
+      this.elements.lyricsBtn.setAttribute("aria-pressed", String(isNowPlaying));
+      this.elements.lyricsBtn.classList.toggle("player__extra-btn--active", isNowPlaying);
+    };
+
+    router.onNavigate(updateRoute);
+    requestAnimationFrame(() => updateRoute(router.current));
   }
 }
 
