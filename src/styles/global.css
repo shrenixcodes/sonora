@@ -100,8 +100,8 @@ body {
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
   box-shadow: var(--glass-edge);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  backdrop-filter: var(--glass-backdrop);
 }
 
 /* ── Ambient mode ────────────────────────────────────────
@@ -140,6 +140,33 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ambient-art__layer {
     transition: none;
+  }
+}
+
+/* ── Reduced transparency ────────────────────────────────
+ * When the OS asks for reduced transparency, drop every glass backdrop blur
+ * and make the panels opaque so text stays fully legible over any artwork.
+ * Done centrally through the material tokens so no surface opts out.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-backdrop-thin: none;
+    --glass-backdrop: none;
+    --glass-backdrop-strong: none;
+    --glass-backdrop-deep: none;
+  }
+  :root,
+  [data-theme="dark"] {
+    --color-panel: #1A1621;
+  }
+  [data-theme="light"] {
+    --color-panel: #F8F5EC;
+  }
+  html[data-window="floating"] {
+    --float-fill: color-mix(in oklab, var(--color-bg) 92%, var(--ambience-2));
+  }
+  .ambient-art__layer.is-visible {
+    opacity: calc(var(--ambient-art-opacity) * 0.5);
   }
 }
 
