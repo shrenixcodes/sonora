@@ -37,6 +37,8 @@ const UNAVAILABLE_MESSAGE = "Playback works in the Sonora desktop app.";
 /** A page that never reports back (unavailable video, network trouble) must not leave "Loading…" forever. */
 const LOAD_TIMEOUT_MS = 15_000;
 const LOAD_FAILED_MESSAGE = "YouTube Music couldn't play this song.";
+/** Taps on next/previous arrive faster than a track can load; see `load`. */
+const SKIP_SETTLE_MS = 400;
 
 export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   private state: PlaybackState = {
@@ -59,6 +61,9 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   private lastReport = { time: 0, at: 0 };
   private ticker: number | null = null;
   private loadTimer: number | null = null;
+  /** When the last skip was handled, and the load a run of them is still waiting to send. */
+  private lastSkipAt = 0;
+  private skipTimer: number | null = null;
 
   constructor(private readonly bridge: PlaybackBridge = ytmBridge) {
     super();
@@ -133,7 +138,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   next(): void {
     const track = this.queue.next(this.state.repeat);
     if (track) {
-      this.load(track);
+      this.load(track, true);
     } else if (this.state.currentTrack) {
       // Past the end of Sonora's list, let YouTube Music continue with its own radio.
       this.send({ action: "next" });
@@ -146,7 +151,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       return;
     }
     const track = this.queue.previous(this.state.repeat);
-    if (track) this.load(track);
+    if (track) this.load(track, true);
     else this.seekTo(0);
   }
 
@@ -233,7 +238,10 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
         this.send({ action: "seek", value: 0 });
         this.send({ action: "play" });
       } else {
-        this.next();
+        // A finished track advances straight away; nothing is waiting to settle.
+        const track = this.queue.next(this.state.repeat);
+        if (track) this.load(track);
+        else this.send({ action: "next" });
       }
       return;
     }
@@ -285,7 +293,14 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   /* ── Internals ────────────────────────────────────────── */
 
-  private load(track: Track): void {
+  /**
+   * Starts a track. Every load reloads the YouTube Music page, which takes far
+   * longer than a tap on next: sending one per tap left the page part-way
+   * through a load it was already being pulled out of, and playback stuck
+   * there. The queue and the interface still move with every tap, but a run of
+   * them loads once, for the track the user stops on.
+   */
+  private load(track: Track, fromSkip = false): void {
     this.setCurrent(track);
     this.state.status = "loading";
     this.state.duration = track.duration || 0;
@@ -301,7 +316,19 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.loadTimer = window.setTimeout(() => {
       if (this.pendingId === track.id) this.fail(LOAD_FAILED_MESSAGE);
     }, LOAD_TIMEOUT_MS);
-    this.send({ action: "load", value: track.id });
+
+    this.clearSkipTimer();
+    const stillSkipping = fromSkip && Date.now() - this.lastSkipAt < SKIP_SETTLE_MS;
+    if (fromSkip) this.lastSkipAt = Date.now();
+    if (!stillSkipping) {
+      this.send({ action: "load", value: track.id });
+      return;
+    }
+    this.skipTimer = window.setTimeout(() => {
+      this.skipTimer = null;
+      // A later tap has its own load pending; this one is no longer wanted.
+      if (this.pendingId === track.id) this.send({ action: "load", value: track.id });
+    }, SKIP_SETTLE_MS);
   }
 
   private setCurrent(track: Track): void {
@@ -326,10 +353,18 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     }
   }
 
+  private clearSkipTimer(): void {
+    if (this.skipTimer !== null) {
+      window.clearTimeout(this.skipTimer);
+      this.skipTimer = null;
+    }
+  }
+
   private fail(err: unknown): void {
     console.error("[PlaybackEngine]", err);
     this.pendingId = null;
     this.clearLoadTimer();
+    this.clearSkipTimer();
     this.stopTicker();
     this.state.status = "error";
     this.state.error = typeof err === "string" ? err : "YouTube Music did not respond. Try again.";

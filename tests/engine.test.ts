@@ -10,6 +10,8 @@ const { PlaybackEngine } = await import("../src/lib/playback/engine");
 
 const track = (id: string): Track => ({ id, title: `Song ${id}`, artist: "Artist", duration: 200, artworkUrl: "" });
 const list = ["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"].map(track);
+/** Mirrors SKIP_SETTLE_MS in the engine. */
+const SKIP_SETTLE_MS = 400;
 
 function report(overrides: Partial<YtmState>): YtmState {
   return {
@@ -100,6 +102,33 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
 
     engine.next();
     expect(sent.at(-1)).toEqual({ action: "load", value: shown });
+  });
+
+  it("loads once for a run of skips, for the track they land on", () => {
+    vi.useFakeTimers();
+    try {
+      const long = ["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc", "ddddddddddd"].map(track);
+      const { engine, sent } = setup();
+      const loads = () => sent.filter((c) => c.action === "load");
+      engine.playTrack(long[0], long);
+
+      engine.next();
+      expect(loads().at(-1)).toEqual({ action: "load", value: "bbbbbbbbbbb" });
+
+      // Taps that land while the page is still loading are held back.
+      engine.next();
+      vi.advanceTimersByTime(100);
+      engine.next();
+      expect(loads()).toHaveLength(2);
+      // The queue and the interface still moved with every tap.
+      expect(engine.currentTrack?.id).toBe("ddddddddddd");
+
+      vi.advanceTimersByTime(SKIP_SETTLE_MS);
+      expect(loads()).toHaveLength(3);
+      expect(loads().at(-1)).toEqual({ action: "load", value: "ddddddddddd" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("re-applies the chosen volume after each load, since loading resets the page", () => {
