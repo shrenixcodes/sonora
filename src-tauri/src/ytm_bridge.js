@@ -21,6 +21,7 @@
 
   let video = null;
   let lastTimeReport = 0;
+  let lastLoadedVideoId = null;
 
   const player = () => document.getElementById("movie_player");
   // The player marks itself while an ad runs; the media metadata then describes the ad.
@@ -45,8 +46,31 @@
   // keep the URL as the answer for a page that has not built its player yet.
   const currentVideoId = () => {
     const p = player();
-    const data = p && typeof p.getVideoData === "function" ? p.getVideoData() : null;
-    return (data && data.video_id) || new URLSearchParams(location.search).get("v");
+    let id = null;
+    if (p) {
+      if (typeof p.getVideoData === "function") {
+        const data = p.getVideoData();
+        id = (data && (data.video_id || data.videoId)) || null;
+      }
+      if (!id && typeof p.getVideoUrl === "function") {
+        try {
+          const url = new URL(p.getVideoUrl());
+          id = url.searchParams.get("v");
+        } catch {}
+      }
+    }
+    if (!id) {
+      id = new URLSearchParams(location.search).get("v");
+    }
+    if (!id) {
+      const link = document.querySelector("ytmusic-player-bar a[href*='watch?v=']");
+      if (link && link.href) {
+        try {
+          id = new URL(link.href).searchParams.get("v");
+        } catch {}
+      }
+    }
+    return id || lastLoadedVideoId;
   };
 
   const send = (reason) => {
@@ -103,6 +127,7 @@
   }
 
   const attach = (element) => {
+    if (video === element) return;
     video = element;
     for (const type of ["play", "pause", "ended", "volumechange", "seeked"]) {
       element.addEventListener(type, () => send(type));
@@ -123,11 +148,10 @@
     send("ready");
   };
 
-  // The app keeps one <video> element for the whole session; find it once.
+  // The app keeps looking for the <video> element to handle creation or replacement.
   const lookup = setInterval(() => {
     const element = document.querySelector("video");
-    if (element) {
-      clearInterval(lookup);
+    if (element && element !== video) {
       attach(element);
     }
   }, VIDEO_LOOKUP_INTERVAL_MS);
@@ -264,6 +288,7 @@
           // Swapping the track inside the running page skips reloading the
           // whole YouTube Music app, which took seconds and dropped the audio.
           if (typeof value === "string") {
+            lastLoadedVideoId = value;
             if (p && typeof p.loadVideoById === "function") p.loadVideoById(value);
             else location.assign("/watch?v=" + encodeURIComponent(value));
           }

@@ -126,20 +126,25 @@ export class DiscordRpcService {
       this.lastActivity.artist !== state.currentTrack.artist;
     const playStateChanged = !this.lastActivity || this.lastActivity.isPlaying !== isPlaying;
 
+    const currentDuration =
+      state.currentTrack.duration || (state.duration > 0 ? Math.round(state.duration) : undefined);
+    const durationChanged =
+      !this.lastActivity ||
+      (currentDuration !== undefined && this.lastActivity.durationSeconds !== currentDuration);
+
     // Check for user seeking: significant drift (>4s) from expected wall-clock progression
     const now = Date.now();
     const elapsedRealSec = (now - this.lastSendTimestamp) / 1000;
     const expectedElapsed = (this.lastActivity?.elapsedSeconds ?? 0) + (isPlaying ? elapsedRealSec : 0);
     const seekDetected = Math.abs(expectedElapsed - state.currentTime) > 4;
 
-    if (trackChanged || playStateChanged || seekDetected) {
+    if (trackChanged || playStateChanged || seekDetected || durationChanged) {
       this.sendActivity({
         title: state.currentTrack.title,
         artist: state.currentTrack.artist,
         album: state.currentTrack.album,
         artworkUrl: state.currentTrack.artworkUrl,
-        durationSeconds:
-          state.currentTrack.duration || (state.duration > 0 ? Math.round(state.duration) : undefined),
+        durationSeconds: currentDuration,
         elapsedSeconds: Math.round(state.currentTime),
         isPlaying,
       });

@@ -248,22 +248,26 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     }
     this.state.isAd = report.ad;
 
-    if (report.videoId) {
-      if (report.videoId === this.pendingId) {
-        // Confirmed, even if an ad plays first: the page URL already names our track.
+    if (this.pendingId) {
+      const isConfirmedCurrentTrack =
+        (report.videoId && report.videoId === this.pendingId) ||
+        (report.title &&
+          this.state.currentTrack &&
+          report.title.trim().toLowerCase() === this.state.currentTrack.title.trim().toLowerCase()) ||
+        (!report.videoId && !report.paused && report.currentTime > 0);
+
+      if (isConfirmedCurrentTrack) {
         this.pendingId = null;
         this.clearLoadTimer();
         // A load can leave the page on its own saved volume; put ours back.
         this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume });
       } else if (!report.ad && report.title && this.pageIsOnAnotherTrack(report)) {
-        // The page is playing something else: its own radio, a media key, or a
-        // song it chose over the one we asked for. Waiting for an id that is
-        // never coming would freeze the interface on the wrong track, with the
-        // wrong lyrics under the seek bar, while the music played on.
         this.pendingId = null;
         this.clearLoadTimer();
         this.adoptTrack(report);
       }
+    } else if (report.videoId && !report.ad && report.title && this.pageIsOnAnotherTrack(report)) {
+      this.adoptTrack(report);
     }
 
     if (this.reportCorrectsCurrentTrack(report)) {
@@ -323,7 +327,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       !report.ad &&
       (report.reason === "track" || report.reason === "time") &&
       !!current &&
-      report.videoId === current.id &&
+      (!report.videoId || report.videoId === current.id) &&
       !!report.title &&
       (report.title !== current.title || (!!report.artist && report.artist !== current.artist))
     );

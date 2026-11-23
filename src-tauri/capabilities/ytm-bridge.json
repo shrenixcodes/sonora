@@ -3,7 +3,10 @@
   "description": "Lets the YouTube Music page report playback state and catalog replies, and nothing else",
   "windows": ["ytm"],
   "remote": {
-    "urls": ["https://music.youtube.com/*"]
+    "urls": [
+      "https://music.youtube.com",
+      "https://music.youtube.com/*"
+    ]
   },
   "permissions": ["allow-ytm-report", "allow-ytm-response"]
 }

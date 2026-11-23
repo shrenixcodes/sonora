@@ -4,6 +4,25 @@ All notable changes to Sonora are documented in this file.
 
 ---
 
+## [0.5.1] – 2026-11-24
+
+### 🛠 Fixes & Sync Improvements
+
+#### YouTube Music & Interface Synchronization
+- **Fixed playback state desync**: Resolved an issue where Sonora's player bar would appear stuck at `0:00` with the play button showing paused/error while music was actively playing in the background.
+- **Robust track load confirmation**: The player engine now confirms active playback via matching video ID, title metadata, or active progress reports, preventing false timeout failures from freezing the playback controls.
+- **Dynamic `<video>` re-attachment**: The bridge script now continuously checks for video element recreation or SPA replacements so playback events and time updates never detach.
+- **Fallback video ID detection**: Multiple fallback strategies (including `lastLoadedVideoId`, `getVideoUrl`, player bar DOM hrefs, and URL queries) ensure reports always correlate with the active track.
+
+#### Discord Rich Presence
+- **Dynamic duration synchronization**: Discord presence updates immediately when track duration is resolved, ensuring full progress bars display accurately in Discord profiles and server member lists.
+
+### 📦 Build & Installer
+- Version bumped to `0.5.1` across all manifests.
+- Attached Windows NSIS installer executable (`Sonora_0.5.1_x64-setup.exe`) to GitHub release assets.
+
+---
+
 ## [0.5.0] – 2026-11-24
 
 ### ✨ New Features

@@ -149,6 +149,26 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     expect(engine.currentState.currentTime).toBe(12);
   });
 
+  it("confirms playback when the page reports matching title or active playback without videoId", () => {
+    const { engine } = setup();
+    engine.playTrack(list[0], list);
+    expect(engine.currentState.status).toBe("loading");
+
+    engine.handleBridgeState(
+      report({
+        reason: "play",
+        videoId: null,
+        title: "Song aaaaaaaaaaa",
+        artist: "Artist",
+        currentTime: 0.5,
+        paused: false,
+      }),
+    );
+
+    expect(engine.currentState.status).toBe("playing");
+    expect(engine.currentState.currentTime).toBe(0.5);
+  });
+
   it("plays in the shuffled order that Up next shows", () => {
     const { engine, sent } = setup();
     engine.playTrack(list[0], list);
