@@ -16,6 +16,19 @@ html[data-window="floating"] {
   --stage-radius: 26px;
   /* Floating pieces: liquid glass tinted by the artwork's dominant color. */
   --float-fill: color-mix(in oklab, color-mix(in oklab, var(--color-bg) 62%, var(--ambience-2)) 78%, transparent);
+
+  /* The shared elevation tokens pair a tight contact shadow with a wide, soft
+     ambient one. The ambient layer needs a window background to settle on; here
+     it spreads past the transparent edges and darkens the desktop around every
+     piece. Keep the contact layer only, so each piece still lifts off what is
+     behind it without casting a halo. */
+  --elevation-2: 0 1px 3px rgba(0, 0, 0, 0.22);
+  --elevation-3: 0 2px 6px rgba(0, 0, 0, 0.26);
+}
+
+html[data-window="floating"][data-theme="light"] {
+  --elevation-2: 0 1px 3px rgba(31, 41, 20, 0.10);
+  --elevation-3: 0 2px 6px rgba(31, 41, 20, 0.12);
 }
 
 html[data-window="floating"] #app {
