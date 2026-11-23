@@ -32,6 +32,7 @@ const INTERACTIVE_PARTS = [
   ".queue-panel",
   ".player",
   "dialog[open]",
+  ".splash-overlay",
 ];
 
 export function modeFor(state: { maximized: boolean; fullscreen: boolean }): WindowMode {

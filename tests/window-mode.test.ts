@@ -42,4 +42,15 @@ describe("collectRegions", () => {
 
     expect(collectRegions(root)).toEqual([{ x: 300, y: 200, width: 380, height: 300 }]);
   });
+
+  it("includes splash screen overlay in interactive click regions", () => {
+    const root = document.createElement("div");
+    const splash = document.createElement("div");
+    splash.className = "splash-overlay";
+    splash.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 1200, bottom: 800, width: 1200, height: 800 }) as DOMRect;
+    root.appendChild(splash);
+
+    expect(collectRegions(root)).toEqual([{ x: 0, y: 0, width: 1200, height: 800 }]);
+  });
 });

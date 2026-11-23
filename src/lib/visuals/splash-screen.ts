@@ -10,6 +10,7 @@
  */
 
 import { icon } from "@/icons";
+import { shouldReduceMotion } from "./motion";
 
 export interface SplashOptions {
   duration?: number;
@@ -95,6 +96,12 @@ function sampleScreenBlockColor(x: number, y: number, width: number, height: num
 }
 
 let activeSplashPromise: Promise<void> | null = null;
+let hasLaunchedThisProcess = false;
+
+/** Resets the launch splash shown flag (primarily for test fixtures). */
+export function resetLaunchSplashFlag(): void {
+  hasLaunchedThisProcess = false;
+}
 
 /**
  * Mounts and executes the Sonora launch splash animation sequence.
@@ -102,23 +109,15 @@ let activeSplashPromise: Promise<void> | null = null;
 export function showLaunchSplash(options: SplashOptions = {}): Promise<void> {
   if (activeSplashPromise) return activeSplashPromise;
 
-  const prefersReduced =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const prefersReduced = shouldReduceMotion();
 
-  // Only run once per session unless forced
-  const hasShown = typeof sessionStorage !== "undefined" && sessionStorage.getItem("sonora_splash_seen");
-  if ((hasShown && !options.force) || prefersReduced) {
+  // Only run once per session/process unless forced
+  if ((hasLaunchedThisProcess && !options.force) || prefersReduced) {
     return Promise.resolve();
   }
+  hasLaunchedThisProcess = true;
 
   activeSplashPromise = new Promise<void>((resolve) => {
-    if (typeof sessionStorage !== "undefined") {
-      try {
-        sessionStorage.setItem("sonora_splash_seen", "true");
-      } catch {}
-    }
 
     const overlay = document.createElement("div");
     overlay.className = "splash-overlay";

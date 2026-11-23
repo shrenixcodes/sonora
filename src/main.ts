@@ -32,7 +32,7 @@ import { renderNowPlaying } from "@/views/now-playing";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
 import type { ArtworkPalette } from "@/lib/visuals/color-extractor";
-import { initPlasmaRestore } from "@/lib/visuals/plasma-restore";
+import { initPlasmaRestore, triggerPlasmaRestore } from "@/lib/visuals/plasma-restore";
 import { initRubberbandUX } from "@/lib/rubberband";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
 
@@ -69,6 +69,23 @@ function init(): void {
   initPlasmaRestore();
   initRubberbandUX();
   showLaunchSplash().catch((err) => console.error("[main] splash screen failed:", err));
+
+  // Manual animation preview shortcuts: F8 = Splash, F9 = Plasma Restore
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "F8") {
+      e.preventDefault();
+      showLaunchSplash({ force: true }).catch(() => {});
+    } else if (e.key === "F9") {
+      e.preventDefault();
+      triggerPlasmaRestore(undefined, { force: true });
+    }
+  });
+
+  // Developer / test hooks
+  (window as unknown as Record<string, unknown>).__sonora_test_splash = () =>
+    showLaunchSplash({ force: true });
+  (window as unknown as Record<string, unknown>).__sonora_test_restore = (origin?: any) =>
+    triggerPlasmaRestore(origin, { force: true });
 
   // Floating vs full layout; also reveals the window after first paint
   initWindowMode().catch((err) => console.error("[main] window mode setup failed:", err));

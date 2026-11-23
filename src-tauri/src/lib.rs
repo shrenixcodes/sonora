@@ -1,4 +1,4 @@
-use tauri::{Manager, WindowEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 
 mod commands;
 mod discord;
@@ -61,6 +61,7 @@ pub fn run() {
                 if !focused {
                     let _ = window.set_ignore_cursor_events(false);
                 }
+                let _ = window.emit("sonora://focus", *focused);
             }
             _ => {}
         })

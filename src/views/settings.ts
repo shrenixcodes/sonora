@@ -12,6 +12,8 @@ import { ytmBridge } from "@/lib/playback/ytm-bridge";
 import { account } from "@/lib/ytm/account";
 import { router } from "@/lib/router";
 import { storage } from "@/lib/storage";
+import { showLaunchSplash } from "@/lib/visuals/splash-screen";
+import { triggerPlasmaRestore } from "@/lib/visuals/plasma-restore";
 import type { UserSettings, AmbientVisualMode } from "@/types/music";
 
 const ACCENT_COLORS = [
@@ -87,6 +89,13 @@ export function renderSettings(container: HTMLElement): void {
           "Visualizer Frame Rate",
           "Cap ambient GPU frame rate for maximum power efficiency",
           createFpsSelector(currentSettings.ambientFpsLimit),
+        ),
+
+        // Fluid Animations & Launch Splash
+        createSettingRow(
+          "Interface Animations",
+          "Preview launch splash screen and window restore plasma fluid animations",
+          createAnimationTester(),
         ),
 
         // Theme Import / Export
@@ -455,6 +464,30 @@ function createFpsSelector(currentFps: number): HTMLElement {
   });
 
   return select;
+}
+
+function createAnimationTester(): HTMLElement {
+  const container = el("div", {
+    className: "settings__actions-group",
+    children: [
+      el("button", {
+        className: "settings__btn",
+        text: "Preview Launch Splash",
+        onClick: () => {
+          showLaunchSplash({ force: true }).catch(() => {});
+        },
+      }),
+      el("button", {
+        className: "settings__btn",
+        text: "Test Plasma Restore",
+        onClick: () => {
+          triggerPlasmaRestore(undefined, { force: true });
+        },
+      }),
+    ],
+  });
+
+  return container;
 }
 
 function createToggle(

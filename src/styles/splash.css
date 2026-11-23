@@ -158,8 +158,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .splash-overlay {
-    display: none !important;
-  }
+html[data-reduce-motion="true"] .splash-overlay {
+  display: none !important;
 }

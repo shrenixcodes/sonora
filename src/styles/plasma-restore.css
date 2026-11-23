@@ -141,19 +141,18 @@ html.app--restoring[data-plasma-origin="all"] .queue-panel {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html.app--restoring .player,
-  html.app--restoring .titlebar,
-  html.app--restoring .sidebar,
-  html.app--restoring .main,
-  html.app--restoring .queue-panel,
-  html.app--restoring #app::before {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-    filter: none !important;
-  }
-  .plasma-canvas {
-    display: none !important;
-  }
+html[data-reduce-motion="true"].app--restoring .player,
+html[data-reduce-motion="true"].app--restoring .titlebar,
+html[data-reduce-motion="true"].app--restoring .sidebar,
+html[data-reduce-motion="true"].app--restoring .main,
+html[data-reduce-motion="true"].app--restoring .queue-panel,
+html[data-reduce-motion="true"].app--restoring #app::before {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+html[data-reduce-motion="true"] .plasma-canvas {
+  display: none !important;
 }

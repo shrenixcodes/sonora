@@ -10,6 +10,7 @@
 
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { shouldReduceMotion } from "./motion";
 
 export type PlasmaOrigin =
   | "top"
@@ -291,21 +292,18 @@ function createPlasmaParticles(
  */
 export function triggerPlasmaRestore(
   forcedOrigin?: PlasmaOrigin,
-  options?: { originAware?: boolean },
+  options?: { originAware?: boolean; force?: boolean },
 ): void {
-  // Check user preference for reduced motion
-  const prefersReduced =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Check user preference for reduced motion unless forced
+  const prefersReduced = shouldReduceMotion();
 
-  if (prefersReduced) {
+  if (prefersReduced && !options?.force) {
     return;
   }
 
   // Debounce consecutive triggers (e.g. visibility + focus simultaneously)
   const now = Date.now();
-  if (now - lastTriggerTime < 500) {
+  if (now - lastTriggerTime < 500 && !options?.force) {
     return;
   }
   lastTriggerTime = now;
@@ -507,10 +505,38 @@ export function initPlasmaRestore(): void {
     }
   });
 
-  // If running inside Tauri, hook window focus events for unminimize
+  // If running inside Tauri, hook window unminimize and focus events
   if (isTauri()) {
     try {
       const appWindow = getCurrentWindow();
+
+      // Native restore event from Rust click_through_sampler polling window.is_minimized()
+      appWindow
+        .listen("sonora://restore", () => {
+          wasInactive = false;
+          triggerPlasmaRestore();
+        })
+        .catch(() => {});
+
+      appWindow
+        .listen("sonora://minimize", () => {
+          recordWindowOrigin();
+          wasInactive = true;
+        })
+        .catch(() => {});
+
+      appWindow
+        .listen<boolean>("sonora://focus", ({ payload: focused }) => {
+          if (!focused) {
+            recordWindowOrigin();
+            wasInactive = true;
+          } else if (wasInactive) {
+            wasInactive = false;
+            triggerPlasmaRestore();
+          }
+        })
+        .catch(() => {});
+
       appWindow
         .onFocusChanged(({ payload: focused }) => {
           if (!focused) {

@@ -14,11 +14,11 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
-use tauri::{AppHandle, Manager, PhysicalPosition, Runtime, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Runtime, State, WebviewWindow};
 
 const MAIN_LABEL: &str = "main";
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
-const IDLE_INTERVAL: Duration = Duration::from_millis(250);
+const IDLE_INTERVAL: Duration = Duration::from_millis(100);
 const ENTRANCE_DURATION: Duration = Duration::from_millis(420);
 const ENTRANCE_FRAME: Duration = Duration::from_millis(16);
 
@@ -161,10 +161,22 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
     let app = app.clone();
     thread::spawn(move || {
         let mut ignoring = false;
+        let mut was_minimized = false;
         loop {
             let Some(window) = app.get_webview_window(MAIN_LABEL) else {
                 return;
             };
+
+            let is_min = window.is_minimized().unwrap_or(false);
+            if was_minimized && !is_min {
+                log::info!("Window restored from minimized state");
+                let _ = window.emit("sonora://restore", ());
+            } else if !was_minimized && is_min {
+                log::info!("Window minimized");
+                let _ = window.emit("sonora://minimize", ());
+            }
+            was_minimized = is_min;
+
             let regions = app
                 .state::<FloatingRegions>()
                 .0
@@ -173,7 +185,7 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
                 .and_then(|guard| guard.clone());
 
             let active =
-                window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true);
+                window.is_visible().unwrap_or(false) && !is_min;
             let should_ignore = match (&regions, active) {
                 (Some(regions), true) => match (
                     window.cursor_position(),

@@ -8,6 +8,7 @@
 import { el } from "@/lib/dom";
 import { icon, type IconName } from "@/icons";
 import { router } from "@/lib/router";
+import { showLaunchSplash } from "@/lib/visuals/splash-screen";
 
 interface NavItem {
   label: string;
@@ -79,7 +80,12 @@ export function createSidebar(): HTMLElement {
   });
   brand.addEventListener("click", (e) => {
     e.preventDefault();
-    router.navigate("/");
+    const currentHash = window.location.hash.slice(1) || "/";
+    if (currentHash === "/") {
+      showLaunchSplash({ force: true }).catch(() => {});
+    } else {
+      router.navigate("/");
+    }
   });
 
   const sidebar = el("aside", {

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { showLaunchSplash } from "../src/lib/visuals/splash-screen";
+import { showLaunchSplash, resetLaunchSplashFlag } from "../src/lib/visuals/splash-screen";
 import { icon } from "../src/icons";
 
 describe("Sonora logo and launch splash screen", () => {
   beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div>';
+    resetLaunchSplashFlag();
     sessionStorage.clear();
     vi.useFakeTimers();
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {} }));
