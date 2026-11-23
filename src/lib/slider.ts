@@ -54,6 +54,28 @@ export function attachSlider(bar: HTMLElement, options: SliderOptions): Slider {
     options.onCommit(value);
   };
 
+  const updateRubberbandPull = (clientX: number) => {
+    const rect = bar.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    let pull = 0;
+    if (clientX < rect.left) {
+      const over = clientX - rect.left;
+      pull = -Math.min(20, Math.pow(Math.abs(over), 0.7) * 1.2);
+    } else if (clientX > rect.right) {
+      const over = clientX - rect.right;
+      pull = Math.min(20, Math.pow(over, 0.7) * 1.2);
+    }
+    bar.style.setProperty("--rubberband-pull", `${pull.toFixed(1)}px`);
+  };
+
+  const clearRubberbandPull = () => {
+    bar.classList.add("is-rebounding");
+    bar.style.setProperty("--rubberband-pull", "0px");
+    setTimeout(() => {
+      bar.classList.remove("is-rebounding");
+    }, 320);
+  };
+
   bar.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -61,12 +83,14 @@ export function attachSlider(bar: HTMLElement, options: SliderOptions): Slider {
     bar.setPointerCapture(e.pointerId);
     dragging = true;
     bar.classList.add("is-dragging");
+    updateRubberbandPull(e.clientX);
     show(ratioAt(e.clientX));
     options.onInput(value);
   });
 
   bar.addEventListener("pointermove", (e) => {
     if (!dragging) return;
+    updateRubberbandPull(e.clientX);
     show(ratioAt(e.clientX));
     options.onInput(value);
   });
@@ -75,6 +99,7 @@ export function attachSlider(bar: HTMLElement, options: SliderOptions): Slider {
     if (!dragging) return;
     dragging = false;
     bar.classList.remove("is-dragging");
+    clearRubberbandPull();
     if (bar.hasPointerCapture(e.pointerId)) bar.releasePointerCapture(e.pointerId);
     options.onCommit(value);
   };

@@ -33,6 +33,7 @@ import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
 import type { ArtworkPalette } from "@/lib/visuals/color-extractor";
 import { initPlasmaRestore } from "@/lib/visuals/plasma-restore";
+import { initRubberbandUX } from "@/lib/rubberband";
 
 const ARTWORK_PLACEHOLDER = "/artwork-placeholder.svg";
 
@@ -65,6 +66,7 @@ function init(): void {
   queuePanel.init();
   discordRpc.init();
   initPlasmaRestore();
+  initRubberbandUX();
 
   // Floating vs full layout; also reveals the window after first paint
   initWindowMode().catch((err) => console.error("[main] window mode setup failed:", err));
