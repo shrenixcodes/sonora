@@ -26,6 +26,29 @@
   }
 }
 
+/* Keep the page change legible for reduced-motion users: fade without the
+   slide, and hold mood cards still instead of lifting and zooming on hover. */
+@media (prefers-reduced-motion: reduce) {
+  .main__content {
+    animation: fadeInReduced var(--duration-normal) var(--ease-out);
+  }
+  .mood-card:hover {
+    transform: none;
+  }
+  .mood-card:hover .mood-card__art img {
+    transform: none;
+  }
+}
+
+@keyframes fadeInReduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* ── Page header ─────────────────────────────────────────── */
 
 .page-header {
