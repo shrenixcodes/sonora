@@ -15,6 +15,7 @@ import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
 import { AmbientArtwork, applyAmbience, applyArtworkAccent } from "@/lib/ambience";
 import { initWindowMode } from "@/lib/window-mode";
+import { discordRpc } from "@/lib/discord-rpc";
 import { searchQuery } from "@/lib/search-query";
 import { account } from "@/lib/ytm/account";
 import { showSignInConfirmation } from "@/components/sign-in-confirm";
@@ -60,6 +61,7 @@ function init(): void {
   app.appendChild(createQueuePanel());
   app.appendChild(player);
   queuePanel.init();
+  discordRpc.init();
 
   // Floating vs full layout; also reveals the window after first paint
   initWindowMode().catch((err) => console.error("[main] window mode setup failed:", err));

@@ -1,6 +1,7 @@
 use tauri::{Manager, WindowEvent};
 
 mod commands;
+mod discord;
 mod window_mode;
 mod ytm;
 
@@ -12,9 +13,12 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(window_mode::FloatingRegions::default())
         .manage(ytm::AccountState::default())
+        .manage(discord::DiscordRpcState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::get_platform_info,
+            discord::discord_set_activity,
+            discord::discord_clear_activity,
             ytm::ytm_report,
             ytm::ytm_control,
             ytm::ytm_set_signin_visible,

@@ -113,6 +113,13 @@ export function renderSettings(container: HTMLElement): void {
             storage.saveSettings({ autoPlayNext: val });
           }),
         ),
+        createSettingRow(
+          "Discord Rich Presence",
+          "Show current song, artist, and playback progress on your Discord profile",
+          createToggle(currentSettings.enableDiscordRpc, (val) => {
+            storage.saveSettings({ enableDiscordRpc: val });
+          }),
+        ),
       ]),
 
       // ── YouTube Music Service ────────────────────────────
