@@ -4,6 +4,15 @@
   if (location.hostname !== "music.youtube.com" || window.top !== window) return;
   if (window.__sonoraBridge) return;
 
+  // While a track is playing the page keeps a beforeunload handler, so every
+  // navigation raises the browser's "Leave site?" confirmation. This window is
+  // hidden, so that prompt is invisible: it simply freezes the page, and the
+  // music with it, until something dismisses it. Sonora only ever navigates
+  // this page deliberately, so the prompt guards nothing. The bridge is
+  // injected before the page's own scripts, so this listener runs first and
+  // stops the handler that would ask for it.
+  window.addEventListener("beforeunload", (event) => event.stopImmediatePropagation(), true);
+
   const TIME_REPORT_INTERVAL_MS = 1000;
   const VIDEO_LOOKUP_INTERVAL_MS = 500;
   const ACCOUNT_LOOKUP_ATTEMPTS = 60;
