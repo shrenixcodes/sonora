@@ -145,12 +145,19 @@ class PlayerBar {
     const queueBtn = el("button", {
       className: "player__extra-btn",
       html: icon("queue"),
-      attrs: { "aria-label": "Up next", title: "Up next", "aria-pressed": String(queuePanel.isOpen) },
+      attrs: {
+        "aria-label": queuePanel.isOpen ? "Close Up next" : "Up next",
+        title: queuePanel.isOpen ? "Close Up next" : "Up next",
+        "aria-pressed": String(queuePanel.isOpen),
+      },
       onClick: () => queuePanel.toggle(),
     });
     queuePanel.on("change", (open) => {
       queueBtn.setAttribute("aria-pressed", String(open));
       queueBtn.classList.toggle("player__extra-btn--active", open);
+      const queueLabel = open ? "Close Up next" : "Up next";
+      queueBtn.setAttribute("aria-label", queueLabel);
+      queueBtn.setAttribute("title", queueLabel);
     });
 
     const lyricsBtn = el("button", {
@@ -332,13 +339,37 @@ class PlayerBar {
 
       // Shuffle & Repeat state
       this.elements.shuffleBtn.classList.toggle("player__btn--active", state.shuffle);
-      this.elements.repeatBtn.classList.toggle("player__btn--active", state.repeat !== "off");
+      this.elements.shuffleBtn.setAttribute("aria-pressed", String(state.shuffle));
+      const shuffleLabel = state.shuffle ? "Shuffle: On" : "Shuffle: Off";
+      this.elements.shuffleBtn.setAttribute("aria-label", shuffleLabel);
+      this.elements.shuffleBtn.setAttribute("title", shuffleLabel);
+
+      const isRepeat = state.repeat !== "off";
+      this.elements.repeatBtn.classList.toggle("player__btn--active", isRepeat);
+      this.elements.repeatBtn.setAttribute("aria-pressed", String(isRepeat));
+      if (state.repeat === "one") {
+        this.elements.repeatBtn.innerHTML = icon("repeatOne");
+        this.elements.repeatBtn.setAttribute("aria-label", "Repeat: One");
+        this.elements.repeatBtn.setAttribute("title", "Repeat: One");
+      } else if (state.repeat === "all") {
+        this.elements.repeatBtn.innerHTML = icon("repeat");
+        this.elements.repeatBtn.setAttribute("aria-label", "Repeat: All");
+        this.elements.repeatBtn.setAttribute("title", "Repeat: All");
+      } else {
+        this.elements.repeatBtn.innerHTML = icon("repeat");
+        this.elements.repeatBtn.setAttribute("aria-label", "Repeat: Off");
+        this.elements.repeatBtn.setAttribute("title", "Repeat: Off");
+      }
 
       // Volume slider & icon
       const vol = state.isMuted ? 0 : state.volume;
       this.volumeSlider?.setValue(vol);
       const volIcon = vol > 0.5 ? "volumeHigh" : vol > 0 ? "volumeLow" : "volumeMute";
       this.elements.volumeBtn.innerHTML = icon(volIcon);
+      const isMuted = state.isMuted || state.volume === 0;
+      const volLabel = isMuted ? "Unmute" : "Mute";
+      this.elements.volumeBtn.setAttribute("aria-label", volLabel);
+      this.elements.volumeBtn.setAttribute("title", volLabel);
     });
 
     playerEngine.on("trackChange", (track: Track | null) => {

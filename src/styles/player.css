@@ -89,6 +89,10 @@
   height: 18px;
 }
 
+.player__like-btn.player__btn--active svg {
+  fill: currentColor;
+}
+
 /* ── Playback controls (center) ─────────────────────────── */
 
 .player__controls {

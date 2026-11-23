@@ -105,7 +105,7 @@ export function createTitlebar(): HTMLElement {
           el("button", {
             className: "titlebar__window-btn",
             html: icon("minimize"),
-            attrs: { "aria-label": "Minimize" },
+            attrs: { "aria-label": "Minimize", title: "Minimize" },
             onClick: async () => {
               if (!appWindow) return;
               await appWindow.setIgnoreCursorEvents(false).catch(() => {});
@@ -113,20 +113,11 @@ export function createTitlebar(): HTMLElement {
               await appWindow.minimize();
             },
           }),
-          el("button", {
-            className: "titlebar__window-btn",
-            html: icon("maximize"),
-            attrs: { "aria-label": "Maximize" },
-            onClick: async () => {
-              if (!appWindow) return;
-              await leaveFullscreen(appWindow);
-              await appWindow.toggleMaximize();
-            },
-          }),
+          createMaximizeButton(appWindow),
           el("button", {
             className: "titlebar__window-btn titlebar__window-btn--close",
             html: icon("close"),
-            attrs: { "aria-label": "Close" },
+            attrs: { "aria-label": "Close", title: "Close" },
             onClick: () => appWindow?.close(),
           }),
         ],
@@ -135,6 +126,41 @@ export function createTitlebar(): HTMLElement {
   });
 
   return titlebar;
+}
+
+/** Maximize/restore button that stays in sync with window state. */
+function createMaximizeButton(appWindow: WindowHandle | null): HTMLElement {
+  const btn = el("button", {
+    className: "titlebar__window-btn",
+    html: icon("maximize"),
+    attrs: { "aria-label": "Maximize", title: "Maximize" },
+    onClick: async () => {
+      if (!appWindow) return;
+      await leaveFullscreen(appWindow);
+      await appWindow.toggleMaximize();
+      await updateState();
+    },
+  });
+
+  const updateState = async () => {
+    if (!appWindow) return;
+    try {
+      const isMax = await appWindow.isMaximized();
+      btn.innerHTML = icon(isMax ? "restore" : "maximize");
+      const label = isMax ? "Restore" : "Maximize";
+      btn.setAttribute("aria-label", label);
+      btn.setAttribute("title", label);
+    } catch (err) {
+      console.error("[titlebar] failed to check maximized state:", err);
+    }
+  };
+
+  if (appWindow) {
+    void updateState();
+    appWindow.onResized(() => void updateState()).catch(() => {});
+  }
+
+  return btn;
 }
 
 /** The app's single search field; typing opens the search view with live results. */

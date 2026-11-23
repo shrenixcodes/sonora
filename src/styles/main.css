@@ -398,6 +398,10 @@
   color: var(--color-accent);
 }
 
+.track-row__like-btn--active svg {
+  fill: currentColor;
+}
+
 .track-row__like-btn svg {
   width: 16px;
   height: 16px;
