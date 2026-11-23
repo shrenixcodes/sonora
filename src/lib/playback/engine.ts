@@ -294,11 +294,10 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   /* ── Internals ────────────────────────────────────────── */
 
   /**
-   * Starts a track. Every load reloads the YouTube Music page, which takes far
-   * longer than a tap on next: sending one per tap left the page part-way
-   * through a load it was already being pulled out of, and playback stuck
-   * there. The queue and the interface still move with every tap, but a run of
-   * them loads once, for the track the user stops on.
+   * Starts a track. A load still takes the page a moment to act on, and taps on
+   * next arrive faster than that: handing it every one of them only asks it to
+   * start tracks nobody waits for. The queue and the interface move with every
+   * tap, but a run of them loads once, for the track the user stops on.
    */
   private load(track: Track, fromSkip = false): void {
     this.setCurrent(track, false);

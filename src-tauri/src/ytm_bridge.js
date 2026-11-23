@@ -40,6 +40,15 @@
     }
   };
 
+  // The player knows what is loaded; the address bar does not. Swapping a track
+  // in place leaves the URL on the track before it, so ask the player first and
+  // keep the URL as the answer for a page that has not built its player yet.
+  const currentVideoId = () => {
+    const p = player();
+    const data = p && typeof p.getVideoData === "function" ? p.getVideoData() : null;
+    return (data && data.video_id) || new URLSearchParams(location.search).get("v");
+  };
+
   const send = (reason) => {
     const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
     if (!invoke) return;
@@ -53,7 +62,7 @@
     invoke("ytm_report", {
       state: {
         reason,
-        videoId: new URLSearchParams(location.search).get("v"),
+        videoId: currentVideoId(),
         title: metadata ? metadata.title || null : null,
         artist: metadata ? metadata.artist || null : null,
         album: metadata ? metadata.album || null : null,
@@ -225,6 +234,14 @@
           if (video) {
             if (video.paused) video.play().catch(() => send("blocked"));
             else video.pause();
+          }
+          break;
+        case "load":
+          // Swapping the track inside the running page skips reloading the
+          // whole YouTube Music app, which took seconds and dropped the audio.
+          if (typeof value === "string") {
+            if (p && typeof p.loadVideoById === "function") p.loadVideoById(value);
+            else location.assign("/watch?v=" + encodeURIComponent(value));
           }
           break;
         case "next":

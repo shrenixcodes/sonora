@@ -140,6 +140,16 @@ fn is_valid_video_id(id: &str) -> bool {
 
 /// Builds the script evaluated in the YouTube Music page for a command.
 fn command_script(command: &YtmCommand) -> Option<String> {
+    // The id is written into the script as a string, so it is checked here.
+    // A page that has not injected the bridge yet still has to navigate.
+    if let YtmCommand::Load(id) = command {
+        if !is_valid_video_id(id) {
+            return None;
+        }
+        return Some(format!(
+            "window.__sonoraBridge ? window.__sonoraBridge.exec(\"load\", \"{id}\") \n             : location.assign(\"/watch?v={id}\");"
+        ));
+    }
     let (action, value) = match command {
         YtmCommand::Play => ("play", None),
         YtmCommand::Pause => ("pause", None),
@@ -190,12 +200,17 @@ pub fn ytm_control<R: Runtime>(app: AppHandle<R>, command: YtmCommand) -> Result
         if !is_valid_video_id(id) {
             return Err(format!("invalid video id: {id}"));
         }
-        // Loading navigates the page, which would throw away a sign-in in progress.
+        // Loading would throw away a sign-in in progress.
         if window.is_visible().unwrap_or(false) && window.url().is_ok_and(|u| is_sign_in_page(&u)) {
             return Err("finish signing in to YouTube Music first".into());
         }
-        let url = Url::parse(&format!("{YTM_HOME}watch?v={id}")).map_err(|e| e.to_string())?;
-        return window.navigate(url).map_err(|e| e.to_string());
+        // The running page can swap the track itself. Only a page that is not
+        // on YouTube Music yet, such as one left on a sign-in hop, has to
+        // navigate, and reloading the whole app is what that costs.
+        if window.url().is_ok_and(|u| is_sign_in_page(&u)) {
+            let url = Url::parse(&format!("{YTM_HOME}watch?v={id}")).map_err(|e| e.to_string())?;
+            return window.navigate(url).map_err(|e| e.to_string());
+        }
     }
 
     let script = command_script(&command).ok_or("invalid command value")?;
@@ -463,7 +478,13 @@ mod tests {
         );
         assert!(command_script(&YtmCommand::Seek(-1.0)).is_none());
         assert!(command_script(&YtmCommand::Seek(f64::NAN)).is_none());
-        assert!(command_script(&YtmCommand::Load("dQw4w9WgXcQ".into())).is_none());
+
+        let load = command_script(&YtmCommand::Load("dQw4w9WgXcQ".into())).unwrap();
+        assert!(load.contains("exec(\"load\", \"dQw4w9WgXcQ\")"));
+        assert!(load.contains("/watch?v=dQw4w9WgXcQ"));
+        // An id that could break out of the string never reaches the page.
+        assert!(command_script(&YtmCommand::Load("a\");alert(1)//".into())).is_none());
+        assert!(command_script(&YtmCommand::Load("short".into())).is_none());
     }
 
     #[test]
