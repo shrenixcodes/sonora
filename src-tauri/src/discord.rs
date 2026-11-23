@@ -71,6 +71,15 @@ impl Default for DiscordRpcState {
     }
 }
 
+fn sanitize_text<'a>(s: &'a str, fallback: &'a str) -> &'a str {
+    let trimmed = s.trim();
+    if trimmed.chars().count() >= 2 {
+        trimmed
+    } else {
+        fallback
+    }
+}
+
 fn run_discord_worker(receiver: Receiver<DiscordCommand>) {
     let mut client: Option<DiscordIpcClient> = None;
     let mut current_client_id = String::new();
@@ -104,22 +113,24 @@ fn run_discord_worker(receiver: Receiver<DiscordCommand>) {
                 }
 
                 if let Some(ref mut ipc) = client {
+                    let title = sanitize_text(&payload.title, "Sonora Track");
+                    let artist = sanitize_text(&payload.artist, "YouTube Music");
+
                     let mut act = activity::Activity::new();
-                    act = act.details(&payload.title);
-                    act = act.state(&payload.artist);
+                    act = act
+                        .activity_type(activity::ActivityType::Listening)
+                        .status_display_type(activity::StatusDisplayType::Details)
+                        .details(title)
+                        .state(artist);
 
                     let mut assets = activity::Assets::new();
                     if let Some(ref art) = payload.artwork_url {
-                        if !art.is_empty() {
-                            assets = assets.large_image(art);
+                        if !art.trim().is_empty() {
+                            assets = assets.large_image(art.trim());
                         }
                     }
                     if let Some(ref alb) = payload.album {
-                        if !alb.is_empty() {
-                            assets = assets.large_text(alb);
-                        } else {
-                            assets = assets.large_text("Sonora");
-                        }
+                        assets = assets.large_text(sanitize_text(alb, "Sonora"));
                     } else {
                         assets = assets.large_text("Sonora");
                     }
@@ -172,6 +183,14 @@ fn run_discord_worker(receiver: Receiver<DiscordCommand>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_sanitize_text() {
+        assert_eq!(sanitize_text("   ", "Fallback"), "Fallback");
+        assert_eq!(sanitize_text("A", "Fallback"), "Fallback");
+        assert_eq!(sanitize_text("Starboy", "Fallback"), "Starboy");
+        assert_eq!(sanitize_text(" 4U ", "Fallback"), "4U");
+    }
 
     #[test]
     fn test_discord_payload_serialization() {

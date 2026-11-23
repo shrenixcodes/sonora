@@ -123,6 +123,7 @@ export class DiscordRpcService {
       !this.lastActivity ||
       this.lastActivity.isPlaying !== isPlaying ||
       this.lastActivity.title !== state.currentTrack.title ||
+      this.lastActivity.artist !== state.currentTrack.artist ||
       Math.abs((this.lastActivity.elapsedSeconds ?? 0) - Math.round(state.currentTime)) > 5
     ) {
       this.sendActivity({
