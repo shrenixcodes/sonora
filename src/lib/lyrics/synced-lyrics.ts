@@ -56,6 +56,7 @@ export class LyricsController {
   private container: HTMLElement | null = null;
   private isUserScrolling = false;
   private userScrollTimeout: number | null = null;
+  private scrollLockIndicator: HTMLElement | null = null;
   private onSeekRequest?: (timeSeconds: number) => void;
 
   constructor(options?: { onSeekRequest?: (timeSeconds: number) => void }) {
@@ -65,6 +66,7 @@ export class LyricsController {
   setLyrics(lyrics: LyricsData | null): void {
     this.data = lyrics;
     this.activeIndex = -1;
+    this.hideScrollLockIndicator();
     this.render();
   }
 
@@ -76,15 +78,49 @@ export class LyricsController {
   }
 
   private handleUserScroll(): void {
+    if (!this.data || !this.data.isSynced || this.data.lines.length === 0) return;
     this.isUserScrolling = true;
+    this.showScrollLockIndicator();
+
     if (this.userScrollTimeout !== null) {
       window.clearTimeout(this.userScrollTimeout);
     }
-    // Resume auto-scroll 3.5 seconds after user stops scrolling
+    // Resume auto-scroll 5 seconds after user stops scrolling
     this.userScrollTimeout = window.setTimeout(() => {
-      this.isUserScrolling = false;
-      this.scrollToActive();
-    }, 3500);
+      this.resumeAutoScroll();
+    }, 5000);
+  }
+
+  resumeAutoScroll(): void {
+    if (this.userScrollTimeout !== null) {
+      window.clearTimeout(this.userScrollTimeout);
+      this.userScrollTimeout = null;
+    }
+    this.isUserScrolling = false;
+    this.hideScrollLockIndicator();
+    this.scrollToActive();
+  }
+
+  private showScrollLockIndicator(): void {
+    if (!this.container || this.scrollLockIndicator) return;
+    const indicator = document.createElement("button");
+    indicator.className = "lyrics__scroll-lock";
+    indicator.type = "button";
+    indicator.setAttribute("aria-label", "Auto-scroll paused. Click to sync with lyrics.");
+    indicator.innerHTML = `<span class="lyrics__scroll-lock-dot"></span><span>Sync to lyrics</span>`;
+    indicator.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.resumeAutoScroll();
+    });
+    this.scrollLockIndicator = indicator;
+    this.container.appendChild(indicator);
+  }
+
+  private hideScrollLockIndicator(): void {
+    if (this.scrollLockIndicator) {
+      this.scrollLockIndicator.remove();
+      this.scrollLockIndicator = null;
+    }
   }
 
   updateTime(currentTimeSeconds: number): void {
@@ -173,7 +209,7 @@ export class LyricsController {
       `.lyrics__line[data-index="${this.activeIndex}"]`,
     ) as HTMLElement | null;
 
-    if (activeEl) {
+    if (activeEl && typeof activeEl.scrollIntoView === "function") {
       activeEl.scrollIntoView({
         behavior: "smooth",
         block: "center",
@@ -185,5 +221,6 @@ export class LyricsController {
     if (this.userScrollTimeout !== null) {
       window.clearTimeout(this.userScrollTimeout);
     }
+    this.hideScrollLockIndicator();
   }
 }

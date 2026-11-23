@@ -114,9 +114,42 @@ export function renderNowPlaying(container: HTMLElement): void {
   };
   window.addEventListener("keydown", onKeyDown);
 
+  // ── Lyrics typography scaling ─────────────
+  let lyricsSize: "sm" | "md" | "lg" = settings.lyricsFontSize ?? "md";
+  const sizeLabels: Record<"sm" | "md" | "lg", string> = {
+    sm: "Small",
+    md: "Medium",
+    lg: "Large",
+  };
+  const sizeCycle: Array<"sm" | "md" | "lg"> = ["sm", "md", "lg"];
+
+  const fontBtn = el("button", {
+    className: "now-playing__mode-btn",
+    text: "Aa",
+    attrs: {
+      "aria-label": `Lyrics text size: ${sizeLabels[lyricsSize]}`,
+      title: `Lyrics text size: ${sizeLabels[lyricsSize]}`,
+    },
+    onClick: () => {
+      const nextIdx = (sizeCycle.indexOf(lyricsSize) + 1) % sizeCycle.length;
+      lyricsSize = sizeCycle[nextIdx];
+      storage.saveSettings({ lyricsFontSize: lyricsSize });
+      nowPlayingRoot.dataset.lyricsSize = lyricsSize;
+      const label = `Lyrics text size: ${sizeLabels[lyricsSize]}`;
+      fontBtn.setAttribute("aria-label", label);
+      fontBtn.setAttribute("title", label);
+    },
+  });
+
   const topBar = el("div", {
     className: "now-playing__topbar",
-    children: [closeBtn, fullscreenBtn],
+    children: [
+      closeBtn,
+      el("div", {
+        className: "now-playing__topbar-actions",
+        children: [fontBtn, fullscreenBtn],
+      }),
+    ],
   });
 
   // ── Left: Artwork & Info ────────────────────────────────
@@ -171,6 +204,7 @@ export function renderNowPlaying(container: HTMLElement): void {
 
   const nowPlayingRoot = el("div", {
     className: "now-playing",
+    attrs: { "data-lyrics-size": lyricsSize },
     children: [canvas, scrim, content],
   });
 

@@ -68,6 +68,13 @@ export function renderSettings(container: HTMLElement): void {
           createDensitySelector(currentSettings.density),
         ),
 
+        // Lyrics Text Size
+        createSettingRow(
+          "Lyrics Text Size",
+          "Scale synchronized lyrics font size in Now Playing",
+          createLyricsSizeSelector(currentSettings.lyricsFontSize),
+        ),
+
         // Ambient Visual Mode
         createSettingRow(
           "Ambient Visualizer Mode",
@@ -355,6 +362,32 @@ function createDensitySelector(currentDensity: UserSettings["density"]): HTMLEle
 
   container.appendChild(comfy);
   container.appendChild(compact);
+  return container;
+}
+
+function createLyricsSizeSelector(currentSize: UserSettings["lyricsFontSize"] = "md"): HTMLElement {
+  const container = el("div", { className: "settings__segmented" });
+  const sizes: Array<{ val: "sm" | "md" | "lg"; label: string }> = [
+    { val: "sm", label: "Small" },
+    { val: "md", label: "Medium" },
+    { val: "lg", label: "Large" },
+  ];
+
+  const buttons: HTMLElement[] = [];
+  sizes.forEach(({ val, label }) => {
+    const btn = el("button", {
+      className: `settings__seg-btn${(currentSize || "md") === val ? " settings__seg-btn--active" : ""}`,
+      text: label,
+      onClick: () => {
+        storage.saveSettings({ lyricsFontSize: val });
+        buttons.forEach((b) => b.classList.remove("settings__seg-btn--active"));
+        btn.classList.add("settings__seg-btn--active");
+      },
+    });
+    buttons.push(btn);
+    container.appendChild(btn);
+  });
+
   return container;
 }
 

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseLrc } from "../src/lib/lyrics/synced-lyrics";
+import { describe, it, expect, vi } from "vitest";
+import { parseLrc, LyricsController } from "../src/lib/lyrics/synced-lyrics";
 
 describe("parseLrc", () => {
   it("parses standard minute:second.hundredths timestamps", () => {
@@ -44,5 +44,57 @@ describe("parseLrc", () => {
     const parsed = parseLrc("");
     expect(parsed.isSynced).toBe(false);
     expect(parsed.lines).toHaveLength(0);
+  });
+});
+
+describe("LyricsController auto-scroll lock", () => {
+  it("shows scroll lock indicator on user wheel and resumes after clicking indicator", () => {
+    vi.useFakeTimers();
+    const container = document.createElement("div");
+    const controller = new LyricsController();
+    controller.bindContainer(container);
+
+    const lrc = "[00:01.00]Line 1\n[00:05.00]Line 2\n[00:10.00]Line 3";
+    controller.setLyrics(parseLrc(lrc));
+
+    controller.updateTime(1);
+    expect(container.querySelector(".lyrics__line--active")?.textContent).toBe("Line 1");
+
+    // Simulate user scroll
+    container.dispatchEvent(new Event("wheel"));
+    const indicator = container.querySelector(".lyrics__scroll-lock") as HTMLButtonElement | null;
+    expect(indicator).not.toBeNull();
+    expect(indicator?.textContent).toContain("Sync to lyrics");
+
+    // Clicking indicator resumes auto-scroll
+    indicator?.click();
+    expect(container.querySelector(".lyrics__scroll-lock")).toBeNull();
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
+  it("automatically resumes auto-scroll after 5 seconds of inactivity", () => {
+    vi.useFakeTimers();
+    const container = document.createElement("div");
+    const controller = new LyricsController();
+    controller.bindContainer(container);
+
+    const lrc = "[00:01.00]Line 1\n[00:05.00]Line 2";
+    controller.setLyrics(parseLrc(lrc));
+
+    container.dispatchEvent(new Event("wheel"));
+    expect(container.querySelector(".lyrics__scroll-lock")).not.toBeNull();
+
+    // Advance 4999ms -> still locked
+    vi.advanceTimersByTime(4999);
+    expect(container.querySelector(".lyrics__scroll-lock")).not.toBeNull();
+
+    // Advance 1ms -> 5000ms reached -> unlocked
+    vi.advanceTimersByTime(1);
+    expect(container.querySelector(".lyrics__scroll-lock")).toBeNull();
+
+    controller.destroy();
+    vi.useRealTimers();
   });
 });

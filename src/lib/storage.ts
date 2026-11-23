@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   ambientFpsLimit: 30,
   ambientIntensity: 0.8,
   density: "comfortable",
+  lyricsFontSize: "md",
   volume: 0.8,
   normalizeVolume: true,
   autoPlayNext: true,
