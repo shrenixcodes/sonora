@@ -188,6 +188,7 @@
 .queue-row__grip svg {
   width: 14px;
   height: 14px;
+  pointer-events: none;
 }
 
 .queue-row__remove-btn {
@@ -238,6 +239,9 @@
   border-radius: var(--radius-md);
   object-fit: cover;
   background: var(--color-surface-secondary);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .queue-row__meta {
@@ -245,12 +249,16 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  pointer-events: none;
+  user-select: none;
 }
 
 .queue-row__title {
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
   color: var(--color-text);
+  pointer-events: none;
+  user-select: none;
 }
 
 .queue-row.is-playing .queue-row__title {
@@ -261,6 +269,8 @@
 .queue-row__duration {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
+  pointer-events: none;
+  user-select: none;
 }
 
 .queue-row__duration {

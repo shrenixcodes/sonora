@@ -50,18 +50,13 @@ export function createTitlebar(): HTMLElement {
       // Left: navigation buttons
       el("div", {
         className: "titlebar__left",
+        attrs: { "data-tauri-drag-region": "" },
         children: [
           // Drag handle for the floating layout, where the gaps around panels are click-through.
           el("span", {
             className: "titlebar__grip",
             attrs: { "data-tauri-drag-region": "", title: "Drag to move", "aria-hidden": "true" },
             html: GRIP_ICON,
-            onMouseDown: (e: MouseEvent) => {
-              if (e.button === 0) {
-                e.preventDefault();
-                startWindowDrag(e);
-              }
-            },
           }),
           el("div", {
             className: "titlebar__nav",

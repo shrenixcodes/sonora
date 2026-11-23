@@ -17,6 +17,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.titlebar__left button,
+.titlebar__nav-btn {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }

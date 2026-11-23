@@ -9,8 +9,6 @@ import { el, formatTime } from "@/lib/dom";
 import { icon } from "@/icons";
 import { EventEmitter } from "@/lib/events";
 import { playerEngine } from "@/lib/playback/engine";
-import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Track } from "@/types/music";
 
 const STORAGE_KEY = "sonora-queue-panel";
@@ -49,7 +47,6 @@ class QueuePanelState extends EventEmitter<{ change: boolean }> {
 export const queuePanel = new QueuePanelState();
 
 export function createQueuePanel(): HTMLElement {
-  const appWindow = isTauri() ? getCurrentWindow() : null;
   const list = el("div", { className: "queue-panel__list" });
   const count = el("span", { className: "queue-panel__count" });
 
@@ -79,11 +76,6 @@ export function createQueuePanel(): HTMLElement {
           }),
           closeBtn,
         ],
-        onMouseDown: (e: MouseEvent) => {
-          if (e.button === 0 && appWindow && !(e.target as HTMLElement).closest("button")) {
-            appWindow.startDragging().catch(() => {});
-          }
-        },
       }),
       list,
     ],
@@ -193,8 +185,12 @@ function setupDragHandlers(item: HTMLElement, index: number): void {
   item.addEventListener("drop", (e) => {
     e.preventDefault();
     item.classList.remove("is-drag-over");
-    if (dragSourceIndex !== null && dragSourceIndex !== index) {
-      playerEngine.moveUpcoming(dragSourceIndex, index);
+    const sourceIdx =
+      dragSourceIndex !== null
+        ? dragSourceIndex
+        : Number(e.dataTransfer?.getData("text/plain"));
+    if (!isNaN(sourceIdx) && sourceIdx !== index) {
+      playerEngine.moveUpcoming(sourceIdx, index);
     }
     dragSourceIndex = null;
   });
@@ -223,7 +219,10 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
   }
 
   children.push(
-    el("img", { className: "queue-row__art", attrs: { src: track.artworkUrl, alt: "", loading: "lazy" } }),
+    el("img", {
+      className: "queue-row__art",
+      attrs: { src: track.artworkUrl, alt: "", loading: "lazy", draggable: "false" },
+    }),
     el("span", {
       className: "queue-row__meta",
       children: [
