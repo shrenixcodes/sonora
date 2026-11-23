@@ -140,8 +140,10 @@
 /* ── Right Column: Synchronized Lyrics ───────────────────── */
 
 .now-playing__lyrics {
+  /* Fill the row rather than sitting in a fixed band: fullscreen is where
+     the lyrics are meant to be read, and a cap wasted most of the screen. */
+  align-self: stretch;
   height: 100%;
-  max-height: 480px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--space-6) var(--space-4);
