@@ -301,7 +301,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
    * them loads once, for the track the user stops on.
    */
   private load(track: Track, fromSkip = false): void {
-    this.setCurrent(track);
+    this.setCurrent(track, false);
     this.state.status = "loading";
     this.state.duration = track.duration || 0;
     this.setTime(0);
@@ -322,21 +322,38 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     if (fromSkip) this.lastSkipAt = Date.now();
     if (!stillSkipping) {
       this.send({ action: "load", value: track.id });
+      this.settleOn(track);
       return;
     }
     this.skipTimer = window.setTimeout(() => {
       this.skipTimer = null;
       // A later tap has its own load pending; this one is no longer wanted.
-      if (this.pendingId === track.id) this.send({ action: "load", value: track.id });
+      if (this.pendingId !== track.id) return;
+      this.send({ action: "load", value: track.id });
+      this.settleOn(track);
     }, SKIP_SETTLE_MS);
   }
 
-  private setCurrent(track: Track): void {
+  /**
+   * Shows a track in the interface. Cheap enough for every tap on next; pass
+   * `settle` as false when the track may still be skipped past.
+   */
+  private setCurrent(track: Track, settle = true): void {
     this.state.currentTrack = track;
-    storage.addToHistory(track);
     this.emit("trackChange", track);
     this.emit("queueChange", this.queue.all);
+    if (settle) this.settleOn(track);
+  }
 
+  /**
+   * The work a track only deserves once it is the one playing: its artwork is
+   * fetched and read for colors, its lyrics are looked up, and it joins the
+   * listening history. Tracks a run of skips passes through are never heard,
+   * so doing this for each of them only cost time and filled history with
+   * songs the user never played.
+   */
+  private settleOn(track: Track): void {
+    storage.addToHistory(track);
     extractPalette(track.artworkUrl).then((palette) => this.emit("paletteChange", palette));
     lyricsService.getLyrics(track).then((lyrics) => this.emit("lyricsChange", lyrics));
   }

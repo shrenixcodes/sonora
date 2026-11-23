@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Track } from "../src/types/music";
 import type { YtmCommand, YtmState } from "../src/lib/playback/ytm-bridge";
+import { storage } from "../src/lib/storage";
 
 // Keep tests offline: no lyrics requests, no image decoding.
 vi.mock("../src/lib/lyrics/providers", () => ({ lyricsService: { getLyrics: async () => null } }));
@@ -126,6 +127,28 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
       vi.advanceTimersByTime(SKIP_SETTLE_MS);
       expect(loads()).toHaveLength(3);
       expect(loads().at(-1)).toEqual({ action: "load", value: "ddddddddddd" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps songs a run of skips passed through out of the history", () => {
+    vi.useFakeTimers();
+    try {
+      const long = ["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc", "ddddddddddd"].map(track);
+      const { engine } = setup();
+      engine.playTrack(long[0], long);
+      engine.next();
+      engine.next();
+      engine.next();
+      vi.advanceTimersByTime(SKIP_SETTLE_MS);
+
+      // "ccccccccccc" was passed through in a burst and never played.
+      expect(storage.getHistory().map((t) => t.id)).toEqual([
+        "ddddddddddd",
+        "bbbbbbbbbbb",
+        "aaaaaaaaaaa",
+      ]);
     } finally {
       vi.useRealTimers();
     }
