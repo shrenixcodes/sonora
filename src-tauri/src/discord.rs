@@ -7,6 +7,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const DEFAULT_DISCORD_CLIENT_ID: &str = "463151177836658699";
 
+/// Shown as "Listening to Sonora" in place of the Discord application's name.
+const ACTIVITY_NAME: &str = "Sonora";
+
+/// Where the presence card sends people; GitHub redirects it to the newest release.
+const LATEST_RELEASE_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/releases/latest");
+
 /// How often to look for Discord again while it is not running yet, or has
 /// gone away. People open Sonora and Discord in either order.
 const RETRY_INTERVAL: Duration = Duration::from_secs(15);
@@ -164,10 +170,12 @@ impl Presence {
     fn activity(&self) -> activity::Activity<'_> {
         let payload = &self.payload;
 
-        let mut assets = activity::Assets::new().large_text(sanitize_text(
-            payload.album.as_deref().unwrap_or(""),
-            "Sonora",
-        ));
+        let mut assets = activity::Assets::new()
+            .large_text(sanitize_text(
+                payload.album.as_deref().unwrap_or(""),
+                ACTIVITY_NAME,
+            ))
+            .large_url(LATEST_RELEASE_URL);
         if let Some(art) = payload.artwork_url.as_deref().and_then(usable_artwork) {
             assets = assets.large_image(art);
         }
@@ -178,11 +186,16 @@ impl Presence {
         };
 
         let mut act = activity::Activity::new()
+            .name(ACTIVITY_NAME)
             .activity_type(activity::ActivityType::Listening)
             .status_display_type(activity::StatusDisplayType::Details)
             .details(sanitize_text(&payload.title, "Sonora Track"))
             .state(sanitize_text(&payload.artist, "YouTube Music"))
-            .assets(assets);
+            .assets(assets)
+            .buttons(vec![activity::Button::new(
+                "Get Sonora",
+                LATEST_RELEASE_URL,
+            )]);
 
         if let Some(start) = self.start {
             let mut timestamps = activity::Timestamps::new().start(start);
@@ -369,6 +382,20 @@ mod tests {
         let mut p = payload(true);
         p.duration_seconds = Some(30);
         assert_eq!(Presence::new(p, 1_000).end, None);
+    }
+
+    #[test]
+    fn activity_is_branded_and_links_to_latest_release() {
+        assert_eq!(
+            LATEST_RELEASE_URL,
+            "https://github.com/shrenixcodes/sonora/releases/latest"
+        );
+        let presence = Presence::new(payload(true), 1_000);
+        let json = serde_json::to_value(presence.activity()).expect("serialization failed");
+        assert_eq!(json["name"], "Sonora");
+        assert_eq!(json["assets"]["large_url"], LATEST_RELEASE_URL);
+        assert_eq!(json["buttons"][0]["label"], "Get Sonora");
+        assert_eq!(json["buttons"][0]["url"], LATEST_RELEASE_URL);
     }
 
     #[test]

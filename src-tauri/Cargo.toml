@@ -3,6 +3,7 @@ name = "sonora"
 version = "0.4.2"
 description = "An immersive YouTube Music desktop client"
 authors = ["Shreyan Bag"]
+repository = "https://github.com/shrenixcodes/sonora"
 edition = "2024"
 
 [lib]
