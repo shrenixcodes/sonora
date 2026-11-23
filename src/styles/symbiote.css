@@ -1,0 +1,88 @@
+/*
+ * Symbiote — launch and restore animations (src/lib/visuals/symbiote.ts).
+ * Panels are animated from script (Web Animations); this file styles the
+ * overlay layers and the hidden state the shell waits in before an entrance.
+ */
+
+/* Metaball layer: soft blobs, thresholded, rimmed and lit by the SVG filter */
+.symbiote-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9998;
+  filter: url(#sonora-symbiote-goo);
+}
+
+.symbiote-canvas[data-quality="lite"] {
+  filter: url(#sonora-symbiote-goo-lite);
+}
+
+/* Album art or logo riding the head of the liquid */
+.symbiote-flyer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9999;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.symbiote-flyer--art {
+  overflow: hidden;
+  background: rgb(7 6 12);
+  box-shadow:
+    0 0 0 1.5px color-mix(in oklab, var(--color-accent, #a78bfa) 70%, transparent),
+    0 10px 28px rgb(0 0 0 / 0.45),
+    0 0 36px color-mix(in oklab, var(--color-accent, #a78bfa) 35%, transparent);
+}
+
+.symbiote-flyer--art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+.symbiote-flyer--placeholder img {
+  object-fit: contain;
+  padding: 18%;
+}
+
+.symbiote-flyer--logo {
+  color: color-mix(in oklab, var(--color-accent, #a78bfa) 55%, white);
+  filter:
+    drop-shadow(0 0 10px color-mix(in oklab, var(--color-accent, #a78bfa) 70%, transparent))
+    drop-shadow(0 6px 18px rgb(0 0 0 / 0.5));
+}
+
+.symbiote-flyer--logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Waiting for an entrance (launch, or minimized): never flash the finished frame */
+html.symbiote-primed .titlebar__left,
+html.symbiote-primed .titlebar__search,
+html.symbiote-primed .titlebar__right,
+html.symbiote-primed .sidebar,
+html.symbiote-primed .main,
+html.symbiote-primed .queue-panel,
+html.symbiote-primed .player,
+html.symbiote-primed #app::before {
+  opacity: 0;
+}
+
+/* Hover lifts would fight the entrance transforms */
+html.app--restoring .player__artwork {
+  transition: none;
+}
+
+html[data-reduce-motion="true"] .symbiote-canvas,
+html[data-reduce-motion="true"] .symbiote-flyer {
+  display: none !important;
+}

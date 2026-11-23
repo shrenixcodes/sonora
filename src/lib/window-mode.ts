@@ -32,7 +32,6 @@ const INTERACTIVE_PARTS = [
   ".queue-panel",
   ".player",
   "dialog[open]",
-  ".splash-overlay",
 ];
 
 export function modeFor(state: { maximized: boolean; fullscreen: boolean }): WindowMode {
@@ -106,11 +105,13 @@ export async function initWindowMode(): Promise<void> {
     refresh().catch((err) => console.error("[window-mode] failed to read window state:", err));
   });
 
-  // Show the window after the first paint; slide in unless the user prefers less motion.
-  const animate = currentMode === "floating" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
-  requestAnimationFrame(() => {
-    invoke("present_main_window", { animate }).catch((err) =>
-      console.error("[window-mode] failed to show the window:", err),
-    );
+  // Show the window in place after the first paint. The liquid launch animation
+  // (symbiote.ts) is the entrance, so the native slide-in is not used.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      invoke("present_main_window", { animate: false })
+        .catch((err) => console.error("[window-mode] failed to show the window:", err))
+        .finally(resolve);
+    });
   });
 }

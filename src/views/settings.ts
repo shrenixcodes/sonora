@@ -13,7 +13,7 @@ import { account } from "@/lib/ytm/account";
 import { router } from "@/lib/router";
 import { storage } from "@/lib/storage";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
-import { triggerPlasmaRestore } from "@/lib/visuals/plasma-restore";
+import { triggerRestoreAnimation } from "@/lib/visuals/symbiote";
 import type { UserSettings, AmbientVisualMode } from "@/types/music";
 
 const ACCENT_COLORS = [
@@ -94,7 +94,7 @@ export function renderSettings(container: HTMLElement): void {
         // Fluid Animations & Launch Splash
         createSettingRow(
           "Interface Animations",
-          "Preview launch splash screen and window restore plasma fluid animations",
+          "Preview the launch splash and the liquid taskbar restore animation (F8 / F9)",
           createAnimationTester(),
         ),
 
@@ -479,9 +479,9 @@ function createAnimationTester(): HTMLElement {
       }),
       el("button", {
         className: "settings__btn",
-        text: "Test Plasma Restore",
+        text: "Preview Taskbar Restore",
         onClick: () => {
-          triggerPlasmaRestore(undefined, { force: true });
+          triggerRestoreAnimation({ force: true });
         },
       }),
     ],

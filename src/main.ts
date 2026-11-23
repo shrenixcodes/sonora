@@ -32,9 +32,9 @@ import { renderNowPlaying } from "@/views/now-playing";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
 import type { ArtworkPalette } from "@/lib/visuals/color-extractor";
-import { initPlasmaRestore, triggerPlasmaRestore } from "@/lib/visuals/plasma-restore";
+import { initRestoreAnimation, setLiquidPalette, triggerRestoreAnimation, type RevealMode } from "@/lib/visuals/symbiote";
 import { initRubberbandUX } from "@/lib/rubberband";
-import { showLaunchSplash } from "@/lib/visuals/splash-screen";
+import { prepareLaunchSplash, showLaunchSplash } from "@/lib/visuals/splash-screen";
 
 const ARTWORK_PLACEHOLDER = "/artwork-placeholder.svg";
 
@@ -66,29 +66,34 @@ function init(): void {
   app.appendChild(player);
   queuePanel.init();
   discordRpc.init();
-  initPlasmaRestore();
+  initRestoreAnimation();
   initRubberbandUX();
-  showLaunchSplash().catch((err) => console.error("[main] splash screen failed:", err));
 
-  // Manual animation preview shortcuts: F8 = Splash, F9 = Plasma Restore
+  // Manual animation preview shortcuts: F8 = Splash, F9 = Taskbar restore
   window.addEventListener("keydown", (e) => {
     if (e.key === "F8") {
       e.preventDefault();
       showLaunchSplash({ force: true }).catch(() => {});
     } else if (e.key === "F9") {
       e.preventDefault();
-      triggerPlasmaRestore(undefined, { force: true });
+      triggerRestoreAnimation({ force: true });
     }
   });
 
   // Developer / test hooks
   (window as unknown as Record<string, unknown>).__sonora_test_splash = () =>
     showLaunchSplash({ force: true });
-  (window as unknown as Record<string, unknown>).__sonora_test_restore = (origin?: any) =>
-    triggerPlasmaRestore(origin, { force: true });
+  (window as unknown as Record<string, unknown>).__sonora_test_restore = (mode?: RevealMode) =>
+    triggerRestoreAnimation({ force: true, mode });
 
-  // Floating vs full layout; also reveals the window after first paint
-  initWindowMode().catch((err) => console.error("[main] window mode setup failed:", err));
+  // Floating vs full layout; also reveals the window after first paint.
+  // The shell stays hidden until then, and the launch builds it once the window is up.
+  const launching = prepareLaunchSplash();
+  initWindowMode()
+    .catch((err) => console.error("[main] window mode setup failed:", err))
+    .finally(() => {
+      if (launching) showLaunchSplash().catch((err) => console.error("[main] launch animation failed:", err));
+    });
 
   // Register routes
   router
@@ -108,9 +113,11 @@ function init(): void {
 
   // Tint the shell with the current artwork
   // The shell, its buttons and floating pieces all adapt to the artwork's colors
-  let palette: ArtworkPalette | null = null;
+  let palette: ArtworkPalette | null = playerEngine.currentPalette;
+  setLiquidPalette(palette);
   playerEngine.on("paletteChange", (next) => {
     palette = next;
+    setLiquidPalette(next);
     applyAmbience(next);
     applyArtworkAccent(next, themeManager.theme, app);
   });

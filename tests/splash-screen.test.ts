@@ -1,70 +1,45 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { showLaunchSplash, resetLaunchSplashFlag } from "../src/lib/visuals/splash-screen";
+import { showLaunchSplash, resetLaunchSplashFlag, prepareLaunchSplash } from "../src/lib/visuals/splash-screen";
 import { icon } from "../src/icons";
 
-describe("Sonora logo and launch splash screen", () => {
+describe("Sonora logo and launch splash", () => {
   beforeEach(() => {
-    document.body.innerHTML = '<div id="app"></div>';
+    document.body.innerHTML = '<div id="app"><div class="main"></div></div>';
     resetLaunchSplashFlag();
-    sessionStorage.clear();
     vi.useFakeTimers();
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {} }));
   });
 
   afterEach(() => {
+    resetLaunchSplashFlag();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
   it("exports unique Sonora brand logo SVG", () => {
     const logoSvg = icon("sonoraLogo");
-    expect(logoSvg).toBeDefined();
     expect(logoSvg).toContain("<svg");
     expect(logoSvg).toContain("viewBox");
     expect(logoSvg).toContain("</svg>");
   });
 
-  it("mounts splash screen with 3D canvas and brand typography", async () => {
-    const splashPromise = showLaunchSplash({ force: true, duration: 1000 });
+  it("plays the liquid launch with the Sonora logo and cleans up", async () => {
+    expect(prepareLaunchSplash()).toBe(true);
+    const done = showLaunchSplash();
+    expect(document.querySelector(".symbiote-flyer--logo")).not.toBeNull();
 
-    const overlay = document.querySelector(".splash-overlay");
-    expect(overlay).not.toBeNull();
-
-    const canvas = overlay?.querySelector("canvas.splash-canvas");
-    expect(canvas).not.toBeNull();
-
-    const title = overlay?.querySelector(".splash-title");
-    expect(title?.textContent).toBe("Sonora");
-
-    // Advance timers so splash completes and unmounts
-    vi.advanceTimersByTime(1200);
-    await splashPromise;
-
-    expect(document.querySelector(".splash-overlay")).toBeNull();
+    vi.advanceTimersByTime(3000);
+    await done;
+    expect(document.querySelector(".symbiote-flyer--logo")).toBeNull();
   });
 
-  it("dismisses immediately on user click or key press", async () => {
-    const splashPromise = showLaunchSplash({ force: true, duration: 3000 });
+  it("is skipped with reduced motion unless forced", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), addEventListener() {} }));
+    expect(prepareLaunchSplash()).toBe(false);
+    await showLaunchSplash();
+    expect(document.querySelector(".symbiote-flyer")).toBeNull();
 
-    const overlay = document.querySelector(".splash-overlay") as HTMLElement;
-    expect(overlay).not.toBeNull();
-
-    // User clicks anywhere to skip
-    overlay.click();
-
-    vi.advanceTimersByTime(500);
-    await splashPromise;
-
-    expect(document.querySelector(".splash-overlay")).toBeNull();
-  });
-
-  it("bypasses splash if prefers-reduced-motion is active", async () => {
-    vi.stubGlobal("matchMedia", (q: string) => ({
-      matches: q.includes("prefers-reduced-motion"),
-      addEventListener() {},
-    }));
-
-    await showLaunchSplash({ force: true });
-    expect(document.querySelector(".splash-overlay")).toBeNull();
+    void showLaunchSplash({ force: true });
+    expect(document.querySelector(".symbiote-flyer--logo")).not.toBeNull();
   });
 });
