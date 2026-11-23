@@ -7,6 +7,8 @@
 
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+
+type WindowHandle = ReturnType<typeof getCurrentWindow>;
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
 import { router } from "@/lib/router";
@@ -14,6 +16,19 @@ import { searchQuery } from "@/lib/search-query";
 import { catalog } from "@/lib/ytm/catalog";
 
 const GRIP_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
+
+/**
+ * A window in fullscreen ignores maximize and minimizes badly, which left these
+ * buttons looking broken after Now Playing had been opened fullscreen. Fullscreen
+ * is a mode of its own, so step out of it before working the window.
+ */
+async function leaveFullscreen(appWindow: WindowHandle): Promise<void> {
+  try {
+    if (await appWindow.isFullscreen()) await appWindow.setFullscreen(false);
+  } catch (err) {
+    console.error("[titlebar] could not leave fullscreen:", err);
+  }
+}
 
 export function createTitlebar(): HTMLElement {
   // Window controls need the Tauri runtime; in a plain browser (UI development) they do nothing.
@@ -92,17 +107,21 @@ export function createTitlebar(): HTMLElement {
             html: icon("minimize"),
             attrs: { "aria-label": "Minimize" },
             onClick: async () => {
-              if (appWindow) {
-                await appWindow.setIgnoreCursorEvents(false).catch(() => {});
-                await appWindow.minimize();
-              }
+              if (!appWindow) return;
+              await appWindow.setIgnoreCursorEvents(false).catch(() => {});
+              await leaveFullscreen(appWindow);
+              await appWindow.minimize();
             },
           }),
           el("button", {
             className: "titlebar__window-btn",
             html: icon("maximize"),
             attrs: { "aria-label": "Maximize" },
-            onClick: () => appWindow?.toggleMaximize(),
+            onClick: async () => {
+              if (!appWindow) return;
+              await leaveFullscreen(appWindow);
+              await appWindow.toggleMaximize();
+            },
           }),
           el("button", {
             className: "titlebar__window-btn titlebar__window-btn--close",
