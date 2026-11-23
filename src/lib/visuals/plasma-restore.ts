@@ -1,10 +1,11 @@
 /**
- * Plasma restore animation for Sonora.
+ * Plasma restore animation for Sonora with check origin awareness.
  *
  * When the window is restored (e.g. from the taskbar after being minimized),
  * the player bar immediately holds its place as a magnetic attractor core.
- * Randomized plasma fluid tendrils stream in from the screen edge or corners,
- * coalescing the rest of the window panels into position.
+ * Plasma fluid tendrils stream in with awareness of the window's physical screen
+ * origin, display boundaries, and taskbar position, coalescing the rest of the
+ * window panels into position.
  */
 
 import { isTauri } from "@tauri-apps/api/core";
@@ -35,6 +36,25 @@ export const PLASMA_ORIGINS: readonly PlasmaOrigin[] = [
 
 export const RESTORE_DURATION_MS = 750;
 
+export interface WindowOriginState {
+  screenX: number;
+  screenY: number;
+  innerWidth: number;
+  innerHeight: number;
+  outerWidth: number;
+  outerHeight: number;
+  screenWidth: number;
+  screenHeight: number;
+  availLeft: number;
+  availTop: number;
+  availWidth: number;
+  availHeight: number;
+  taskbarEdge: "bottom" | "top" | "left" | "right";
+  nearestScreenEdge: PlasmaOrigin;
+  relativeX: number;
+  relativeY: number;
+}
+
 interface PlasmaParticle {
   x: number;
   y: number;
@@ -55,10 +75,115 @@ const PLASMA_PALETTE = [
   "#a78bfa", // lavender electric
 ];
 
+let lastWindowOrigin: WindowOriginState | null = null;
+
+/**
+ * Checks and records the current window origin, screen geometry, and taskbar edge.
+ */
+export function recordWindowOrigin(): WindowOriginState {
+  const win = typeof window !== "undefined" ? window : null;
+  const screen = win?.screen;
+
+  const screenX = win?.screenX ?? 0;
+  const screenY = win?.screenY ?? 0;
+  const innerWidth = win?.innerWidth ?? 1024;
+  const innerHeight = win?.innerHeight ?? 768;
+  const outerWidth = win?.outerWidth ?? innerWidth;
+  const outerHeight = win?.outerHeight ?? innerHeight;
+
+  const screenWidth = screen?.width ?? 1920;
+  const screenHeight = screen?.height ?? 1080;
+  const availLeft = (screen && "availLeft" in screen ? Number((screen as unknown as Record<string, unknown>).availLeft) : 0) || 0;
+  const availTop = (screen && "availTop" in screen ? Number((screen as unknown as Record<string, unknown>).availTop) : 0) || 0;
+  const availWidth = screen?.availWidth ?? screenWidth;
+  const availHeight = screen?.availHeight ?? screenHeight;
+
+  // Detect taskbar position from available screen bounds
+  let taskbarEdge: "bottom" | "top" | "left" | "right" = "bottom";
+  if (availTop > 0) {
+    taskbarEdge = "top";
+  } else if (availLeft > 0) {
+    taskbarEdge = "left";
+  } else if (availWidth < screenWidth) {
+    taskbarEdge = "right";
+  } else if (availHeight < screenHeight) {
+    taskbarEdge = "bottom";
+  }
+
+  // Calculate nearest screen edge or corner based on window center
+  const centerX = screenX + outerWidth / 2;
+  const centerY = screenY + outerHeight / 2;
+  const normX = Math.max(0, Math.min(1, centerX / (screenWidth || 1)));
+  const normY = Math.max(0, Math.min(1, centerY / (screenHeight || 1)));
+
+  let nearestScreenEdge: PlasmaOrigin = "bottom";
+  if (normX < 0.35 && normY < 0.35) nearestScreenEdge = "top-left";
+  else if (normX > 0.65 && normY < 0.35) nearestScreenEdge = "top-right";
+  else if (normX < 0.35 && normY > 0.65) nearestScreenEdge = "bottom-left";
+  else if (normX > 0.65 && normY > 0.65) nearestScreenEdge = "bottom-right";
+  else if (normY < 0.35) nearestScreenEdge = "top";
+  else if (normY > 0.65) nearestScreenEdge = "bottom";
+  else if (normX < 0.35) nearestScreenEdge = "left";
+  else if (normX > 0.65) nearestScreenEdge = "right";
+  else nearestScreenEdge = taskbarEdge;
+
+  const state: WindowOriginState = {
+    screenX,
+    screenY,
+    innerWidth,
+    innerHeight,
+    outerWidth,
+    outerHeight,
+    screenWidth,
+    screenHeight,
+    availLeft,
+    availTop,
+    availWidth,
+    availHeight,
+    taskbarEdge,
+    nearestScreenEdge,
+    relativeX: normX,
+    relativeY: normY,
+  };
+
+  lastWindowOrigin = state;
+  return state;
+}
+
+/**
+ * Checks the last recorded or active window origin awareness state.
+ */
+export function checkOriginAwareness(): WindowOriginState {
+  if (lastWindowOrigin) {
+    return lastWindowOrigin;
+  }
+  return recordWindowOrigin();
+}
+
 /** Randomly chooses an origin boundary for the fluid plasma stream. */
 export function pickRandomOrigin(): PlasmaOrigin {
   const index = Math.floor(Math.random() * PLASMA_ORIGINS.length);
   return PLASMA_ORIGINS[index];
+}
+
+/**
+ * Resolves restore origin taking into account window screen origin and taskbar placement.
+ */
+export function resolveOriginWithAwareness(options?: {
+  preferTaskbar?: boolean;
+}): { origin: PlasmaOrigin; originState: WindowOriginState } {
+  const originState = checkOriginAwareness();
+  let origin: PlasmaOrigin;
+
+  if (options?.preferTaskbar) {
+    origin = originState.taskbarEdge;
+  } else {
+    // Check nearest edge or pick origin
+    const usePhysical = Math.random() < 0.5;
+    origin = usePhysical ? originState.nearestScreenEdge : pickRandomOrigin();
+  }
+
+  return { origin, originState };
 }
 
 let lastTriggerTime = 0;
@@ -67,15 +192,19 @@ let activeRafId: number | null = null;
 let activeCleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Creates particles spawned from the specified screen edge or corner.
+ * Creates particles spawned from the specified screen edge or corner with origin awareness.
  */
 function createPlasmaParticles(
   origin: PlasmaOrigin,
   width: number,
   height: number,
   count = 50,
+  originState?: WindowOriginState,
 ): PlasmaParticle[] {
   const particles: PlasmaParticle[] = [];
+
+  // Fine-tune initial velocity scaling when origin-aware
+  const edgeWeight = originState && originState.nearestScreenEdge === origin ? 1.25 : 1;
 
   for (let i = 0; i < count; i++) {
     let x = 0;
@@ -94,49 +223,49 @@ function createPlasmaParticles(
         x = Math.random() * width;
         y = -10 - Math.random() * 40;
         vx = (Math.random() - 0.5) * 5;
-        vy = 4 + Math.random() * 8;
+        vy = (4 + Math.random() * 8) * edgeWeight;
         break;
       case "bottom":
         x = Math.random() * width;
         y = height + 10 + Math.random() * 40;
         vx = (Math.random() - 0.5) * 5;
-        vy = -4 - Math.random() * 8;
+        vy = (-4 - Math.random() * 8) * edgeWeight;
         break;
       case "left":
         x = -10 - Math.random() * 40;
         y = Math.random() * height;
-        vx = 4 + Math.random() * 8;
+        vx = (4 + Math.random() * 8) * edgeWeight;
         vy = (Math.random() - 0.5) * 5;
         break;
       case "right":
         x = width + 10 + Math.random() * 40;
         y = Math.random() * height;
-        vx = -4 - Math.random() * 8;
+        vx = (-4 - Math.random() * 8) * edgeWeight;
         vy = (Math.random() - 0.5) * 5;
         break;
       case "top-left":
         x = -15 + Math.random() * 50;
         y = -15 + Math.random() * 50;
-        vx = 3 + Math.random() * 6;
-        vy = 3 + Math.random() * 6;
+        vx = (3 + Math.random() * 6) * edgeWeight;
+        vy = (3 + Math.random() * 6) * edgeWeight;
         break;
       case "top-right":
         x = width - 35 + Math.random() * 50;
         y = -15 + Math.random() * 50;
-        vx = -3 - Math.random() * 6;
-        vy = 3 + Math.random() * 6;
+        vx = (-3 - Math.random() * 6) * edgeWeight;
+        vy = (3 + Math.random() * 6) * edgeWeight;
         break;
       case "bottom-left":
         x = -15 + Math.random() * 50;
         y = height - 35 + Math.random() * 50;
-        vx = 3 + Math.random() * 6;
-        vy = -3 - Math.random() * 6;
+        vx = (3 + Math.random() * 6) * edgeWeight;
+        vy = (-3 - Math.random() * 6) * edgeWeight;
         break;
       case "bottom-right":
         x = width - 35 + Math.random() * 50;
         y = height - 35 + Math.random() * 50;
-        vx = -3 - Math.random() * 6;
-        vy = -3 - Math.random() * 6;
+        vx = (-3 - Math.random() * 6) * edgeWeight;
+        vy = (-3 - Math.random() * 6) * edgeWeight;
         break;
     }
 
@@ -157,10 +286,13 @@ function createPlasmaParticles(
 }
 
 /**
- * Triggers the magnetic plasma restore sequence.
- * Can be tested with a deterministic origin if provided.
+ * Triggers the magnetic plasma restore sequence with check origin awareness.
+ * Can be tested with a deterministic origin or options.
  */
-export function triggerPlasmaRestore(forcedOrigin?: PlasmaOrigin): void {
+export function triggerPlasmaRestore(
+  forcedOrigin?: PlasmaOrigin,
+  options?: { originAware?: boolean },
+): void {
   // Check user preference for reduced motion
   const prefersReduced =
     typeof window !== "undefined" &&
@@ -181,10 +313,31 @@ export function triggerPlasmaRestore(forcedOrigin?: PlasmaOrigin): void {
   // Clean up any ongoing animation first
   stopPlasmaRestore();
 
-  const origin = forcedOrigin ?? pickRandomOrigin();
+  // Apply check origin awareness
+  const originAware = options?.originAware ?? true;
+  let origin = forcedOrigin;
+  let originState: WindowOriginState | undefined;
+
+  if (originAware) {
+    const awareness = resolveOriginWithAwareness({ preferTaskbar: !forcedOrigin });
+    originState = awareness.originState;
+    if (!origin) {
+      origin = awareness.origin;
+    }
+  } else if (!origin) {
+    origin = pickRandomOrigin();
+  }
+
   const root = document.documentElement;
   root.classList.add("app--restoring");
   root.setAttribute("data-plasma-origin", origin);
+
+  if (originState) {
+    root.setAttribute("data-plasma-origin-aware", "true");
+    root.style.setProperty("--plasma-screen-x", `${originState.screenX}px`);
+    root.style.setProperty("--plasma-screen-y", `${originState.screenY}px`);
+    root.style.setProperty("--plasma-taskbar", originState.taskbarEdge);
+  }
 
   const width = window.innerWidth || 1024;
   const height = window.innerHeight || 768;
@@ -218,7 +371,7 @@ export function triggerPlasmaRestore(forcedOrigin?: PlasmaOrigin): void {
     return;
   }
 
-  const particles = createPlasmaParticles(origin, width, height, 55);
+  const particles = createPlasmaParticles(origin, width, height, 55, originState);
   const startTime = performance.now();
 
   function animate(currentTime: number): void {
@@ -312,18 +465,26 @@ export function stopPlasmaRestore(): void {
   const root = document.documentElement;
   root.classList.remove("app--restoring");
   root.removeAttribute("data-plasma-origin");
+  root.removeAttribute("data-plasma-origin-aware");
+  root.style.removeProperty("--plasma-screen-x");
+  root.style.removeProperty("--plasma-screen-y");
+  root.style.removeProperty("--plasma-taskbar");
   lastTriggerTime = 0;
 }
 
 /**
- * Initializes listeners for window minimize/restore and focus events.
+ * Initializes listeners for window minimize/restore and focus events with origin awareness.
  */
 export function initPlasmaRestore(): void {
   let wasInactive = false;
 
+  // Track initial window screen origin
+  recordWindowOrigin();
+
   // Track document visibility (minimized window causes document to be hidden)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+      recordWindowOrigin();
       wasInactive = true;
     } else if (document.visibilityState === "visible") {
       if (wasInactive) {
@@ -335,6 +496,7 @@ export function initPlasmaRestore(): void {
 
   // Track window blur and focus
   window.addEventListener("blur", () => {
+    recordWindowOrigin();
     wasInactive = true;
   });
 
@@ -352,6 +514,7 @@ export function initPlasmaRestore(): void {
       appWindow
         .onFocusChanged(({ payload: focused }) => {
           if (!focused) {
+            recordWindowOrigin();
             wasInactive = true;
           } else if (wasInactive) {
             wasInactive = false;

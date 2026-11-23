@@ -5,6 +5,9 @@ import {
   triggerPlasmaRestore,
   stopPlasmaRestore,
   initPlasmaRestore,
+  recordWindowOrigin,
+  checkOriginAwareness,
+  resolveOriginWithAwareness,
   RESTORE_DURATION_MS,
   type PlasmaOrigin,
 } from "../src/lib/visuals/plasma-restore";
@@ -116,5 +119,26 @@ describe("plasma-restore", () => {
 
     expect(document.documentElement.classList.contains("app--restoring")).toBe(true);
     expect(document.querySelector("canvas.plasma-canvas")).not.toBeNull();
+  });
+
+  it("checks origin awareness and applies screen geometry and taskbar properties", () => {
+    const originState = recordWindowOrigin();
+    expect(originState).toBeDefined();
+    expect(originState.taskbarEdge).toBeDefined();
+    expect(PLASMA_ORIGINS).toContain(originState.nearestScreenEdge);
+
+    const checked = checkOriginAwareness();
+    expect(checked).toEqual(originState);
+
+    const resolved = resolveOriginWithAwareness({ preferTaskbar: true });
+    expect(resolved.origin).toBe(originState.taskbarEdge);
+
+    triggerPlasmaRestore(undefined, { originAware: true });
+
+    expect(document.documentElement.classList.contains("app--restoring")).toBe(true);
+    expect(document.documentElement.getAttribute("data-plasma-origin-aware")).toBe("true");
+    expect(document.documentElement.style.getPropertyValue("--plasma-taskbar")).toBe(
+      originState.taskbarEdge,
+    );
   });
 });
