@@ -3235,6 +3235,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-shell",
  "thiserror 2.0.21",
+ "windows",
 ]
 
 [[package]]

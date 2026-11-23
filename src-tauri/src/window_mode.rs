@@ -264,3 +264,141 @@ mod tests {
         assert!(!is_inside_window(500.0, 1050.0, 1000.0, 700.0));
     }
 }
+
+/* -- Magnetic centring ------------------------------------------------------
+ * A floating window is put wherever it is dragged, and there is no way back to
+ * the middle except by eye. Windows offers the rectangle a drag is about to use
+ * before it uses it, so a drag that passes near the middle of the screen can be
+ * pulled onto it there and then: the window settles into place under the
+ * pointer, stays there if the button comes up, and lets go again as soon as the
+ * drag carries on somewhere else.
+ */
+
+#[cfg(windows)]
+pub use centre_snap::install_centre_snap;
+
+#[cfg(not(windows))]
+pub fn install_centre_snap<R: Runtime>(_window: &WebviewWindow<R>) {}
+
+#[cfg(windows)]
+mod centre_snap {
+    use tauri::{Runtime, WebviewWindow};
+    use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
+    use windows::Win32::UI::WindowsAndMessaging::WM_MOVING;
+
+    /// How near the middle, in device pixels, a drag has to pass for the window
+    /// to be taken the rest of the way. Small enough that every other resting
+    /// place is still reachable.
+    const SNAP_RADIUS: i32 = 90;
+    const SUBCLASS_ID: usize = 1;
+
+    /// Where `rect` would sit centred within `work`, if it is close enough to be
+    /// pulled there. None means the drag is heading somewhere else and the
+    /// window should go exactly where it is put.
+    pub(super) fn centred(rect: RECT, work: RECT) -> Option<RECT> {
+        let width = rect.right - rect.left;
+        let height = rect.bottom - rect.top;
+        let left = work.left + (work.right - work.left - width) / 2;
+        let top = work.top + (work.bottom - work.top - height) / 2;
+        let away = f64::from(rect.left - left).hypot(f64::from(rect.top - top));
+        if away > f64::from(SNAP_RADIUS) {
+            return None;
+        }
+        Some(RECT {
+            left,
+            top,
+            right: left + width,
+            bottom: top + height,
+        })
+    }
+
+    /// The usable area of the screen the window is on, so a taskbar does not
+    /// push the middle off centre.
+    fn work_area(hwnd: HWND) -> Option<RECT> {
+        let mut info = MONITORINFO {
+            cbSize: u32::try_from(size_of::<MONITORINFO>()).ok()?,
+            ..Default::default()
+        };
+        unsafe {
+            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            GetMonitorInfoW(monitor, &mut info).as_bool().then_some(info.rcWork)
+        }
+    }
+
+    unsafe extern "system" fn on_message(
+        hwnd: HWND,
+        message: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+        _id: usize,
+        _data: usize,
+    ) -> LRESULT {
+        if message == WM_MOVING {
+            let proposed = lparam.0 as *mut RECT;
+            if !proposed.is_null() {
+                // Safety: for WM_MOVING the system passes a writable RECT, and
+                // writing to it is how the drag is steered.
+                unsafe {
+                    if let Some(work) = work_area(hwnd) {
+                        if let Some(snapped) = centred(*proposed, work) {
+                            log::debug!("drag passed the middle; centring");
+                            *proposed = snapped;
+                        }
+                    }
+                }
+            }
+        }
+        unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+    }
+
+    pub fn install_centre_snap<R: Runtime>(window: &WebviewWindow<R>) {
+        let Ok(hwnd) = window.hwnd() else {
+            log::warn!("no window handle; centre snapping is off");
+            return;
+        };
+        // Safety: the subclass lives as long as the window it is attached to.
+        let installed = unsafe { SetWindowSubclass(hwnd, Some(on_message), SUBCLASS_ID, 0) };
+        if !installed.as_bool() {
+            log::warn!("could not watch window moves; centre snapping is off");
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn rect(left: i32, top: i32, width: i32, height: i32) -> RECT {
+            RECT { left, top, right: left + width, bottom: top + height }
+        }
+
+        /// 1920x1080 with a taskbar along the bottom.
+        fn work() -> RECT {
+            rect(0, 0, 1920, 1040)
+        }
+
+        #[test]
+        fn pulls_a_drag_passing_near_the_middle_onto_it() {
+            let centre = centred(rect(400, 160, 1200, 800), work()).unwrap();
+            assert_eq!((centre.left, centre.top), (360, 120));
+            // and it keeps the window the same size
+            assert_eq!((centre.right - centre.left, centre.bottom - centre.top), (1200, 800));
+        }
+
+        #[test]
+        fn leaves_a_drag_heading_elsewhere_alone() {
+            assert!(centred(rect(40, 120, 1200, 800), work()).is_none());
+            assert!(centred(rect(360, 900, 1200, 800), work()).is_none());
+        }
+
+        #[test]
+        fn centres_within_the_usable_area_of_the_screen_in_use() {
+            let second = rect(1920, 0, 1920, 1040);
+            let centre = centred(rect(2300, 140, 1200, 800), second).unwrap();
+            assert_eq!((centre.left, centre.top), (2280, 120));
+        }
+    }
+}

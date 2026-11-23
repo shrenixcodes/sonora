@@ -10,7 +10,7 @@
  */
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { currentMonitor, getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type WindowMode = "floating" | "full";
 
@@ -38,42 +38,6 @@ export function modeFor(state: { maximized: boolean; fullscreen: boolean }): Win
   return state.maximized || state.fullscreen ? "full" : "floating";
 }
 
-/* ── Snapping to the middle of the screen ─────────
- * The floating window is dragged around by hand and there is no other way to
- * put it back where it started. A drag that finishes near the middle of the
- * screen is pulled the rest of the way, so the window can always be recentred
- * without aiming for it.
- */
-
-/** How near the middle, in screen pixels, a drag has to finish to be pulled in. */
-const SNAP_RADIUS = 90;
-/** A drag reports a position for every step; wait for it to come to rest. */
-const SNAP_SETTLE_MS = 180;
-
-export interface Box {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/**
- * Where a window of this size would sit centred on this screen, or null when it
- * is already there or too far away to be pulled in.
- */
-export function snapTarget(
-  window_: Box,
-  screen: Box,
-  radius = SNAP_RADIUS,
-): { x: number; y: number } | null {
-  const x = Math.round(screen.x + (screen.width - window_.width) / 2);
-  const y = Math.round(screen.y + (screen.height - window_.height) / 2);
-  if (x === window_.x && y === window_.y) return null; // already centred
-  if (Math.hypot(window_.x - x, window_.y - y) > radius) return null;
-  return { x, y };
-}
-
-/** Bounds of the visible interactive parts, rounded outward to whole pixels. */
 export function collectRegions(root: ParentNode = document): HitRect[] {
   const regions: HitRect[] = [];
   for (const selector of INTERACTIVE_PARTS) {
@@ -121,30 +85,6 @@ function watchLayout(): void {
   new MutationObserver(scheduleRegionSync).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["open"] });
 }
 
-/** Pulls the floating window to the middle of the screen when a drag finishes near it. */
-function watchForRecentring(appWindow: ReturnType<typeof getCurrentWindow>): void {
-  let settle = 0;
-  const snap = async (): Promise<void> => {
-    if (currentMode !== "floating") return;
-    const screen = await currentMonitor();
-    if (!screen) return;
-    const [position, size] = await Promise.all([appWindow.outerPosition(), appWindow.outerSize()]);
-    const target = snapTarget(
-      { x: position.x, y: position.y, width: size.width, height: size.height },
-      { x: screen.position.x, y: screen.position.y, width: screen.size.width, height: screen.size.height },
-      Math.round(SNAP_RADIUS * screen.scaleFactor),
-    );
-    if (target) await appWindow.setPosition(new PhysicalPosition(target.x, target.y));
-  };
-
-  void appWindow.onMoved(() => {
-    window.clearTimeout(settle);
-    settle = window.setTimeout(() => {
-      snap().catch((err) => console.error("[window-mode] could not recentre the window:", err));
-    }, SNAP_SETTLE_MS);
-  });
-}
-
 export async function initWindowMode(): Promise<void> {
   if (!isTauri()) {
     // Browser development: preview the floating layout with ?window=floating
@@ -161,7 +101,6 @@ export async function initWindowMode(): Promise<void> {
 
   await refresh();
   watchLayout();
-  watchForRecentring(appWindow);
   await appWindow.onResized(() => {
     refresh().catch((err) => console.error("[window-mode] failed to read window state:", err));
   });

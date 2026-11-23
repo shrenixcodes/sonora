@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { collectRegions, modeFor, snapTarget } from "../src/lib/window-mode";
+import { collectRegions, modeFor } from "../src/lib/window-mode";
 
 describe("modeFor", () => {
   it("uses the floating layout only at normal size", () => {
@@ -41,31 +41,5 @@ describe("collectRegions", () => {
     root.appendChild(dialog);
 
     expect(collectRegions(root)).toEqual([{ x: 300, y: 200, width: 380, height: 300 }]);
-  });
-});
-
-describe("snapTarget", () => {
-  const screen = { x: 0, y: 0, width: 1920, height: 1080 };
-  const size = { width: 1200, height: 800 };
-  // Centred for this screen and window size.
-  const centre = { x: 360, y: 140 };
-
-  it("pulls a drag that finished near the middle the rest of the way", () => {
-    expect(snapTarget({ ...size, x: 400, y: 170 }, screen)).toEqual(centre);
-    expect(snapTarget({ ...size, x: 300, y: 100 }, screen)).toEqual(centre);
-  });
-
-  it("leaves a window parked somewhere else alone", () => {
-    expect(snapTarget({ ...size, x: 20, y: 140 }, screen)).toBeNull();
-    expect(snapTarget({ ...size, x: 360, y: 900 }, screen)).toBeNull();
-  });
-
-  it("reports nothing once the window is centred, so snapping cannot loop", () => {
-    expect(snapTarget({ ...size, ...centre }, screen)).toBeNull();
-  });
-
-  it("centres on the screen the window is on, not on the desktop origin", () => {
-    const second = { x: 1920, y: 0, width: 1920, height: 1080 };
-    expect(snapTarget({ ...size, x: 2300, y: 160 }, second)).toEqual({ x: 2280, y: 140 });
   });
 });

@@ -9,7 +9,6 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-set-fullscreen",
-    "core:window:allow-set-position",
     "shell:allow-open",
     "allow-get-app-info",
     "allow-get-platform-info",

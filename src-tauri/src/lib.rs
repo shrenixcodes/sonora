@@ -29,6 +29,9 @@ pub fn run() {
 
             ytm::create_window(app.handle())?;
             window_mode::start_click_through_sampler(app.handle());
+            if let Some(window) = app.get_webview_window("main") {
+                window_mode::install_centre_snap(&window);
+            }
             window_mode::show_main_window_if_frontend_stalls(app.handle());
 
             #[cfg(debug_assertions)]
