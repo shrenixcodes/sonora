@@ -113,6 +113,48 @@ describe("YouTube Music bridge script", () => {
     expect(video.pause).toHaveBeenCalledTimes(1);
   });
 
+  describe("media keys", () => {
+    type Handler = (() => void) | null;
+    let handlers: Map<string, Handler>;
+
+    beforeEach(() => {
+      handlers = new Map();
+      Object.defineProperty(navigator, "mediaSession", {
+        configurable: true,
+        value: { setActionHandler: (action: string, handler: Handler) => handlers.set(action, handler) },
+      });
+    });
+
+    afterEach(() => {
+      delete (navigator as unknown as { mediaSession?: unknown }).mediaSession;
+    });
+
+    it("hands next and previous to Sonora instead of the page", () => {
+      setupPage({ ad: false });
+      loadBridge();
+
+      handlers.get("nexttrack")!();
+      handlers.get("previoustrack")!();
+
+      expect(reports().map((s) => s.reason)).toEqual(expect.arrayContaining(["media-next", "media-previous"]));
+    });
+
+    it("keeps the page from taking skips back but passes other actions through", () => {
+      setupPage({ ad: false });
+      loadBridge();
+      const pageNext = vi.fn();
+      const pagePlay = vi.fn();
+
+      navigator.mediaSession.setActionHandler("nexttrack", pageNext);
+      navigator.mediaSession.setActionHandler("play", pagePlay);
+      handlers.get("nexttrack")!();
+
+      expect(pageNext).not.toHaveBeenCalled();
+      expect(reports().at(-1)?.reason).toBe("media-next");
+      expect(handlers.get("play")).toBe(pagePlay);
+    });
+  });
+
   it("does nothing outside music.youtube.com", () => {
     setupPage({ ad: false });
     delete win.__sonoraBridge;
