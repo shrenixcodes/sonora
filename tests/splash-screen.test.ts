@@ -26,6 +26,7 @@ describe("Sonora logo and launch splash", () => {
   it("plays the liquid launch with the Sonora logo and cleans up", async () => {
     expect(prepareLaunchSplash()).toBe(true);
     const done = showLaunchSplash();
+    await vi.advanceTimersByTimeAsync(450);
     expect(document.querySelector(".symbiote-flyer--logo")).not.toBeNull();
 
     vi.advanceTimersByTime(3000);
@@ -40,6 +41,7 @@ describe("Sonora logo and launch splash", () => {
     expect(document.querySelector(".symbiote-flyer")).toBeNull();
 
     void showLaunchSplash({ force: true });
+    await vi.advanceTimersByTimeAsync(450);
     expect(document.querySelector(".symbiote-flyer--logo")).not.toBeNull();
   });
 });

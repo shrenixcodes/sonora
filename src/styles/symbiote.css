@@ -110,9 +110,28 @@ html.symbiote-primed .sidebar,
 html.symbiote-primed .main,
 html.symbiote-primed .queue-panel,
 html.symbiote-primed .player,
+html.symbiote-primed .ambient-art,
 html.symbiote-primed #app::before {
   opacity: 0;
   transition: opacity 110ms ease-in;
+}
+
+/* While an entrance runs, glass blurs are switched off: every moving panel
+   would otherwise re-blur what is behind it on every frame. The panels are
+   nearly opaque, so the difference is hard to see. */
+html.symbiote-primed,
+html.app--restoring {
+  --glass-backdrop-thin: none;
+  --glass-backdrop: none;
+  --glass-backdrop-strong: none;
+  --glass-backdrop-deep: none;
+}
+
+/* Promote the pieces to their own layers before they move, so the first
+   frame of the entrance does not stall building them */
+html.symbiote-primed :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art),
+html.app--restoring :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art) {
+  will-change: transform, opacity;
 }
 
 /* Hover lifts would fight the entrance transforms */

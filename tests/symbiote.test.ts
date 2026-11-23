@@ -345,11 +345,12 @@ describe("symbiote launch", () => {
     expect(document.documentElement.classList.contains("symbiote-primed")).toBe(true);
 
     const done = playLaunchAnimation();
+    await vi.advanceTimersByTimeAsync(450);
     expect(document.documentElement.classList.contains("symbiote-primed")).toBe(false);
     expect(document.documentElement.dataset.symbiote).toBe("launch");
     expect(document.querySelector(".symbiote-flyer--logo svg")).not.toBeNull();
 
-    vi.advanceTimersByTime(SEQUENCE_MAX_MS + 100);
+    await vi.advanceTimersByTimeAsync(SEQUENCE_MAX_MS + 100);
     await done;
     expect(isSymbioteAnimating()).toBe(false);
     expect(document.querySelector(".symbiote-flyer")).toBeNull();
@@ -357,17 +358,19 @@ describe("symbiote launch", () => {
 
   it("plays once per launch unless forced", async () => {
     const first = playLaunchAnimation();
-    vi.advanceTimersByTime(SEQUENCE_MAX_MS + 100);
+    await vi.advanceTimersByTimeAsync(SEQUENCE_MAX_MS + 500);
     await first;
     expect(primeLaunch()).toBe(false);
     await playLaunchAnimation();
     expect(isSymbioteAnimating()).toBe(false);
     void playLaunchAnimation({ force: true });
+    await vi.advanceTimersByTimeAsync(450);
     expect(isSymbioteAnimating()).toBe(true);
   });
 
   it("skips to the finished interface on a click", async () => {
     const done = playLaunchAnimation();
+    await vi.advanceTimersByTimeAsync(450);
     window.dispatchEvent(new Event("pointerdown"));
     await done;
     expect(isSymbioteAnimating()).toBe(false);

@@ -975,6 +975,35 @@ function popPiece(scene: Scene, node: HTMLElement, rect: Rect, arrival: number, 
     ],
     { duration: 560, delay: arrival + 30, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" },
   );
+  // In the floating layout the page sits on a stage (#app::before plus the
+  // artwork behind it); it is part of the same piece and must not show early
+  if (isFloating() && node.matches(".main")) revealBackdrop(scene, arrival + 30, entry, distance);
+}
+
+function isFloating(): boolean {
+  return document.documentElement.dataset.window === "floating";
+}
+
+/**
+ * The backdrop: the stage and artwork in the floating layout (moving with the
+ * main panel), or the window-wide artwork glow in the full layout (fading in
+ * with the music, as the disc lands).
+ */
+function revealBackdrop(scene: Scene, at: number, entry: Point | null, distance = 0): void {
+  const app = document.getElementById("app");
+  const art = document.querySelector(".ambient-art");
+  const keyframes: Keyframe[] = entry
+    ? [
+        { opacity: 0, transform: `translate(${-entry.x * distance}px, ${-entry.y * distance}px) scale(0.94)` },
+        { opacity: 1, transform: `translate(${entry.x * 4}px, ${entry.y * 4}px) scale(1.006)`, offset: 0.6 },
+        { opacity: 1, transform: "none" },
+      ]
+    : [{ opacity: 0 }, { opacity: 1 }];
+  const timing: KeyframeAnimationOptions = entry
+    ? { duration: 560, delay: at, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" }
+    : { duration: 520, delay: at, easing: "ease-out" };
+  animate(scene, app, keyframes, { ...timing, pseudoElement: "::before" });
+  animate(scene, art, keyframes, timing);
 }
 
 /** The player bar spreads out from its album art, liquid racing along it. */
@@ -1138,6 +1167,7 @@ function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
 
   // 2. The player bar spreads out from where the disc lands
   if (player && playerRect) revealPlayer(scene, player, playerRect, land, landing, landsAt - 30, 0);
+  if (!isFloating()) revealBackdrop(scene, landsAt - 60, null);
 
   // 3. Then the panels: tendrils from the screen edges, in the screen's frame of reference
   const pieces = collectPieces();
@@ -1267,6 +1297,8 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
     revealPlayer(scene, player, playerRect, { x: landing.x + landing.width / 2, y: landing.y + landing.height / 2 }, landing, arrival - 30, 0);
   }
 
+  if (!isFloating()) revealBackdrop(scene, burst, null);
+
   // 5. The logo: in with the carrier, breathes in the pool, then flies to the sidebar brand
   const logo = makeFlyer("logo", logoSize);
   const legs: FlightLeg[] = [{ path: carrier, size0: 28, size1: logoSize, radius0: 0, radius1: 0, spin: -20 }];
@@ -1391,14 +1423,6 @@ function play(kind: "restore" | "launch", mode: RevealMode): Promise<void> {
   const geometry = currentGeometry();
   if (kind === "restore") buildRestore(scene, mode, geometry);
   else buildLaunch(scene, geometry);
-
-  // The ambient glow fades in under everything
-  animate(scene, document.getElementById("app"), [{ opacity: 0 }, { opacity: 1 }], {
-    duration: 700,
-    delay: 120,
-    easing: "ease-out",
-    pseudoElement: "::before",
-  });
 
   // Animations now hold everything hidden until its turn
   unprime();
@@ -1554,7 +1578,21 @@ export function playLaunchAnimation(options: { force?: boolean } = {}): Promise<
     return Promise.resolve();
   }
   launched = true;
-  return play("launch", "natural");
+  // Starting while the first page is still loading would stutter; give it a moment
+  return settle().then(() => play("launch", "natural"));
+}
+
+/** Resolves once fonts are in and two frames have gone by (at most ~400 ms). */
+function settle(): Promise<void> {
+  const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve();
+  const capped = Promise.race([fonts, new Promise((r) => setTimeout(r, 350))]);
+  return capped.then(
+    () =>
+      new Promise<void>((resolve) => {
+        if (typeof requestAnimationFrame !== "function") return resolve();
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
 }
 
 /** Resets internal state (tests). */
