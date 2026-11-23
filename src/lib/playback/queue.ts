@@ -63,6 +63,30 @@ export class PlayQueue {
     if (this.position < 0) this.position = 0;
   }
 
+  /** Inserts a track to play immediately after the current one. */
+  playNext(track: Track): void {
+    const existingIndex = this.tracks.findIndex((t) => t.id === track.id);
+    let trackIndex: number;
+    if (existingIndex !== -1) {
+      trackIndex = existingIndex;
+      const orderPos = this.order.indexOf(trackIndex);
+      if (orderPos > this.position) {
+        this.order.splice(orderPos, 1);
+      }
+    } else {
+      trackIndex = this.tracks.length;
+      this.tracks.push(track);
+    }
+    const insertAt = this.position >= 0 ? this.position + 1 : 0;
+    this.order.splice(insertAt, 0, trackIndex);
+    if (this.position < 0) this.position = 0;
+  }
+
+  /** Adds a track to the end of the queue. */
+  addToQueue(track: Track): void {
+    this.append([track]);
+  }
+
   /** Moves to a track already in the queue; returns false if it isn't there. */
   jumpTo(trackId: string): boolean {
     const at = this.order.findIndex((i) => this.tracks[i].id === trackId);

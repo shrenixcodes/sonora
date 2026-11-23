@@ -137,6 +137,27 @@ describe("PlayQueue shuffled", () => {
 
     expect(q.removeUpcoming(99)).toBe(false);
   });
+
+  it("inserts a track to play next immediately after the current playing track", () => {
+    const q = new PlayQueue();
+    q.set(tracks, tracks[0]); // current is 'a', upcoming is ['b', 'c', 'd', 'e']
+    q.playNext(track("z"));
+
+    expect(q.current?.id).toBe("a");
+    expect(ids(q.upcoming)).toEqual(["z", "b", "c", "d", "e"]);
+
+    // If an existing upcoming track is set to play next, it moves to the next position
+    q.playNext(track("d"));
+    expect(ids(q.upcoming)).toEqual(["d", "z", "b", "c", "e"]);
+  });
+
+  it("adds a track to the end of the queue", () => {
+    const q = new PlayQueue();
+    q.set([track("a"), track("b")], track("a"));
+    q.addToQueue(track("z"));
+
+    expect(ids(q.upcoming)).toEqual(["b", "z"]);
+  });
 });
 
 describe("createQueuePanel", () => {

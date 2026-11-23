@@ -231,6 +231,16 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     }
   }
 
+  playNext(track: Track): void {
+    this.queue.playNext(track);
+    this.emit("queueChange", this.queue.all);
+  }
+
+  addToQueue(track: Track): void {
+    this.queue.addToQueue(track);
+    this.emit("queueChange", this.queue.all);
+  }
+
   /* ── Bridge state ─────────────────────────────────────── */
 
   /** Applies a report from the YouTube Music page. Public for tests. */
@@ -247,6 +257,19 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       return;
     }
     this.state.isAd = report.ad;
+
+    if (report.reason === "ended" && !report.ad) {
+      if (this.state.repeat === "one") {
+        this.send({ action: "seek", value: 0 });
+        this.send({ action: "play" });
+      } else {
+        // A finished track advances straight away; nothing is waiting to settle.
+        const track = this.queue.next(this.state.repeat);
+        if (track) this.load(track);
+        else this.send({ action: "next" });
+      }
+      return;
+    }
 
     if (this.pendingId) {
       const isConfirmedCurrentTrack =
@@ -267,7 +290,26 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
         this.adoptTrack(report);
       }
     } else if (report.videoId && !report.ad && report.title && this.pageIsOnAnotherTrack(report)) {
-      this.adoptTrack(report);
+      if (this.state.repeat === "one") {
+        this.send({ action: "seek", value: 0 });
+        this.send({ action: "play" });
+        return;
+      }
+      const nextInQueue = this.queue.upcoming[0];
+      if (nextInQueue) {
+        if (report.videoId === nextInQueue.id) {
+          this.queue.next(this.state.repeat);
+          this.adoptTrack(report);
+        } else {
+          const track = this.queue.next(this.state.repeat);
+          if (track) {
+            this.load(track);
+            return;
+          }
+        }
+      } else {
+        this.adoptTrack(report);
+      }
     }
 
     if (this.reportCorrectsCurrentTrack(report)) {
@@ -279,19 +321,6 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
         artworkUrl: report.artworkUrl ?? current.artworkUrl,
         duration: report.duration > 0 ? Math.round(report.duration) : current.duration,
       });
-    }
-
-    if (report.reason === "ended" && !report.ad) {
-      if (this.state.repeat === "one") {
-        this.send({ action: "seek", value: 0 });
-        this.send({ action: "play" });
-      } else {
-        // A finished track advances straight away; nothing is waiting to settle.
-        const track = this.queue.next(this.state.repeat);
-        if (track) this.load(track);
-        else this.send({ action: "next" });
-      }
-      return;
     }
 
     if (!this.pendingId) {

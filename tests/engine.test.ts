@@ -126,6 +126,21 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     expect(engine.currentTrack).toMatchObject({ id: "zzzzzzzzzzz", title: "Radio pick", artist: "Someone" });
   });
 
+  it("plays the next track in Sonora's queue when the page moves on while tracks are upcoming", () => {
+    const { engine, sent } = setup();
+    engine.playTrack(list[0], list);
+    engine.handleBridgeState(report({ reason: "play", videoId: "aaaaaaaaaaa" }));
+
+    // Page finishes track and auto-advances to an unqueued radio track
+    engine.handleBridgeState(
+      report({ reason: "track", videoId: "zzzzzzzzzzz", title: "Radio pick", artist: "Someone", artworkUrl: "art.jpg" }),
+    );
+
+    // Instead of adopting the foreign radio pick, Sonora advances to list[1]
+    expect(engine.currentTrack?.id).toBe(list[1].id);
+    expect(sent.at(-1)).toEqual({ action: "load", value: list[1].id });
+  });
+
   it("follows the page when it plays a different track than the one asked for", () => {
     const { engine } = setup();
     engine.playTrack(list[0], list);
