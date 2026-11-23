@@ -160,6 +160,24 @@ export class Catalog {
     return this.fetchTrackList({ kind: "likedSongs" });
   }
 
+  /** Songs in the signed-in user's YouTube Music listening history. */
+  getHistory(): Promise<Track[]> {
+    return this.fetchTrackList({ kind: "history" });
+  }
+
+  /** Syncs a track like / remove-like to YouTube Music. */
+  async rateTrack(videoId: string, isLiked: boolean): Promise<void> {
+    try {
+      await this.fetch({
+        kind: "rate",
+        videoId,
+        rating: isLiked ? "LIKE" : "INDIFFERENT",
+      });
+    } catch (err) {
+      console.warn("[catalog] failed to sync rating to YouTube Music:", err);
+    }
+  }
+
   /** Playlists saved in the signed-in user's library. */
   async getLibraryPlaylists(): Promise<LibraryPlaylist[]> {
     return parseLibraryPlaylists(await this.fetch({ kind: "libraryPlaylists" }));

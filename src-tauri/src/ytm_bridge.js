@@ -214,9 +214,14 @@
         if (request.params) body.params = String(request.params);
       } else if (request.kind === "search") {
         endpoint = "search";
-        body = { query: String(request.query), params: SONGS_ONLY };
+        body = { query: String(request.query), params: request.params ? String(request.params) : SONGS_ONLY };
       } else if (request.kind === "likedSongs") {
         body = { browseId: "FEmusic_liked_videos" };
+      } else if (request.kind === "history") {
+        body = { browseId: "FEmusic_history" };
+      } else if (request.kind === "rate") {
+        endpoint = request.rating === "LIKE" ? "like/like" : "like/removelike";
+        body = { target: { videoId: String(request.videoId) } };
       } else if (request.kind === "libraryPlaylists") {
         body = { browseId: "FEmusic_liked_playlists" };
       } else if (request.kind === "libraryAlbums") {
@@ -289,6 +294,9 @@
           // whole YouTube Music app, which took seconds and dropped the audio.
           if (typeof value === "string") {
             lastLoadedVideoId = value;
+            try {
+              window.history.replaceState(null, "", "/watch?v=" + encodeURIComponent(value));
+            } catch {}
             if (p && typeof p.loadVideoById === "function") p.loadVideoById(value);
             else location.assign("/watch?v=" + encodeURIComponent(value));
           }

@@ -184,4 +184,31 @@ describe("Catalog", () => {
     expect(again.map((t) => t.id)).toEqual(["a", "b", "c"]);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+
+  it("fetches history from YouTube Music", async () => {
+    const row = (videoId: string) => ({
+      musicResponsiveListItemRenderer: {
+        flexColumns: [{ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: videoId }] } } }],
+        playlistItemData: { videoId },
+      },
+    });
+    const fetcher = vi.fn(async (r: CatalogRequest) => {
+      if (r.kind === "history") return { contents: [row("h1"), row("h2")] };
+      return {};
+    });
+    const catalog = new Catalog(fetcher);
+    const history = await catalog.getHistory();
+    expect(history.map((t) => t.id)).toEqual(["h1", "h2"]);
+  });
+
+  it("syncs track rating to YouTube Music", async () => {
+    const fetcher = vi.fn(async () => ({}));
+    const catalog = new Catalog(fetcher);
+
+    await catalog.rateTrack("song1", true);
+    expect(fetcher).toHaveBeenCalledWith({ kind: "rate", videoId: "song1", rating: "LIKE" }, expect.any(Number));
+
+    await catalog.rateTrack("song1", false);
+    expect(fetcher).toHaveBeenCalledWith({ kind: "rate", videoId: "song1", rating: "INDIFFERENT" }, expect.any(Number));
+  });
 });

@@ -192,15 +192,48 @@ function showLikedSongs(container: HTMLElement, remote: Track[] | null, notice?:
 }
 
 function renderHistory(container: HTMLElement): void {
-  const historyTracks = storage.getHistory();
+  if (!catalogAvailable()) {
+    showHistory(container, null);
+    return;
+  }
+  if (account.isSignedIn === false) {
+    showHistory(container, null, signInHint("listening history"));
+    return;
+  }
+
+  container.appendChild(
+    el("div", {
+      className: "page-header",
+      children: [
+        el("h1", { className: "page-header__title", text: "Listening History" }),
+        el("p", { className: "page-header__subtitle", text: "Loading your listening history…" }),
+      ],
+    }),
+  );
+  catalog
+    .getHistory()
+    .then((remote) => {
+      if (!container.isConnected) return;
+      container.replaceChildren();
+      showHistory(container, remote);
+    })
+    .catch((err) => {
+      if (!container.isConnected) return;
+      container.replaceChildren();
+      showHistory(container, null, libraryNotice(err, "listening history"));
+    });
+}
+
+function showHistory(container: HTMLElement, remote: Track[] | null, notice?: HTMLElement): void {
+  const historyTracks = dedupeById([...storage.getHistory(), ...(remote ?? [])]);
 
   const clearBtn = el("button", {
     className: "btn btn--secondary",
-    text: "Clear history",
+    text: "Clear local history",
     onClick: () => {
       storage.clearHistory();
-      container.innerHTML = "";
-      renderHistory(container);
+      container.replaceChildren();
+      showHistory(container, remote, notice);
     },
   });
 
@@ -210,7 +243,7 @@ function renderHistory(container: HTMLElement): void {
       el("h1", { className: "page-header__title", text: "Listening History" }),
       el("p", {
         className: "page-header__subtitle",
-        text: "Recent tracks you have played on Sonora",
+        text: "Your playback history across YouTube Music and Sonora",
       }),
       historyTracks.length > 0
         ? el("div", {
@@ -222,6 +255,7 @@ function renderHistory(container: HTMLElement): void {
   });
 
   container.appendChild(header);
+  if (notice) container.appendChild(notice);
 
   if (historyTracks.length === 0) {
     container.appendChild(

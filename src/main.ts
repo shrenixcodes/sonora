@@ -18,6 +18,7 @@ import { initWindowMode } from "@/lib/window-mode";
 import { discordRpc } from "@/lib/discord-rpc";
 import { searchQuery } from "@/lib/search-query";
 import { account } from "@/lib/ytm/account";
+import { catalog } from "@/lib/ytm/catalog";
 import { showSignInConfirmation } from "@/components/sign-in-confirm";
 
 // Views
@@ -108,6 +109,11 @@ function init(): void {
 
   // Confirm which Google account a sign-in from Settings ended up using
   account.on("signInComplete", showSignInConfirmation);
+
+  // Sync liked tracks to YouTube Music when liked in Sonora
+  storage.on("likeChange", ({ trackId, isLiked }) => {
+    catalog.rateTrack(trackId, isLiked);
+  });
 
   // Register desktop keyboard shortcuts
   setupGlobalShortcuts();
