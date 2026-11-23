@@ -61,6 +61,9 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   private lastReport = { time: 0, at: 0 };
   private ticker: number | null = null;
   private loadTimer: number | null = null;
+  /** The current track's lyrics and artwork colors, for a view opened mid-song. */
+  private lyrics: LyricsData | null = null;
+  private palette: ArtworkPalette | null = null;
   /** When the last skip was handled, and the load a run of them is still waiting to send. */
   private lastSkipAt = 0;
   private skipTimer: number | null = null;
@@ -83,6 +86,21 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   get currentQueue(): Track[] {
     return this.queue.all;
+  }
+
+  /**
+   * The current track's lyrics, or null while they are still being looked up.
+   * A view that opens part-way through a song has missed the change event that
+   * carried them, so it reads them from here instead of waiting for the next
+   * track.
+   */
+  get currentLyrics(): LyricsData | null {
+    return this.lyrics;
+  }
+
+  /** Colors drawn from the current artwork, for a view opened mid-song. */
+  get currentPalette(): ArtworkPalette | null {
+    return this.palette;
   }
 
   /** Tracks after the current one, in the order next() will play them. */
@@ -353,8 +371,20 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
    */
   private settleOn(track: Track): void {
     storage.addToHistory(track);
-    extractPalette(track.artworkUrl).then((palette) => this.emit("paletteChange", palette));
-    lyricsService.getLyrics(track).then((lyrics) => this.emit("lyricsChange", lyrics));
+    this.lyrics = null;
+    // Both arrive late. A reply for a track that has since been left behind
+    // would put the wrong words and the wrong colors on screen.
+    const stillCurrent = () => this.state.currentTrack?.id === track.id;
+    extractPalette(track.artworkUrl).then((palette) => {
+      if (!stillCurrent()) return;
+      this.palette = palette;
+      this.emit("paletteChange", palette);
+    });
+    lyricsService.getLyrics(track).then((lyrics) => {
+      if (!stillCurrent()) return;
+      this.lyrics = lyrics;
+      this.emit("lyricsChange", lyrics);
+    });
   }
 
   private send(command: YtmCommand): void {

@@ -4,7 +4,16 @@ import type { YtmCommand, YtmState } from "../src/lib/playback/ytm-bridge";
 import { storage } from "../src/lib/storage";
 
 // Keep tests offline: no lyrics requests, no image decoding.
-vi.mock("../src/lib/lyrics/providers", () => ({ lyricsService: { getLyrics: async () => null } }));
+vi.mock("../src/lib/lyrics/providers", () => ({
+  lyricsService: {
+    getLyrics: async (t: Track) => ({
+      trackId: t.id,
+      isSynced: true,
+      lines: [{ timeMs: 0, text: "first line" }],
+      plainLyrics: "first line",
+    }),
+  },
+}));
 vi.mock("../src/lib/visuals/color-extractor", () => ({ extractPalette: () => new Promise(() => {}) }));
 
 const { PlaybackEngine } = await import("../src/lib/playback/engine");
@@ -225,6 +234,23 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("holds the current track's lyrics for a view opened mid-song", async () => {
+    const { engine } = setup();
+    engine.playTrack(list[0], list);
+    // Now Playing can be opened long after the lyrics event went out.
+    await vi.waitFor(() => expect(engine.currentLyrics?.trackId).toBe("aaaaaaaaaaa"));
+  });
+
+  it("drops a lyrics reply for a track the user has already skipped past", async () => {
+    const { engine } = setup();
+    engine.playTrack(list[0], list);
+    await vi.waitFor(() => expect(engine.currentLyrics?.trackId).toBe("aaaaaaaaaaa"));
+
+    engine.playTrack(list[1], list);
+    expect(engine.currentLyrics).toBeNull();
+    await vi.waitFor(() => expect(engine.currentLyrics?.trackId).toBe("bbbbbbbbbbb"));
   });
 
   it("explains that playback needs the desktop app", () => {

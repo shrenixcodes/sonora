@@ -42,6 +42,14 @@ export function renderNowPlaying(container: HTMLElement): void {
   const lyricsContainer = el("div", { className: "now-playing__lyrics" });
   lyricsController.bindContainer(lyricsContainer);
 
+  // Opening part-way through a song misses the events that carried the lyrics
+  // and the artwork colors, so take what the engine already holds and line the
+  // words up with where the song is now.
+  lyricsController.setLyrics(playerEngine.currentLyrics);
+  lyricsController.updateTime(playerEngine.currentState.currentTime);
+  const openingPalette = playerEngine.currentPalette;
+  if (openingPalette) visualEngine.setPalette(openingPalette);
+
   // ── Top Bar Controls ────────────────────────────────────
   const closeBtn = el("button", {
     className: "now-playing__close-btn",
