@@ -104,6 +104,34 @@ export class PlayQueue {
     return this.current;
   }
 
+  /** Reorders an item within the upcoming section of the queue. */
+  moveUpcoming(fromIndex: number, toIndex: number): boolean {
+    const start = this.position + 1;
+    const from = start + fromIndex;
+    const to = start + toIndex;
+    if (from < start || from >= this.order.length || to < start || to >= this.order.length || from === to) {
+      return false;
+    }
+    const [item] = this.order.splice(from, 1);
+    this.order.splice(to, 0, item);
+    return true;
+  }
+
+  /** Clears all tracks queued after the current playing song. */
+  clearUpcoming(): void {
+    if (this.position + 1 < this.order.length) {
+      this.order = this.order.slice(0, this.position + 1);
+    }
+  }
+
+  /** Removes a single item from the upcoming queue. */
+  removeUpcoming(index: number): boolean {
+    const target = this.position + 1 + index;
+    if (target < this.position + 1 || target >= this.order.length) return false;
+    this.order.splice(target, 1);
+    return true;
+  }
+
   /** Builds the play order with `anchor` (an index into tracks) first, or -1 for none. */
   private rebuildOrder(anchor: number): void {
     const indices = this.tracks.map((_, i) => i);

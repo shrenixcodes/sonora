@@ -6,6 +6,7 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { icon } from "@/icons";
 import { EventEmitter } from "@/lib/events";
 import { playerEngine } from "@/lib/playback/engine";
 import type { Track } from "@/types/music";
@@ -14,6 +15,8 @@ const STORAGE_KEY = "sonora-queue-panel";
 const OPEN_CLASS = "app--queue-open";
 /** Below this window width the panel starts closed unless the user opened it. */
 const AUTO_OPEN_MIN_WIDTH = 1200;
+
+let dragSourceIndex: number | null = null;
 
 class QueuePanelState extends EventEmitter<{ change: boolean }> {
   private open = false;
@@ -87,38 +90,141 @@ export function createQueuePanel(): HTMLElement {
 }
 
 function createGroup(label: string, tracks: Track[], isCurrent: boolean): HTMLElement {
+  const headerChildren: HTMLElement[] = [
+    el("h3", { className: "queue-panel__label", text: label }),
+  ];
+
+  if (!isCurrent && tracks.length > 0) {
+    headerChildren.push(
+      el("button", {
+        className: "queue-panel__clear-btn",
+        text: "Clear",
+        attrs: { type: "button", "aria-label": "Clear upcoming queue", title: "Clear upcoming queue" },
+        onClick: () => playerEngine.clearQueue(),
+      }),
+    );
+  }
+
+  const header = el("div", {
+    className: "queue-panel__group-header",
+    children: headerChildren,
+  });
+
   return el("section", {
     className: "queue-panel__group",
     attrs: { "aria-label": label },
     children: [
-      el("h3", { className: "queue-panel__label", text: label }),
+      header,
       el("ol", {
         className: "queue-panel__tracks",
-        children: tracks.map((track) => el("li", { children: [createRow(track, isCurrent)] })),
+        children: tracks.map((track, idx) => {
+          const item = el("li", {
+            className: "queue-item",
+            children: [createRow(track, isCurrent, idx)],
+          });
+          if (!isCurrent) {
+            setupDragHandlers(item, idx);
+          }
+          return item;
+        }),
       }),
     ],
   });
 }
 
-function createRow(track: Track, isCurrent: boolean): HTMLElement {
+function setupDragHandlers(item: HTMLElement, index: number): void {
+  item.setAttribute("draggable", "true");
+
+  item.addEventListener("dragstart", (e) => {
+    dragSourceIndex = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(index));
+    }
+    item.classList.add("is-dragging");
+  });
+
+  item.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  });
+
+  item.addEventListener("dragenter", (e) => {
+    e.preventDefault();
+    item.classList.add("is-drag-over");
+  });
+
+  item.addEventListener("dragleave", () => {
+    item.classList.remove("is-drag-over");
+  });
+
+  item.addEventListener("drop", (e) => {
+    e.preventDefault();
+    item.classList.remove("is-drag-over");
+    if (dragSourceIndex !== null && dragSourceIndex !== index) {
+      playerEngine.moveUpcoming(dragSourceIndex, index);
+    }
+    dragSourceIndex = null;
+  });
+
+  item.addEventListener("dragend", () => {
+    item.classList.remove("is-dragging");
+    document.querySelectorAll(".queue-item.is-drag-over").forEach((el) => el.classList.remove("is-drag-over"));
+    dragSourceIndex = null;
+  });
+}
+
+function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HTMLElement {
+  const children: HTMLElement[] = [];
+
+  if (!isCurrent && upcomingIndex !== undefined) {
+    children.push(
+      el("span", {
+        className: "queue-row__grip",
+        html: icon("grip"),
+        attrs: { "aria-hidden": "true", title: "Drag to reorder" },
+      }),
+    );
+  }
+
+  children.push(
+    el("img", { className: "queue-row__art", attrs: { src: track.artworkUrl, alt: "", loading: "lazy" } }),
+    el("span", {
+      className: "queue-row__meta",
+      children: [
+        el("span", { className: "queue-row__title truncate", text: track.title }),
+        el("span", { className: "queue-row__artist truncate", text: track.artist }),
+      ],
+    }),
+    el("span", { className: "queue-row__duration", text: track.duration ? formatTime(track.duration) : "" }),
+  );
+
+  if (!isCurrent && upcomingIndex !== undefined) {
+    children.push(
+      el("button", {
+        className: "queue-row__remove-btn",
+        html: icon("close"),
+        attrs: {
+          type: "button",
+          "aria-label": `Remove ${track.title} from queue`,
+          title: "Remove from queue",
+        },
+        onClick: (e) => {
+          e.stopPropagation();
+          playerEngine.removeUpcoming(upcomingIndex);
+        },
+      }),
+    );
+  }
+
   return el("button", {
-    className: `queue-row${isCurrent ? " is-playing" : ""}`,
+    className: `queue-row${isCurrent ? " is-playing" : " queue-row--upcoming"}`,
     attrs: {
       type: "button",
       "aria-label": isCurrent ? `Now playing: ${track.title} by ${track.artist}` : `Play ${track.title} by ${track.artist}`,
       ...(isCurrent ? { "aria-current": "true" } : {}),
     },
-    children: [
-      el("img", { className: "queue-row__art", attrs: { src: track.artworkUrl, alt: "", loading: "lazy" } }),
-      el("span", {
-        className: "queue-row__meta",
-        children: [
-          el("span", { className: "queue-row__title truncate", text: track.title }),
-          el("span", { className: "queue-row__artist truncate", text: track.artist }),
-        ],
-      }),
-      el("span", { className: "queue-row__duration", text: track.duration ? formatTime(track.duration) : "" }),
-    ],
+    children,
     // Restarting the same queue from this track keeps next/previous in order.
     onClick: () => {
       if (!isCurrent) playerEngine.playTrack(track, playerEngine.currentQueue);

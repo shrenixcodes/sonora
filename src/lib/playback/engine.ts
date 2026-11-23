@@ -214,6 +214,23 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.emit("stateChange", this.currentState);
   }
 
+  moveUpcoming(fromIndex: number, toIndex: number): void {
+    if (this.queue.moveUpcoming(fromIndex, toIndex)) {
+      this.emit("queueChange", this.queue.all);
+    }
+  }
+
+  clearQueue(): void {
+    this.queue.clearUpcoming();
+    this.emit("queueChange", this.queue.all);
+  }
+
+  removeUpcoming(index: number): void {
+    if (this.queue.removeUpcoming(index)) {
+      this.emit("queueChange", this.queue.all);
+    }
+  }
+
   /* ── Bridge state ─────────────────────────────────────── */
 
   /** Applies a report from the YouTube Music page. Public for tests. */

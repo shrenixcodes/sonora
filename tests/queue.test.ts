@@ -94,4 +94,46 @@ describe("PlayQueue shuffled", () => {
     expect(ids(q.all)).toEqual(["a", "b", "c", "d"]);
     expect(ids(q.upcoming)).toEqual(["b", "c", "d"]);
   });
+
+  it("reorders upcoming tracks without affecting current playing track", () => {
+    const q = new PlayQueue();
+    q.set(tracks, tracks[0]);
+    expect(ids(q.upcoming)).toEqual(["b", "c", "d", "e"]);
+
+    // Move 'e' (index 3) to index 0 -> should become ['e', 'b', 'c', 'd']
+    expect(q.moveUpcoming(3, 0)).toBe(true);
+    expect(q.current?.id).toBe("a");
+    expect(ids(q.upcoming)).toEqual(["e", "b", "c", "d"]);
+
+    // Move 'b' (index 1) to index 2 -> should become ['e', 'c', 'b', 'd']
+    expect(q.moveUpcoming(1, 2)).toBe(true);
+    expect(ids(q.upcoming)).toEqual(["e", "c", "b", "d"]);
+
+    // Invalid bounds return false
+    expect(q.moveUpcoming(-1, 0)).toBe(false);
+    expect(q.moveUpcoming(0, 99)).toBe(false);
+    expect(q.moveUpcoming(1, 1)).toBe(false);
+  });
+
+  it("clears upcoming queue while preserving current track", () => {
+    const q = new PlayQueue();
+    q.set(tracks, tracks[1]);
+    expect(q.current?.id).toBe("b");
+    expect(ids(q.upcoming)).toEqual(["c", "d", "e"]);
+
+    q.clearUpcoming();
+    expect(q.current?.id).toBe("b");
+    expect(q.upcoming).toHaveLength(0);
+  });
+
+  it("removes a single track from the upcoming queue", () => {
+    const q = new PlayQueue();
+    q.set(tracks, tracks[0]);
+    expect(ids(q.upcoming)).toEqual(["b", "c", "d", "e"]);
+
+    expect(q.removeUpcoming(1)).toBe(true); // removes 'c'
+    expect(ids(q.upcoming)).toEqual(["b", "d", "e"]);
+
+    expect(q.removeUpcoming(99)).toBe(false);
+  });
 });
