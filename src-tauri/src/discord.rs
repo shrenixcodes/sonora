@@ -1,5 +1,6 @@
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient, activity};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -78,13 +79,43 @@ impl Default for DiscordRpcState {
     }
 }
 
-fn sanitize_text<'a>(s: &'a str, fallback: &'a str) -> &'a str {
+/// Discord rejects the whole activity when any text is longer than this.
+const MAX_TEXT_CHARS: usize = 128;
+
+/// Discord rejects the whole activity when an image URL is longer than this.
+const MAX_IMAGE_URL_LEN: usize = 256;
+
+/// Fits text to Discord's 2–128 character rule: too short falls back, too
+/// long is cut with an ellipsis. Discord counts UTF-16 units, as JavaScript
+/// does, so an emoji takes two.
+fn sanitize_text<'a>(s: &'a str, fallback: &'a str) -> Cow<'a, str> {
     let trimmed = s.trim();
-    if trimmed.chars().count() >= 2 {
-        trimmed
-    } else {
-        fallback
+    if trimmed.chars().count() < 2 {
+        return Cow::Borrowed(fallback);
     }
+    if trimmed.encode_utf16().count() <= MAX_TEXT_CHARS {
+        return Cow::Borrowed(trimmed);
+    }
+    let mut cut = String::new();
+    let mut used = 0;
+    for c in trimmed.chars() {
+        // Leave one unit for the ellipsis.
+        if used + c.len_utf16() > MAX_TEXT_CHARS - 1 {
+            break;
+        }
+        used += c.len_utf16();
+        cut.push(c);
+    }
+    cut.push('…');
+    Cow::Owned(cut)
+}
+
+/// Artwork Discord will accept; anything else is left off so the rest of the
+/// activity still shows.
+fn usable_artwork(url: &str) -> Option<&str> {
+    let url = url.trim();
+    let is_web = url.starts_with("https://") || url.starts_with("http://");
+    (is_web && url.len() <= MAX_IMAGE_URL_LEN).then_some(url)
 }
 
 fn unix_now() -> i64 {
@@ -137,12 +168,7 @@ impl Presence {
             payload.album.as_deref().unwrap_or(""),
             "Sonora",
         ));
-        if let Some(art) = payload
-            .artwork_url
-            .as_deref()
-            .map(str::trim)
-            .filter(|art| !art.is_empty())
-        {
+        if let Some(art) = payload.artwork_url.as_deref().and_then(usable_artwork) {
             assets = assets.large_image(art);
         }
         assets = if payload.is_playing {
@@ -285,6 +311,35 @@ mod tests {
         assert_eq!(sanitize_text("A", "Fallback"), "Fallback");
         assert_eq!(sanitize_text("Starboy", "Fallback"), "Starboy");
         assert_eq!(sanitize_text(" 4U ", "Fallback"), "4U");
+    }
+
+    #[test]
+    fn long_text_is_cut_to_discord_limit() {
+        let long = "é".repeat(200);
+        let text = sanitize_text(&long, "Fallback");
+        assert_eq!(text.encode_utf16().count(), MAX_TEXT_CHARS);
+        assert!(text.ends_with('…'));
+
+        // Emoji take two UTF-16 units each and are never split.
+        let emoji = "🎵".repeat(100);
+        let text = sanitize_text(&emoji, "Fallback");
+        assert!(text.encode_utf16().count() <= MAX_TEXT_CHARS);
+        assert_eq!(text.chars().filter(|&c| c == '🎵').count(), 63);
+
+        let exact = "a".repeat(MAX_TEXT_CHARS);
+        assert_eq!(sanitize_text(&exact, "Fallback"), exact.as_str());
+    }
+
+    #[test]
+    fn artwork_must_be_a_short_web_url() {
+        assert_eq!(
+            usable_artwork(" https://lh3.googleusercontent.com/abc=w544-h544 "),
+            Some("https://lh3.googleusercontent.com/abc=w544-h544")
+        );
+        assert_eq!(usable_artwork(""), None);
+        assert_eq!(usable_artwork("/artwork-placeholder.svg"), None);
+        let long = format!("https://example.com/{}", "a".repeat(MAX_IMAGE_URL_LEN));
+        assert_eq!(usable_artwork(&long), None);
     }
 
     #[test]
