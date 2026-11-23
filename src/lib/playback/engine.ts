@@ -227,15 +227,15 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
         // Confirmed, even if an ad plays first: the page URL already names our track.
         this.pendingId = null;
         this.clearLoadTimer();
-        // Loading reloads the page, which falls back to its own saved volume.
+        // A load can leave the page on its own saved volume; put ours back.
         this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume });
-      } else if (
-        !report.ad &&
-        !this.pendingId &&
-        report.videoId !== this.state.currentTrack?.id &&
-        report.title
-      ) {
-        // The page moved on by itself (its radio, or media keys): follow it.
+      } else if (!report.ad && report.title && this.pageIsOnAnotherTrack(report)) {
+        // The page is playing something else: its own radio, a media key, or a
+        // song it chose over the one we asked for. Waiting for an id that is
+        // never coming would freeze the interface on the wrong track, with the
+        // wrong lyrics under the seek bar, while the music played on.
+        this.pendingId = null;
+        this.clearLoadTimer();
         this.adoptTrack(report);
       }
     }
@@ -273,6 +273,17 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       else this.startTicker();
     }
     this.emit("stateChange", this.currentState);
+  }
+
+  /**
+   * True when a report names a track that is neither the one showing nor the
+   * one being loaded. While a load is outstanding only a "track" report counts,
+   * since that is the page saying it finished loading something; anything else
+   * could still be describing the song that was playing before.
+   */
+  private pageIsOnAnotherTrack(report: YtmState): boolean {
+    if (report.videoId === this.state.currentTrack?.id) return false;
+    return this.pendingId === null || report.reason === "track";
   }
 
   /**

@@ -104,6 +104,29 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     expect(engine.currentTrack).toMatchObject({ id: "zzzzzzzzzzz", title: "Radio pick", artist: "Someone" });
   });
 
+  it("follows the page when it plays a different track than the one asked for", () => {
+    const { engine } = setup();
+    engine.playTrack(list[0], list);
+    expect(engine.currentState.status).toBe("loading");
+
+    // Seen live: YouTube Music can put on a song of its own instead of ours.
+    engine.handleBridgeState(
+      report({
+        reason: "track",
+        videoId: "zzzzzzzzzzz",
+        title: "Something else",
+        artist: "Someone",
+        currentTime: 12,
+      }),
+    );
+
+    // Waiting for an id that is never coming would freeze the interface on the
+    // wrong song, with the wrong lyrics, while the music played on.
+    expect(engine.currentTrack?.id).toBe("zzzzzzzzzzz");
+    expect(engine.currentState.status).toBe("playing");
+    expect(engine.currentState.currentTime).toBe(12);
+  });
+
   it("plays in the shuffled order that Up next shows", () => {
     const { engine, sent } = setup();
     engine.playTrack(list[0], list);
