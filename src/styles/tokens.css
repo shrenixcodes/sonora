@@ -159,6 +159,11 @@
                 inset 0 0 20px 0 rgba(255, 255, 255, 0.02),
                 inset 0 -1px 1px 0 rgba(0, 0, 0, 0.28);
 
+  /* Elevation — layered shadows (tight contact + soft ambient) for depth. */
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.20), 0 4px 10px rgba(0, 0, 0, 0.22);
+  --elevation-2: 0 2px 6px rgba(0, 0, 0, 0.26), 0 10px 24px rgba(0, 0, 0, 0.30);
+  --elevation-3: 0 6px 14px rgba(0, 0, 0, 0.30), 0 18px 44px rgba(0, 0, 0, 0.42);
+
   color-scheme: dark;
 }
 
@@ -201,6 +206,11 @@
   --glass-edge: inset 0 1px 1px 0 rgba(255, 255, 255, 0.85),
                 inset 0 0 20px 0 rgba(255, 255, 255, 0.06),
                 inset 0 -1px 1px 0 rgba(0, 0, 0, 0.06);
+
+  /* Elevation — softer in light so panels lift without muddy shadows. */
+  --elevation-1: 0 1px 2px rgba(31, 41, 20, 0.08), 0 3px 8px rgba(31, 41, 20, 0.08);
+  --elevation-2: 0 2px 6px rgba(31, 41, 20, 0.10), 0 8px 20px rgba(31, 41, 20, 0.12);
+  --elevation-3: 0 6px 14px rgba(31, 41, 20, 0.12), 0 16px 36px rgba(31, 41, 20, 0.18);
 
   color-scheme: light;
 }
