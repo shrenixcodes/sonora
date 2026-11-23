@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PlayQueue } from "../src/lib/playback/queue";
+import { createQueuePanel, queuePanel } from "../src/components/queue-panel";
 import type { Track } from "../src/types/music";
 
 const track = (id: string): Track => ({ id, title: id, artist: "A", duration: 100, artworkUrl: "" });
@@ -137,3 +138,17 @@ describe("PlayQueue shuffled", () => {
     expect(q.removeUpcoming(99)).toBe(false);
   });
 });
+
+describe("createQueuePanel", () => {
+  it("renders a close button in the header that toggles the queue panel state", () => {
+    const panel = createQueuePanel();
+    const closeBtn = panel.querySelector<HTMLButtonElement>(".queue-panel__close-btn");
+    expect(closeBtn).not.toBeNull();
+    expect(closeBtn?.getAttribute("aria-label")).toBe("Close Up next");
+
+    const initialState = queuePanel.isOpen;
+    closeBtn?.click();
+    expect(queuePanel.isOpen).toBe(!initialState);
+  });
+});
+

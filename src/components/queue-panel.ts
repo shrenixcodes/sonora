@@ -49,13 +49,30 @@ export function createQueuePanel(): HTMLElement {
   const list = el("div", { className: "queue-panel__list" });
   const count = el("span", { className: "queue-panel__count" });
 
+  const closeBtn = el("button", {
+    className: "queue-panel__close-btn",
+    attrs: {
+      type: "button",
+      "aria-label": "Close Up next",
+      title: "Close Up next",
+    },
+    html: icon("close"),
+    onClick: () => queuePanel.toggle(),
+  });
+
   const panel = el("aside", {
     className: "queue-panel",
     attrs: { "aria-label": "Up next" },
     children: [
       el("div", {
         className: "queue-panel__header",
-        children: [el("h2", { className: "queue-panel__title", text: "Up next" }), count],
+        children: [
+          el("div", {
+            className: "queue-panel__header-title",
+            children: [el("h2", { className: "queue-panel__title", text: "Up next" }), count],
+          }),
+          closeBtn,
+        ],
       }),
       list,
     ],

@@ -53,12 +53,12 @@ html[data-window="floating"] #app.app--queue-open {
     ".       player   player";
 }
 
-/* ── Stage: one surface behind the page and "Up next" ──── */
+/* ── Stage: floating surface behind the central page ────── */
 
 html[data-window="floating"] #app::before {
   inset: 0;
-  grid-row: 2 / 3; /* explicit end: "auto" would mean the container edge here */
-  grid-column: 2 / -1;
+  grid-row: 2 / 3;
+  grid-column: 2 / 3;
   border-radius: var(--stage-radius);
   border: 1px solid var(--color-panel-border);
   box-shadow: var(--glass-edge), var(--float-stage-shadow);
@@ -77,11 +77,11 @@ html[data-window="floating"] #app::before {
   backdrop-filter: var(--glass-backdrop-deep);
 }
 
-/* In the floating layout the artwork fills only the stage. */
+/* In the floating layout the artwork fills only the central stage. */
 html[data-window="floating"] .ambient-art {
   z-index: -1;
   grid-row: 2 / 3;
-  grid-column: 2 / -1;
+  grid-column: 2 / 3;
   border-radius: var(--stage-radius);
   overflow: hidden;
   contain: paint;
@@ -96,19 +96,34 @@ html[data-window="floating"] .ambient-art::after {
   background: color-mix(in oklab, var(--color-bg) 38%, transparent);
 }
 
-html[data-window="floating"] .main,
-html[data-window="floating"] .queue-panel {
+html[data-window="floating"] .main {
   background: transparent;
   border: 0;
   box-shadow: none;
   border-radius: var(--stage-radius);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-/* Close the gap so the stage reads (and clicks) as one surface. */
+/* The queue panel is a separate levitating curved pane */
 html[data-window="floating"] .queue-panel {
-  margin-left: calc(var(--float-gap) * -1);
-  border-left: 1px solid var(--color-panel-border);
-  border-radius: 0 var(--stage-radius) var(--stage-radius) 0;
+  grid-row: 2 / 3;
+  grid-column: 3 / 4;
+  margin-left: 0;
+  border-radius: var(--stage-radius);
+  border: 1px solid var(--color-panel-border);
+  box-shadow: var(--glass-edge), var(--float-stage-shadow);
+  background:
+    var(--glass-sheen),
+    linear-gradient(var(--color-panel), var(--color-panel)),
+    radial-gradient(75% 70% at 85% 12%,
+      color-mix(in oklab, var(--ambience-2) var(--ambience-strength), transparent), transparent 70%),
+    radial-gradient(65% 65% at 20% 90%,
+      color-mix(in oklab, var(--ambience-1) var(--ambience-strength), transparent), transparent 70%),
+    color-mix(in oklab, var(--color-bg) 85%, transparent);
+  -webkit-backdrop-filter: var(--glass-backdrop-deep);
+  backdrop-filter: var(--glass-backdrop-deep);
+  overflow: hidden;
 }
 
 /* ── Floating pieces ─────────────────────────────────────── */
@@ -247,13 +262,13 @@ html[data-window="floating"] .player__progress {
 
 html[data-window="floating"] .shelf {
   grid-auto-flow: row;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   overflow-x: visible;
   scroll-snap-type: none;
   margin: 0;
   padding-inline: 0;
   padding-bottom: 0;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 html[data-window="floating"] .shelf .shelf-card {
