@@ -103,6 +103,16 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.emit("queueChange", this.queue.all);
   }
 
+  /**
+   * Adds the rest of a list that started playing before it finished loading.
+   * Ignored if the user has since moved on to something else.
+   */
+  extendQueue(listStart: Track, more: Track[]): void {
+    if (this.queue.all[0]?.id !== listStart.id) return;
+    this.queue.append(more);
+    this.emit("queueChange", this.queue.all);
+  }
+
   togglePlay(): void {
     if (!this.state.currentTrack) {
       const first = this.queue.current ?? this.queue.all[0];
@@ -159,7 +169,12 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   toggleMute(): void {
     // Muting sets the page's volume to zero and keeps the chosen level to restore.
     this.state.isMuted = !this.state.isMuted;
-    this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume || 0.8 });
+    if (!this.state.isMuted && this.state.volume === 0) {
+      this.state.volume = 0.8;
+      storage.saveSettings({ volume: 0.8 });
+    }
+    const target = this.state.isMuted ? 0 : this.state.volume;
+    this.send({ action: "volume", value: target });
     this.emit("stateChange", this.currentState);
   }
 
@@ -180,6 +195,8 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   /** Applies a report from the YouTube Music page. Public for tests. */
   handleBridgeState(report: YtmState): void {
+    // Sign-in status only; it says nothing about playback.
+    if (report.reason === "account") return;
     this.state.isAd = report.ad;
 
     if (report.videoId) {

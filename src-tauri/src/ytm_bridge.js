@@ -6,6 +6,7 @@
 
   const TIME_REPORT_INTERVAL_MS = 1000;
   const VIDEO_LOOKUP_INTERVAL_MS = 500;
+  const ACCOUNT_LOOKUP_ATTEMPTS = 60;
   // The page updates mediaSession metadata shortly after the track switches.
   const METADATA_SETTLE_MS = 600;
 
@@ -76,6 +77,18 @@
     }
   }, VIDEO_LOOKUP_INTERVAL_MS);
 
+  // The <video> element may not exist until something plays, so the sign-in
+  // state is reported on its own as soon as the page knows it. Without this,
+  // a finished sign-in can go unnoticed and the window never closes.
+  let accountChecks = 0;
+  const accountLookup = setInterval(() => {
+    const loggedIn = window.ytcfg && window.ytcfg.get && window.ytcfg.get("LOGGED_IN");
+    if (loggedIn !== undefined || ++accountChecks >= ACCOUNT_LOOKUP_ATTEMPTS) {
+      clearInterval(accountLookup);
+      if (loggedIn !== undefined) send("account");
+    }
+  }, VIDEO_LOOKUP_INTERVAL_MS);
+
   const clickButton = (selector) => {
     const button = document.querySelector(selector);
     if (button) button.click();
@@ -114,14 +127,40 @@
       const context = window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_CONTEXT");
       if (!context) return reply(false, "not-ready");
 
-      let endpoint;
+      let endpoint = "browse";
+      let query = "";
       let body;
       if (request.kind === "home") {
-        endpoint = "browse";
         body = { browseId: "FEmusic_home" };
+        if (request.params) body.params = String(request.params);
       } else if (request.kind === "search") {
         endpoint = "search";
         body = { query: String(request.query), params: SONGS_ONLY };
+      } else if (request.kind === "likedSongs") {
+        body = { browseId: "FEmusic_liked_videos" };
+      } else if (request.kind === "libraryPlaylists") {
+        body = { browseId: "FEmusic_liked_playlists" };
+      } else if (request.kind === "libraryAlbums") {
+        body = { browseId: "FEmusic_liked_albums" };
+      } else if (request.kind === "libraryArtists") {
+        body = { browseId: "FEmusic_library_corpus_track_artists" };
+      } else if (request.kind === "explore") {
+        body = { browseId: "FEmusic_explore" };
+      } else if (request.kind === "accountInfo") {
+        endpoint = "account/account_menu";
+        body = {};
+      } else if (request.kind === "playlist") {
+        const id = String(request.id);
+        body = { browseId: id.startsWith("VL") ? id : "VL" + id };
+      } else if (request.kind === "watchPlaylist") {
+        // Mixes made for the user have no playlist page; their songs come from a watch queue.
+        endpoint = "next";
+        body = { playlistId: String(request.id), enablePersistentPlaylistPanel: true, isAudioOnly: true };
+      } else if (request.kind === "continuation") {
+        // Older list pages read the token from the URL, newer ones from the body.
+        const token = encodeURIComponent(decodeURIComponent(String(request.token)));
+        query = "&ctoken=" + token + "&continuation=" + token + "&type=next";
+        body = { continuation: decodeURIComponent(String(request.token)) };
       } else {
         return reply(false, "unknown-request");
       }
@@ -130,7 +169,7 @@
       const auth = await authorization();
       if (auth) headers.Authorization = auth;
 
-      const response = await fetch("/youtubei/v1/" + endpoint + "?prettyPrint=false", {
+      const response = await fetch("/youtubei/v1/" + endpoint + "?prettyPrint=false" + query, {
         method: "POST",
         credentials: "include",
         headers,

@@ -59,7 +59,8 @@
   height: 36px;
   border-radius: var(--radius-full);
   background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: var(--glass-backdrop-thin);
+  backdrop-filter: var(--glass-backdrop-thin);
   color: var(--color-text);
   transition: all var(--duration-fast) var(--ease-out);
 }

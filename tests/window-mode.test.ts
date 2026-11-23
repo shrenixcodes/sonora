@@ -31,4 +31,15 @@ describe("collectRegions", () => {
       { x: 200, y: 660, width: 600, height: 64 },
     ]);
   });
+
+  it("includes open dialog elements in interactive click regions", () => {
+    const root = document.createElement("div");
+    const dialog = document.createElement("dialog");
+    dialog.setAttribute("open", "");
+    dialog.getBoundingClientRect = () =>
+      ({ left: 300, top: 200, right: 680, bottom: 500, width: 380, height: 300 }) as DOMRect;
+    root.appendChild(dialog);
+
+    expect(collectRegions(root)).toEqual([{ x: 300, y: 200, width: 380, height: 300 }]);
+  });
 });

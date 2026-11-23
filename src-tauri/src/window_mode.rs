@@ -47,7 +47,7 @@ fn hits_any(regions: &[HitRect], x: f64, y: f64) -> bool {
 }
 
 /// Converts the desktop cursor position into the window's CSS pixel space.
-fn to_window_css(
+pub fn to_window_css(
     cursor: PhysicalPosition<f64>,
     window: PhysicalPosition<i32>,
     scale: f64,
@@ -56,6 +56,11 @@ fn to_window_css(
         (cursor.x - window.x as f64) / scale,
         (cursor.y - window.y as f64) / scale,
     )
+}
+
+/// Whether the cursor is within the window's bounds in CSS pixels.
+pub fn is_inside_window(x: f64, y: f64, width: f64, height: f64) -> bool {
+    x >= 0.0 && y >= 0.0 && x < width && y < height
 }
 
 #[tauri::command]
@@ -173,11 +178,14 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
                 (Some(regions), true) => match (
                     window.cursor_position(),
                     window.outer_position(),
+                    window.inner_size(),
                     window.scale_factor(),
                 ) {
-                    (Ok(cursor), Ok(origin), Ok(scale)) => {
+                    (Ok(cursor), Ok(origin), Ok(size), Ok(scale)) => {
                         let (x, y) = to_window_css(cursor, origin, scale);
-                        !hits_any(regions, x, y)
+                        let win_w = size.width as f64 / scale;
+                        let win_h = size.height as f64 / scale;
+                        is_inside_window(x, y, win_w, win_h) && !hits_any(regions, x, y)
                     }
                     _ => false,
                 },
@@ -243,5 +251,16 @@ mod tests {
         assert_eq!(parsed, Some(vec![rect(1.0, 2.0, 3.0, 4.0)]));
         let full: Option<Vec<HitRect>> = serde_json::from_str("null").unwrap();
         assert_eq!(full, None);
+    }
+
+    #[test]
+    fn checks_window_boundaries() {
+        assert!(is_inside_window(10.0, 20.0, 1000.0, 700.0));
+        assert!(!is_inside_window(-5.0, 20.0, 1000.0, 700.0));
+        assert!(!is_inside_window(10.0, -5.0, 1000.0, 700.0));
+        assert!(!is_inside_window(1000.0, 20.0, 1000.0, 700.0));
+        assert!(!is_inside_window(10.0, 700.0, 1000.0, 700.0));
+        // Pointer on the taskbar below the window
+        assert!(!is_inside_window(500.0, 1050.0, 1000.0, 700.0));
     }
 }

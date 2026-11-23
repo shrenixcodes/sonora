@@ -1,7 +1,7 @@
 /**
  * Custom window titlebar.
  *
- * Provides drag-to-move (via data-tauri-drag-region), back/forward navigation,
+ * Provides drag-to-move (via data-tauri-drag-region), back/forward/refresh navigation,
  * the app-wide search field, and minimize/maximize/close controls.
  */
 
@@ -11,6 +11,7 @@ import { el } from "@/lib/dom";
 import { icon } from "@/icons";
 import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
+import { catalog } from "@/lib/ytm/catalog";
 
 const GRIP_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
 
@@ -54,6 +55,22 @@ export function createTitlebar(): HTMLElement {
                 },
                 onClick: () => window.history.forward(),
               }),
+              el("button", {
+                className: "titlebar__nav-btn titlebar__nav-btn--refresh",
+                html: icon("refresh"),
+                attrs: {
+                  "aria-label": "Refresh",
+                  title: "Refresh from YouTube Music",
+                },
+                onClick: (e) => {
+                  const btn = e.currentTarget as HTMLElement;
+                  btn.classList.remove("is-spinning");
+                  void btn.offsetWidth; // restart the spin on repeated clicks
+                  btn.classList.add("is-spinning");
+                  catalog.clearCache();
+                  router.refresh();
+                },
+              }),
             ],
           }),
         ],
@@ -74,7 +91,12 @@ export function createTitlebar(): HTMLElement {
             className: "titlebar__window-btn",
             html: icon("minimize"),
             attrs: { "aria-label": "Minimize" },
-            onClick: () => appWindow?.minimize(),
+            onClick: async () => {
+              if (appWindow) {
+                await appWindow.setIgnoreCursorEvents(false).catch(() => {});
+                await appWindow.minimize();
+              }
+            },
           }),
           el("button", {
             className: "titlebar__window-btn",

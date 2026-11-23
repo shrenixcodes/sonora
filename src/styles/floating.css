@@ -14,8 +14,8 @@ html[data-window="floating"] {
   --float-gap: 14px;
   --rail-width: 56px;
   --stage-radius: 26px;
-  --float-fill: color-mix(in oklab, var(--color-bg) 92%, transparent);
-  --float-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.18);
+  /* Floating pieces: liquid glass tinted by the artwork's dominant color. */
+  --float-fill: color-mix(in oklab, color-mix(in oklab, var(--color-bg) 62%, var(--ambience-2)) 78%, transparent);
 }
 
 html[data-window="floating"] #app {
@@ -46,9 +46,10 @@ html[data-window="floating"] #app::before {
   grid-column: 2 / -1;
   border-radius: var(--stage-radius);
   border: 1px solid var(--color-panel-border);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 4px 14px rgba(0, 0, 0, 0.25);
-  /* Same layering as the full layout (base, glow, panel tint), so contrast matches. */
+  box-shadow: var(--glass-edge), var(--elevation-3);
+  /* Liquid glass layering with subtle backdrop translucency and specular sheen. */
   background:
+    var(--glass-sheen),
     linear-gradient(var(--color-panel), var(--color-panel)),
     radial-gradient(60% 70% at 12% 0%,
       color-mix(in oklab, var(--ambience-1) var(--ambience-strength), transparent), transparent 70%),
@@ -56,13 +57,35 @@ html[data-window="floating"] #app::before {
       color-mix(in oklab, var(--ambience-2) var(--ambience-strength), transparent), transparent 72%),
     radial-gradient(70% 60% at 55% 105%,
       color-mix(in oklab, var(--ambience-3) var(--ambience-strength), transparent), transparent 70%),
-    var(--color-bg);
+    color-mix(in oklab, var(--color-bg) 85%, transparent);
+  -webkit-backdrop-filter: var(--glass-backdrop-deep);
+  backdrop-filter: var(--glass-backdrop-deep);
+}
+
+/* In the floating layout the artwork fills only the stage. */
+html[data-window="floating"] .ambient-art {
+  z-index: -1;
+  grid-row: 2 / 3;
+  grid-column: 2 / -1;
+  border-radius: var(--stage-radius);
+  overflow: hidden;
+  contain: paint;
+}
+
+/* The page sits straight on the stage here, without a panel tint, so a scrim
+   keeps text readable over bright artwork. */
+html[data-window="floating"] .ambient-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--color-bg) 38%, transparent);
 }
 
 html[data-window="floating"] .main,
 html[data-window="floating"] .queue-panel {
   background: transparent;
   border: 0;
+  box-shadow: none;
   border-radius: var(--stage-radius);
 }
 
@@ -86,9 +109,12 @@ html[data-window="floating"] .titlebar__right,
 html[data-window="floating"] .titlebar__search,
 html[data-window="floating"] .sidebar,
 html[data-window="floating"] .player {
-  background: var(--float-fill);
+  background: var(--glass-sheen), var(--float-fill);
   border: 1px solid var(--color-panel-border);
-  box-shadow: var(--float-shadow);
+  box-shadow: var(--glass-edge), var(--elevation-2);
+  /* Liquid glass refraction */
+  -webkit-backdrop-filter: var(--glass-backdrop-strong);
+  backdrop-filter: var(--glass-backdrop-strong);
 }
 
 html[data-window="floating"] .titlebar__left,
@@ -104,7 +130,7 @@ html[data-window="floating"] .titlebar__search {
 }
 
 html[data-window="floating"] .titlebar__search:focus-within {
-  background: var(--color-bg);
+  background: var(--glass-sheen), color-mix(in oklab, var(--color-bg) 75%, transparent);
 }
 
 /* The right group's window buttons become round in the pill. */
@@ -188,4 +214,16 @@ html[data-window="floating"] .player {
 
 html[data-window="floating"] .player__artwork {
   border-radius: var(--radius-full);
+}
+
+/* The capsule is shorter (64px) than the docked bar, leaving no room to centre
+   the play button and still hang the seek bar below it. Stack them as one
+   centred block here so the play button never overlaps the progress bar. */
+html[data-window="floating"] .player__controls {
+  height: auto;
+  gap: var(--space-1);
+}
+
+html[data-window="floating"] .player__progress {
+  position: static;
 }

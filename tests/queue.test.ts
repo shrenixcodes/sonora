@@ -86,4 +86,12 @@ describe("PlayQueue shuffled", () => {
     expect(q.current?.id).toBe(now);
     expect(ids(q.upcoming)).toEqual(ids(tracks).slice(ids(tracks).indexOf(now) + 1));
   });
+
+  it("appends the rest of a list after the current tracks, skipping duplicates", () => {
+    const q = new PlayQueue();
+    q.set([track("a"), track("b")], track("a"));
+    q.append([track("b"), track("c"), track("d")]);
+    expect(ids(q.all)).toEqual(["a", "b", "c", "d"]);
+    expect(ids(q.upcoming)).toEqual(["b", "c", "d"]);
+  });
 });

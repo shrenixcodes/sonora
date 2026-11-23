@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { applyAmbience } from "../src/lib/ambience";
+import { describe, it, expect, vi } from "vitest";
+import { AmbientArtwork, applyAmbience, applyArtworkAccent } from "../src/lib/ambience";
 import type { ArtworkPalette } from "../src/lib/visuals/color-extractor";
 
 const palette: ArtworkPalette = {
@@ -30,5 +30,42 @@ describe("applyAmbience", () => {
 
     expect(root.style.getPropertyValue("--ambience-1")).toBe("");
     expect(root.getAttribute("style") ?? "").not.toContain("--ambience");
+  });
+});
+
+describe("AmbientArtwork", () => {
+  it("fades a new artwork in over the old one and clears on null", () => {
+    vi.useFakeTimers();
+    const art = new AmbientArtwork();
+    art.set("https://example.com/a.jpg");
+    art.set("https://example.com/a.jpg");
+    expect(art.element.querySelectorAll("img")).toHaveLength(1);
+
+    const first = art.element.querySelector("img")!;
+    first.dispatchEvent(new Event("load"));
+    expect(first.classList.contains("is-visible")).toBe(true);
+
+    art.set("https://example.com/b.jpg");
+    expect(first.classList.contains("is-visible")).toBe(false);
+    expect(art.element.querySelectorAll("img")).toHaveLength(2);
+
+    art.set(null);
+    vi.runAllTimers();
+    expect(art.element.querySelectorAll("img")).toHaveLength(0);
+    vi.useRealTimers();
+  });
+});
+
+describe("applyArtworkAccent", () => {
+  it("takes a readable accent from the artwork and restores the theme's when cleared", () => {
+    const shell = document.createElement("div");
+    applyArtworkAccent(palette, "dark", shell);
+    const accent = shell.style.getPropertyValue("--color-accent");
+    expect(accent).toMatch(/^#[0-9A-F]{6}$/);
+    expect(shell.style.getPropertyValue("--color-hover")).toContain(accent);
+
+    applyArtworkAccent(null, "dark", shell);
+    expect(shell.style.getPropertyValue("--color-accent")).toBe("");
+    expect(shell.style.getPropertyValue("--color-hover")).toBe("");
   });
 });

@@ -90,14 +90,84 @@ body {
   }
 }
 
-/* Shared look for the sidebar, content, queue and player panels. */
+/* Shared look for the sidebar, content, queue and player panels: liquid
+   glass over the ambient glow, with a specular sheen and refractive edge. */
 .sidebar,
 .main,
 .queue-panel,
 .player {
-  background: var(--color-panel);
+  background: var(--glass-sheen), var(--color-panel);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
+  box-shadow: var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  backdrop-filter: var(--glass-backdrop);
+}
+
+/* ── Ambient mode ────────────────────────────────────────
+ * Like YouTube's ambient mode: the playing track's artwork, scaled up and
+ * dissolved into a soft wash of its own colors, lights the window from behind
+ * the panels (src/lib/ambience.ts). It reads as light, not as a second picture.
+ */
+
+.ambient-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  contain: paint;
+  pointer-events: none;
+}
+
+.ambient-art__layer {
+  position: absolute;
+  /* Overscan: the glow spreads past the edges instead of fading out at them. */
+  top: -15%;
+  left: -15%;
+  width: 130%;
+  height: 130%;
+  max-width: none;
+  object-fit: cover;
+  filter: blur(var(--ambient-glow-blur)) saturate(150%);
+  opacity: 0;
+  transition: opacity var(--duration-ambience) var(--ease-in-out);
+}
+
+.ambient-art__layer.is-visible {
+  opacity: var(--ambient-art-opacity);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-art__layer {
+    transition: none;
+  }
+}
+
+/* ── Reduced transparency ────────────────────────────────
+ * When the OS asks for reduced transparency, drop every glass backdrop blur
+ * and make the panels opaque so text stays fully legible over any artwork.
+ * Done centrally through the material tokens so no surface opts out.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-backdrop-thin: none;
+    --glass-backdrop: none;
+    --glass-backdrop-strong: none;
+    --glass-backdrop-deep: none;
+  }
+  :root,
+  [data-theme="dark"] {
+    --color-panel: #1A1621;
+  }
+  [data-theme="light"] {
+    --color-panel: #F8F5EC;
+  }
+  html[data-window="floating"] {
+    --float-fill: color-mix(in oklab, var(--color-bg) 92%, var(--ambience-2));
+  }
+  .ambient-art__layer.is-visible {
+    opacity: calc(var(--ambient-art-opacity) * 0.5);
+  }
 }
 
 /* ── Scrollbar ───────────────────────────────────────────── */
@@ -122,6 +192,14 @@ body {
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Panels have large rounded corners; keep their scrollbars clear of them so
+   the thumb never runs past the curve. */
+.sidebar::-webkit-scrollbar-track,
+.main::-webkit-scrollbar-track,
+.queue-panel__list::-webkit-scrollbar-track {
+  margin-block: var(--radius-2xl);
 }
 
 /* ── Selection ───────────────────────────────────────────── */

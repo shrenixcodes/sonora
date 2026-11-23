@@ -72,11 +72,16 @@
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
   flex-shrink: 0;
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-spring);
 }
 
 .player__like-btn:hover {
   color: var(--color-accent);
+}
+
+.player__like-btn:active {
+  transform: scale(0.88);
 }
 
 .player__like-btn svg {
@@ -87,11 +92,13 @@
 /* ── Playback controls (center) ─────────────────────────── */
 
 .player__controls {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: center;
   min-width: 400px;
+  height: 100%;
 }
 
 .player__buttons {
@@ -116,6 +123,10 @@
   color: var(--color-text);
 }
 
+.player__btn:active:not(:disabled) {
+  transform: scale(0.88);
+}
+
 .player__btn--active {
   color: var(--color-accent);
 }
@@ -134,12 +145,15 @@
   background: var(--color-text);
   color: var(--color-bg);
   border-radius: var(--radius-full);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
   transition: transform var(--duration-fast) var(--ease-spring),
+              box-shadow var(--duration-fast) var(--ease-out),
               background var(--duration-fast) var(--ease-out);
 }
 
 .player__play-btn:hover {
   transform: scale(1.06);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .player__play-btn:active {
@@ -154,6 +168,10 @@
 /* ── Progress bar ────────────────────────────────────────── */
 
 .player__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -168,28 +186,78 @@
   text-align: center;
 }
 
+/* Progress and volume bars (src/lib/slider.ts). The element is a tall,
+   easy-to-grab hit area; the 4px track, fill and handle are drawn inside it. */
+.player__progress-bar,
+.player__volume-slider {
+  --value: 0;
+  position: relative;
+  height: 16px;
+  cursor: pointer;
+  touch-action: none;
+  border-radius: var(--radius-full);
+}
+
 .player__progress-bar {
   flex: 1;
-  height: 4px;
-  background: var(--color-border);
-  border-radius: var(--radius-full);
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
 }
 
-.player__progress-fill {
+.player__progress-bar::before,
+.player__volume-slider::before {
+  content: "";
   position: absolute;
-  top: 0;
+  inset: 6px 0;
+  background: color-mix(in oklab, var(--color-text) 14%, transparent);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-full);
+}
+
+.player__progress-fill,
+.player__volume-fill {
+  position: absolute;
+  top: 6px;
   left: 0;
-  height: 100%;
+  height: 4px;
+  width: calc(var(--value) * 100%);
   background: var(--color-text);
   border-radius: var(--radius-full);
-  transition: width 100ms linear;
 }
 
-.player__progress-bar:hover .player__progress-fill {
+/* Handle: appears on hover, focus or drag, centred on the current value. */
+.player__progress-bar::after,
+.player__volume-slider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(var(--value) * 100%);
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.player__progress-bar:hover::after,
+.player__volume-slider:hover::after,
+.player__progress-bar:focus-visible::after,
+.player__volume-slider:focus-visible::after,
+.is-dragging::after {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.player__progress-bar:hover .player__progress-fill,
+.player__volume-slider:hover .player__volume-fill,
+.is-dragging > .player__progress-fill,
+.is-dragging > .player__volume-fill {
   background: var(--color-accent);
+}
+
+.player__progress-bar:focus-visible,
+.player__volume-slider:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* ── Volume + extras (right) ─────────────────────────────── */
@@ -215,11 +283,16 @@
   height: 32px;
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-spring);
 }
 
 .player__volume-btn:hover {
   color: var(--color-text);
+}
+
+.player__volume-btn:active {
+  transform: scale(0.88);
 }
 
 .player__volume-btn svg {
@@ -229,25 +302,6 @@
 
 .player__volume-slider {
   width: 80px;
-  height: 4px;
-  background: var(--color-border);
-  border-radius: var(--radius-full);
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.player__volume-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: var(--color-text);
-  border-radius: var(--radius-full);
-}
-
-.player__volume-slider:hover .player__volume-fill {
-  background: var(--color-accent);
 }
 
 .player__extra-btn {
@@ -258,11 +312,16 @@
   height: 32px;
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-spring);
 }
 
 .player__extra-btn:hover {
   color: var(--color-text);
+}
+
+.player__extra-btn:active {
+  transform: scale(0.88);
 }
 
 .player__extra-btn svg {

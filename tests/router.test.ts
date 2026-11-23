@@ -19,4 +19,20 @@ describe("Router", () => {
     expect(typeof unsub).toBe("function");
     unsub();
   });
+
+  it("re-renders the current page on refresh, telling the old one to clean up first", () => {
+    const container = document.createElement("div");
+    const order: string[] = [];
+    window.location.hash = "#/refresh-test";
+    router.route("/refresh-test", () => {
+      order.push("render");
+    });
+    router.start(container);
+    const unsub = router.onNavigate((path) => order.push(`nav:${path}`));
+    order.length = 0;
+
+    router.refresh();
+    expect(order).toEqual(["nav:", "render", "nav:/refresh-test"]);
+    unsub();
+  });
 });

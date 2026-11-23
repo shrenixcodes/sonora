@@ -33,6 +33,9 @@ describe("StorageService", () => {
 
     expect(storage.isLiked(sampleTrack.id)).toBe(false);
 
+    const events: Array<{ trackId: string; isLiked: boolean }> = [];
+    const unsub = storage.on("likeChange", (e) => events.push(e));
+
     const isLikedNow = storage.toggleLike(sampleTrack);
     expect(isLikedNow).toBe(true);
     expect(storage.isLiked(sampleTrack.id)).toBe(true);
@@ -42,6 +45,12 @@ describe("StorageService", () => {
     expect(isUnliked).toBe(false);
     expect(storage.isLiked(sampleTrack.id)).toBe(false);
     expect(storage.getLikedTracks()).toHaveLength(0);
+
+    expect(events).toEqual([
+      { trackId: sampleTrack.id, isLiked: true, track: sampleTrack },
+      { trackId: sampleTrack.id, isLiked: false, track: sampleTrack },
+    ]);
+    unsub();
   });
 
   it("tracks listening history and deduplicates recent plays", () => {

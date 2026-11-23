@@ -7,13 +7,35 @@
  */
 
 import { CatalogError, requestCatalog, type CatalogRequest } from "@/lib/ytm/client";
-import { parseHomeShelves, parseSearchSongs, type HomeShelf } from "@/lib/ytm/parse";
+import {
+  parseAccountProfile,
+  parseContinuation,
+  parseHomeChips,
+  parseHomeShelves,
+  parseLibraryAlbums,
+  parseLibraryArtists,
+  parseLibraryPlaylists,
+  parsePlaylistTracks,
+  parseSearchSongs,
+  parseWatchPlaylist,
+  type AccountProfile,
+  type HomeChip,
+  type HomeCollection,
+  type HomeItem,
+  type HomePage,
+  type HomeShelf,
+  type LibraryArtist,
+  type LibraryPlaylist,
+} from "@/lib/ytm/parse";
+import { dedupeById } from "@/lib/tracks";
 import type { Track } from "@/types/music";
 
-export type { HomeShelf };
+export type { AccountProfile, HomeChip, HomeCollection, HomeItem, HomePage, HomeShelf, LibraryArtist, LibraryPlaylist };
 export { CatalogError };
 
 const HOME_TTL_MS = 5 * 60_000;
+/** Playlists change rarely; a short cache makes playing one again instant. */
+const PLAYLIST_TTL_MS = 10 * 60_000;
 /**
  * The YouTube Music page takes a few seconds to load when Sonora starts, and
  * reloads whenever a song is loaded. A request sent while it loads either gets
@@ -22,27 +44,103 @@ const HOME_TTL_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 8;
 const ATTEMPT_TIMEOUT_MS = 6_000;
 const NOT_READY_DELAY_MS = 1_000;
+/** Long lists arrive in pages of about 100 songs; this caps a single load. */
+const MAX_LIST_PAGES = 20;
+/** Home arrives a few shelves at a time, like the site loading more as you scroll. */
+const MAX_HOME_PAGES = 5;
+const HOME_SNAPSHOT_KEY = "sonora:home_snapshot";
 /** Sending fails outright while the page is still being created at startup. */
 const RETRYABLE = new Set(["not-ready", "timeout", "send-failed"]);
 
 type Fetcher = (request: CatalogRequest, timeoutMs: number) => Promise<unknown>;
 
 export class Catalog {
-  private home: { shelves: HomeShelf[]; at: number } | null = null;
+  private home: { page: HomePage; at: number } | null = null;
+  private explore: { shelves: HomeShelf[]; at: number } | null = null;
   private inFlight = new Map<string, Promise<unknown>>();
+  private playlists = new Map<string, { tracks: Track[]; at: number }>();
+  /** How many pages each Home page has loaded, to cap how far it goes. */
+  private homePages = new WeakMap<HomePage, number>();
 
   constructor(
     private readonly fetcher: Fetcher = requestCatalog,
     private readonly now: () => number = Date.now,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+    private readonly store: Pick<Storage, "getItem" | "setItem"> | null = globalThis.localStorage ?? null,
   ) {}
 
-  async getHome(options: { refresh?: boolean } = {}): Promise<HomeShelf[]> {
-    if (!options.refresh && this.home && this.now() - this.home.at < HOME_TTL_MS) {
-      return this.home.shelves;
+  /**
+   * The first page of Home: shelves and chips. More shelves come from
+   * getMoreHome, so the page can show before all of them arrive. `params` picks
+   * a mood or genre chip; filtered pages aren't cached since each chip is its own page.
+   */
+  async getHome(options: { refresh?: boolean; params?: string } = {}): Promise<HomePage> {
+    const filtered = !!options.params;
+    if (!filtered && !options.refresh && this.home && this.now() - this.home.at < HOME_TTL_MS) {
+      return this.home.page;
     }
-    const shelves = parseHomeShelves(await this.fetch({ kind: "home" }));
-    this.home = { shelves, at: this.now() };
+    const response = await this.fetch(filtered ? { kind: "home", params: options.params } : { kind: "home" });
+    const page: HomePage = { chips: parseHomeChips(response), shelves: parseHomeShelves(response) };
+    const more = parseContinuation(response);
+    if (more) page.more = more;
+    this.homePages.set(page, 1);
+    if (!filtered) {
+      this.home = { page, at: this.now() };
+      this.saveSnapshot(page);
+    }
+    return page;
+  }
+
+  /** Loads the next shelves of a Home page into it and returns them; empty when there are no more. */
+  async getMoreHome(page: HomePage): Promise<HomeShelf[]> {
+    const loaded = this.homePages.get(page) ?? 1;
+    if (!page.more || loaded >= MAX_HOME_PAGES) return [];
+    const response = await this.fetch({ kind: "continuation", token: page.more });
+    const shelves = parseHomeShelves(response);
+    const next = parseContinuation(response);
+    if (next && shelves.length > 0) page.more = next;
+    else delete page.more;
+    this.homePages.set(page, loaded + 1);
+    page.shelves.push(...shelves);
+    if (this.home?.page === page) this.saveSnapshot(page);
+    return shelves;
+  }
+
+  /**
+   * Home as last seen, to show instantly while a fresh copy loads: the cached
+   * page, or the copy saved by the previous session.
+   */
+  peekHome(): HomePage | null {
+    if (this.home) return this.home.page;
+    try {
+      const saved = this.store?.getItem(HOME_SNAPSHOT_KEY);
+      const page = saved ? (JSON.parse(saved) as HomePage) : null;
+      return page && Array.isArray(page.shelves) && Array.isArray(page.chips) ? page : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private saveSnapshot(page: HomePage): void {
+    try {
+      this.store?.setItem(HOME_SNAPSHOT_KEY, JSON.stringify({ chips: page.chips, shelves: page.shelves }));
+    } catch {
+      // Storage full or unavailable: Home just loads without a head start.
+    }
+  }
+
+  /** Forgets cached pages so the next request fetches fresh ones. */
+  clearCache(): void {
+    this.home = null;
+    this.explore = null;
+    this.playlists.clear();
+  }
+
+  /** YouTube Music's Explore page: new releases, charts and trending. */
+  async getExplore(): Promise<HomeShelf[]> {
+    if (this.explore && this.now() - this.explore.at < HOME_TTL_MS) return this.explore.shelves;
+    const shelves = parseHomeShelves(await this.fetch({ kind: "explore" }));
+    this.explore = { shelves, at: this.now() };
     return shelves;
   }
 
@@ -50,6 +148,89 @@ export class Catalog {
     const trimmed = query.trim();
     if (!trimmed) return [];
     return parseSearchSongs(await this.fetch({ kind: "search", query: trimmed }));
+  }
+
+  /** Name and picture of the signed-in Google account. */
+  async getAccountProfile(): Promise<AccountProfile | null> {
+    return parseAccountProfile(await this.fetch({ kind: "accountInfo" }));
+  }
+
+  /** Songs on the signed-in user's Liked Music playlist. */
+  getLikedSongs(): Promise<Track[]> {
+    return this.fetchTrackList({ kind: "likedSongs" });
+  }
+
+  /** Playlists saved in the signed-in user's library. */
+  async getLibraryPlaylists(): Promise<LibraryPlaylist[]> {
+    return parseLibraryPlaylists(await this.fetch({ kind: "libraryPlaylists" }));
+  }
+
+  /** Albums saved in the signed-in user's library. */
+  async getLibraryAlbums(): Promise<LibraryPlaylist[]> {
+    return parseLibraryAlbums(await this.fetch({ kind: "libraryAlbums" }));
+  }
+
+  /** Artists in the signed-in user's library. */
+  async getLibraryArtists(): Promise<LibraryArtist[]> {
+    return parseLibraryArtists(await this.fetch({ kind: "libraryArtists" }));
+  }
+
+  /**
+   * Songs of a playlist, album or mix. With `onMore`, resolves with the first
+   * page so playback can start at once, and reports later pages as they
+   * arrive; without it, resolves with every page. Mixes without a playlist
+   * page fall back to their watch queue.
+   */
+  async getPlaylistTracks(id: string, onMore?: (more: Track[]) => void): Promise<Track[]> {
+    const cached = this.playlists.get(id);
+    if (cached && this.now() - cached.at < PLAYLIST_TTL_MS) return cached.tracks;
+
+    const remember = (tracks: Track[]) => {
+      this.playlists.set(id, { tracks, at: this.now() });
+      return tracks;
+    };
+    const isMix = id.startsWith("RD");
+    let response: unknown;
+    try {
+      response = await this.fetch({ kind: "playlist", id });
+    } catch (err) {
+      if (!isMix) throw err;
+      response = null;
+    }
+    const first = response ? dedupeById(parsePlaylistTracks(response)) : [];
+    if (first.length === 0) {
+      return remember(isMix ? parseWatchPlaylist(await this.fetch({ kind: "watchPlaylist", id })) : []);
+    }
+
+    const all = this.fetchRemainingPages(response, first, onMore).then(remember);
+    if (!onMore) return all;
+    all.catch((err) => console.warn("[catalog] stopped loading the rest of a playlist:", err));
+    return first;
+  }
+
+  private async fetchTrackList(request: CatalogRequest): Promise<Track[]> {
+    const response = await this.fetch(request);
+    return this.fetchRemainingPages(response, dedupeById(parsePlaylistTracks(response)));
+  }
+
+  /** Follows a list's continuation pages, reporting each page's new songs to `onMore`. */
+  private async fetchRemainingPages(
+    response: unknown,
+    first: Track[],
+    onMore?: (more: Track[]) => void,
+  ): Promise<Track[]> {
+    const tracks = [...first];
+    const seen = new Set(first.map((t) => t.id));
+    for (let page = 1; page < MAX_LIST_PAGES; page++) {
+      const token = parseContinuation(response);
+      if (!token) break;
+      response = await this.fetch({ kind: "continuation", token });
+      const more = parsePlaylistTracks(response).filter((t) => !seen.has(t.id) && (seen.add(t.id), true));
+      if (more.length === 0) break;
+      tracks.push(...more);
+      onMore?.(more);
+    }
+    return tracks;
   }
 
   private fetch(request: CatalogRequest): Promise<unknown> {

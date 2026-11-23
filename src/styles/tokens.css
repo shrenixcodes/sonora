@@ -74,6 +74,24 @@
   --duration-slow: 320ms;
   --duration-slower: 500ms;
   --duration-ambience: 1200ms;
+  /* Strong enough that the artwork becomes light and color, not a picture. */
+  --ambient-glow-blur: 64px;
+
+  /* ── Glass material system ─────────────────────────────── */
+  /* One knob per tier. Surfaces reference these composite filters instead of
+     hardcoding blur/saturate, so the whole material system stays consistent
+     and the reduced-transparency fallback (global.css) can disable it in one
+     place. Tiers climb with a surface's importance and elevation. */
+  --glass-blur-thin: 8px;   /* small controls, inline chips */
+  --glass-blur: 24px;       /* navigation, sidebars, supporting panels */
+  --glass-blur-deep: 28px;  /* the stage, dialogs, high-priority overlays */
+  --glass-saturate: 180%;
+  --glass-saturate-strong: 190%;
+
+  --glass-backdrop-thin: blur(var(--glass-blur-thin));
+  --glass-backdrop: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  --glass-backdrop-strong: blur(var(--glass-blur)) saturate(var(--glass-saturate-strong)) contrast(104%);
+  --glass-backdrop-deep: blur(var(--glass-blur-deep)) saturate(var(--glass-saturate-strong)) contrast(102%);
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
@@ -123,12 +141,28 @@
   --color-warning: #F59E0B;
 
   /* Shell panels sit over the artwork ambience (see global.css). */
-  --color-panel: rgba(23, 21, 28, 0.68);
-  --color-panel-border: rgba(244, 240, 246, 0.06);
+  --color-panel: rgba(22, 19, 29, 0.62);
+  --color-panel-border: rgba(255, 255, 255, 0.13);
   --ambience-1: #A78BFA;
   --ambience-2: #3B2F5C;
   --ambience-3: #C9A96E;
   --ambience-strength: 42%;
+  --ambient-art-opacity: 0.6;
+  --glass-sheen: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 30%,
+    rgba(255, 255, 255, 0.0) 65%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  --glass-edge: inset 0 1px 1px 0 rgba(255, 255, 255, 0.22),
+                inset 0 0 20px 0 rgba(255, 255, 255, 0.02),
+                inset 0 -1px 1px 0 rgba(0, 0, 0, 0.28);
+
+  /* Elevation — layered shadows (tight contact + soft ambient) for depth. */
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.20), 0 4px 10px rgba(0, 0, 0, 0.22);
+  --elevation-2: 0 2px 6px rgba(0, 0, 0, 0.26), 0 10px 24px rgba(0, 0, 0, 0.30);
+  --elevation-3: 0 6px 14px rgba(0, 0, 0, 0.30), 0 18px 44px rgba(0, 0, 0, 0.42);
 
   color-scheme: dark;
 }
@@ -155,12 +189,28 @@
   --color-success: #16A34A;
   --color-warning: #D97706;
 
-  --color-panel: rgba(248, 245, 236, 0.94); /* keeps secondary text at WCAG AA over any artwork */
-  --color-panel-border: rgba(32, 40, 32, 0.08);
+  --color-panel: rgba(248, 245, 236, 0.76); /* keeps secondary text at WCAG AA over any artwork */
+  --color-panel-border: rgba(255, 255, 255, 0.45);
   --ambience-1: #315E48;
   --ambience-2: #D8C9A8;
   --ambience-3: #D95342;
   --ambience-strength: 22%;
+  --ambient-art-opacity: 0.4;
+  --glass-sheen: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.25) 30%,
+    rgba(255, 255, 255, 0.0) 65%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  --glass-edge: inset 0 1px 1px 0 rgba(255, 255, 255, 0.85),
+                inset 0 0 20px 0 rgba(255, 255, 255, 0.06),
+                inset 0 -1px 1px 0 rgba(0, 0, 0, 0.06);
+
+  /* Elevation — softer in light so panels lift without muddy shadows. */
+  --elevation-1: 0 1px 2px rgba(31, 41, 20, 0.08), 0 3px 8px rgba(31, 41, 20, 0.08);
+  --elevation-2: 0 2px 6px rgba(31, 41, 20, 0.10), 0 8px 20px rgba(31, 41, 20, 0.12);
+  --elevation-3: 0 6px 14px rgba(31, 41, 20, 0.12), 0 16px 36px rgba(31, 41, 20, 0.18);
 
   color-scheme: light;
 }

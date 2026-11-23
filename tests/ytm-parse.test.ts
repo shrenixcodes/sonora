@@ -1,8 +1,16 @@
 import { describe, it, expect } from "vitest";
 import {
   artworkUrl,
+  parseAccountProfile,
   parseDuration,
+  parseContinuation,
+  parseHomeChips,
   parseHomeShelves,
+  parseLibraryAlbums,
+  parseLibraryArtists,
+  parseLibraryPlaylists,
+  parseWatchPlaylist,
+  parsePlaylistTracks,
   parseSearchSongs,
 } from "../src/lib/ytm/parse";
 
@@ -118,6 +126,13 @@ describe("parseSearchSongs", () => {
   });
 });
 
+const browse = (browseId: string, pageType: string) => ({
+  browseEndpoint: {
+    browseId,
+    browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType } },
+  },
+});
+
 describe("parseHomeShelves", () => {
   const shelf = (title: string, contents: object[]) => ({
     musicCarouselShelfRenderer: {
@@ -139,12 +154,40 @@ describe("parseHomeShelves", () => {
                         column(album("HIStory: PAST, PRESENT AND FUTURE, BOOK I")),
                       ]),
                     ]),
-                    // Playlists need another request to play, so this shelf is skipped.
                     shelf("Divine Tunes", [
                       {
                         musicTwoRowItemRenderer: {
                           title: { runs: [{ text: "Bhajan Clubbing" }] },
-                          navigationEndpoint: { browseEndpoint: { browseId: "VLxyz" } },
+                          subtitle: { runs: [{ text: "Playlist" }] },
+                          navigationEndpoint: browse("VLxyz", "MUSIC_PAGE_TYPE_PLAYLIST"),
+                        },
+                      },
+                      {
+                        musicTwoRowItemRenderer: {
+                          title: { runs: [{ text: "Thriller" }] },
+                          navigationEndpoint: browse("MPREb_1", "MUSIC_PAGE_TYPE_ALBUM"),
+                          thumbnailOverlay: {
+                            musicItemThumbnailOverlayRenderer: {
+                              content: {
+                                musicPlayButtonRenderer: {
+                                  playNavigationEndpoint: { watchPlaylistEndpoint: { playlistId: "OLAK5uy_1" } },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                      {
+                        musicTwoRowItemRenderer: {
+                          title: { runs: [{ text: "Arijit Singh" }] },
+                          navigationEndpoint: browse("UC1", "MUSIC_PAGE_TYPE_ARTIST"),
+                        },
+                      },
+                      // An album with no way to play it is left out.
+                      {
+                        musicTwoRowItemRenderer: {
+                          title: { runs: [{ text: "Unplayable" }] },
+                          navigationEndpoint: browse("MPREb_2", "MUSIC_PAGE_TYPE_ALBUM"),
                         },
                       },
                     ]),
@@ -168,10 +211,18 @@ describe("parseHomeShelves", () => {
     },
   };
 
-  it("keeps shelves of playable songs and skips playlist-only shelves", () => {
+  it("keeps song, album, playlist and artist shelves in order", () => {
     const shelves = parseHomeShelves(homeResponse);
 
-    expect(shelves.map((s) => s.title)).toEqual(["Song mixes", "Music videos for you"]);
+    expect(shelves.map((s) => s.title)).toEqual(["Song mixes", "Divine Tunes", "Music videos for you"]);
+    expect(shelves.map((s) => s.layout)).toEqual(["list", "cards", "cards"]);
+    expect(shelves[1].items).toEqual([
+      { kind: "playlist", title: "Bhajan Clubbing", subtitle: "Playlist", artworkUrl: "", playlistId: "xyz" },
+      { kind: "album", title: "Thriller", subtitle: "", artworkUrl: "", playlistId: "OLAK5uy_1" },
+      { kind: "artist", title: "Arijit Singh", subtitle: "", artworkUrl: "" },
+    ]);
+    expect(shelves[1].tracks).toEqual([]);
+    shelves.splice(1, 1);
     expect(shelves[0].tracks[0]).toMatchObject({
       id: "WlTlUseVt7E",
       title: "Beat It",
@@ -195,5 +246,155 @@ describe("helpers", () => {
       "https://i.ytimg.com/vi/x/hqdefault.jpg",
     );
     expect(artworkUrl([])).toBe("");
+    expect(artworkUrl([{ url: "//www.gstatic.com/ytm/liked.png", width: 192 }])).toBe(
+      "https://www.gstatic.com/ytm/liked.png",
+    );
+  });
+});
+
+describe("parsePlaylistTracks", () => {
+  it("reads songs from a playlist shelf and its continuation token", () => {
+    const response = {
+      contents: {
+        musicPlaylistShelfRenderer: {
+          contents: [
+            songRow("abc", "First", [artist("A"), SEP, { text: "2:01" }]),
+            songRow("def", "Second", [artist("B")]),
+            { continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: "NEXT" } } } },
+          ],
+        },
+      },
+    };
+    expect(parsePlaylistTracks(response).map((t) => t.id)).toEqual(["abc", "def"]);
+    expect(parseContinuation(response)).toBe("NEXT");
+  });
+
+  it("finds older continuation tokens and reports none when the list ends", () => {
+    expect(parseContinuation({ continuations: [{ nextContinuationData: { continuation: "OLD" } }] })).toBe("OLD");
+    expect(parseContinuation({ contents: [] })).toBeNull();
+  });
+});
+
+describe("parseLibraryPlaylists", () => {
+  const card = (title: string, browseId?: string) => ({
+    musicTwoRowItemRenderer: {
+      title: { runs: [{ text: title }] },
+      subtitle: { runs: [{ text: "Playlist" }, SEP, { text: "12 songs" }] },
+      thumbnailRenderer: thumbs(`https://lh3.googleusercontent.com/${title}`),
+      navigationEndpoint: browseId ? { browseEndpoint: { browseId } } : { createPlaylistEndpoint: {} },
+    },
+  });
+
+  it("keeps saved playlists and skips the new-playlist card and duplicates", () => {
+    const response = { items: [card("New playlist"), card("Liked Music", "VLLM"), card("Mix", "VLPL1"), card("Mix", "VLPL1")] };
+    const playlists = parseLibraryPlaylists(response);
+    expect(playlists.map((p) => p.id)).toEqual(["LM", "PL1"]);
+    expect(playlists[1]).toMatchObject({ title: "Mix", subtitle: "Playlist • 12 songs" });
+    expect(playlists[1].artworkUrl).toContain("=w544-h544");
+  });
+});
+
+describe("parseHomeChips", () => {
+  it("reads chips that filter Home and skips ones without a filter", () => {
+    const chip = (text: string, params?: string) => ({
+      chipCloudChipRenderer: {
+        text: { runs: [{ text }] },
+        navigationEndpoint: { browseEndpoint: { browseId: "FEmusic_home", ...(params ? { params } : {}) } },
+      },
+    });
+    expect(parseHomeChips({ chips: [chip("Relax", "ggM%3D"), chip("Broken")] })).toEqual([
+      { title: "Relax", params: "ggM%3D" },
+    ]);
+  });
+});
+
+describe("parseWatchPlaylist", () => {
+  it("reads songs from a mix's watch queue", () => {
+    const response = {
+      contents: [
+        {
+          playlistPanelVideoRenderer: {
+            videoId: "abc",
+            title: { runs: [{ text: "Tum Hi Ho" }] },
+            longBylineText: { runs: [artist("Arijit Singh"), SEP, album("Aashiqui 2"), SEP, { text: "2013" }] },
+            lengthText: { runs: [{ text: "4:22" }] },
+            thumbnail: { thumbnails: [{ url: "https://i.ytimg.com/a=w60-h60", width: 60 }] },
+          },
+        },
+        { playlistPanelVideoRenderer: { title: { runs: [{ text: "No id" }] } } },
+      ],
+    };
+    expect(parseWatchPlaylist(response)).toEqual([
+      {
+        id: "abc",
+        title: "Tum Hi Ho",
+        artist: "Arijit Singh",
+        album: "Aashiqui 2",
+        duration: 262,
+        artworkUrl: "https://i.ytimg.com/a=w544-h544",
+      },
+    ]);
+  });
+});
+
+describe("parseAccountProfile", () => {
+  it("reads the account name, handle and a sharper photo", () => {
+    const response = {
+      actions: [
+        {
+          openPopupAction: {
+            popup: {
+              multiPageMenuRenderer: {
+                header: {
+                  activeAccountHeaderRenderer: {
+                    accountName: { runs: [{ text: "Alex Rivera" }] },
+                    channelHandle: { runs: [{ text: "@alex" }] },
+                    accountPhoto: { thumbnails: [{ url: "https://yt3.ggpht.com/abc=s108-c-k-c0x00ffffff-no-rj", width: 108 }] },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
+    expect(parseAccountProfile(response)).toEqual({
+      name: "Alex Rivera",
+      handle: "@alex",
+      photoUrl: "https://yt3.ggpht.com/abc=s176-c-k-c0x00ffffff-no-rj",
+    });
+    expect(parseAccountProfile({})).toBeNull();
+  });
+});
+
+describe("library albums and artists", () => {
+  it("reads saved albums with the playlist that plays them", () => {
+    const album = (title: string, playlistId?: string) => ({
+      musicTwoRowItemRenderer: {
+        title: { runs: [{ text: title }] },
+        subtitle: { runs: [{ text: "Album" }, SEP, { text: "2016" }] },
+        navigationEndpoint: browse("MPREb_" + title, "MUSIC_PAGE_TYPE_ALBUM"),
+        ...(playlistId
+          ? { thumbnailOverlay: { musicItemThumbnailOverlayRenderer: { content: { musicPlayButtonRenderer: { playNavigationEndpoint: { watchPlaylistEndpoint: { playlistId } } } } } } }
+          : {}),
+      },
+    });
+    expect(parseLibraryAlbums({ items: [album("Starboy", "OLAK1"), album("NoPlay")] })).toEqual([
+      { id: "OLAK1", title: "Starboy", subtitle: "Album • 2016", artworkUrl: "" },
+    ]);
+  });
+
+  it("reads artist rows and skips rows that aren't artists", () => {
+    const row = (title: string, pageType: string) => ({
+      musicResponsiveListItemRenderer: {
+        navigationEndpoint: browse("UC" + title, pageType),
+        flexColumns: [column({ text: title }), column({ text: "12 songs" })],
+        thumbnail: thumbs("https://lh3.googleusercontent.com/" + title),
+      },
+    });
+    const artists = parseLibraryArtists({ items: [row("Talwiinder", "MUSIC_PAGE_TYPE_ARTIST"), row("Song", "MUSIC_PAGE_TYPE_ALBUM")] });
+    expect(artists).toHaveLength(1);
+    expect(artists[0]).toMatchObject({ title: "Talwiinder", subtitle: "12 songs" });
+    expect(artists[0].artworkUrl).toContain("=w544-h544");
   });
 });
