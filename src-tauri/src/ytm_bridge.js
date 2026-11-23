@@ -29,6 +29,17 @@
     return !!(p && p.classList.contains("ad-showing"));
   };
 
+  // Nobody ever sees this page, but a music video still arrives as video and is
+  // decoded frame by frame for a window that is never drawn. Hold the player at
+  // its smallest picture: the audio stream is picked separately and keeps its
+  // quality, so the song plays as a song and the frames stop costing anything.
+  const holdVideoAtMinimum = () => {
+    const p = player();
+    if (p && typeof p.setPlaybackQualityRange === "function") {
+      p.setPlaybackQualityRange("tiny", "tiny");
+    }
+  };
+
   const send = (reason) => {
     const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
     if (!invoke) return;
@@ -64,6 +75,7 @@
       element.addEventListener(type, () => send(type));
     }
     element.addEventListener("loadedmetadata", () => {
+      holdVideoAtMinimum();
       send("track");
       setTimeout(() => send("track"), METADATA_SETTLE_MS);
     });
@@ -74,6 +86,7 @@
         send("time");
       }
     });
+    holdVideoAtMinimum();
     send("ready");
   };
 
