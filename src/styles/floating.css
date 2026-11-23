@@ -58,8 +58,8 @@ html[data-window="floating"] #app::before {
     radial-gradient(70% 60% at 55% 105%,
       color-mix(in oklab, var(--ambience-3) var(--ambience-strength), transparent), transparent 70%),
     color-mix(in oklab, var(--color-bg) 85%, transparent);
-  -webkit-backdrop-filter: blur(28px) saturate(190%) contrast(102%);
-  backdrop-filter: blur(28px) saturate(190%) contrast(102%);
+  -webkit-backdrop-filter: var(--glass-backdrop-deep);
+  backdrop-filter: var(--glass-backdrop-deep);
 }
 
 /* In the floating layout the artwork fills only the stage. */
@@ -113,8 +113,8 @@ html[data-window="floating"] .player {
   border: 1px solid var(--color-panel-border);
   box-shadow: var(--glass-edge);
   /* Liquid glass refraction */
-  -webkit-backdrop-filter: blur(24px) saturate(190%) contrast(104%);
-  backdrop-filter: blur(24px) saturate(190%) contrast(104%);
+  -webkit-backdrop-filter: var(--glass-backdrop-strong);
+  backdrop-filter: var(--glass-backdrop-strong);
 }
 
 html[data-window="floating"] .titlebar__left,

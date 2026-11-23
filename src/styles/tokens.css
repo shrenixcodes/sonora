@@ -77,6 +77,22 @@
   /* Strong enough that the artwork becomes light and color, not a picture. */
   --ambient-glow-blur: 64px;
 
+  /* ── Glass material system ─────────────────────────────── */
+  /* One knob per tier. Surfaces reference these composite filters instead of
+     hardcoding blur/saturate, so the whole material system stays consistent
+     and the reduced-transparency fallback (global.css) can disable it in one
+     place. Tiers climb with a surface's importance and elevation. */
+  --glass-blur-thin: 8px;   /* small controls, inline chips */
+  --glass-blur: 24px;       /* navigation, sidebars, supporting panels */
+  --glass-blur-deep: 28px;  /* the stage, dialogs, high-priority overlays */
+  --glass-saturate: 180%;
+  --glass-saturate-strong: 190%;
+
+  --glass-backdrop-thin: blur(var(--glass-blur-thin));
+  --glass-backdrop: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  --glass-backdrop-strong: blur(var(--glass-blur)) saturate(var(--glass-saturate-strong)) contrast(104%);
+  --glass-backdrop-deep: blur(var(--glass-blur-deep)) saturate(var(--glass-saturate-strong)) contrast(102%);
+
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
