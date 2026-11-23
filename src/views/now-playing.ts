@@ -14,7 +14,7 @@ import { AmbientVisualRenderer } from "@/lib/visuals/ambient-renderer";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { AmbientVisualMode, Track } from "@/types/music";
+import type { Track } from "@/types/music";
 
 export function renderNowPlaying(container: HTMLElement): void {
   const currentTrack = playerEngine.currentTrack;
@@ -64,35 +64,6 @@ export function renderNowPlaying(container: HTMLElement): void {
     },
   });
 
-  // Visual mode selector
-  const modes: Array<{ mode: AmbientVisualMode; label: string }> = [
-    { mode: "aurora", label: "Aurora" },
-    { mode: "fluid", label: "Fluid" },
-    { mode: "glow", label: "Glow" },
-    { mode: "cinematic", label: "Cinema" },
-    { mode: "minimal", label: "Minimal" },
-    { mode: "none", label: "Off" },
-  ];
-
-  const visualSelector = el("div", {
-    className: "now-playing__visual-selector",
-    children: modes.map(({ mode, label }) => {
-      const chip = el("button", {
-        className: `now-playing__visual-chip${settings.ambientMode === mode ? " now-playing__visual-chip--active" : ""}`,
-        text: label,
-        onClick: () => {
-          visualSelector.querySelectorAll(".now-playing__visual-chip").forEach((c) => {
-            c.classList.remove("now-playing__visual-chip--active");
-          });
-          chip.classList.add("now-playing__visual-chip--active");
-          visualEngine.setMode(mode);
-          storage.saveSettings({ ambientMode: mode });
-        },
-      });
-      return chip;
-    }),
-  });
-
   // Fullscreen button
   const fullscreenBtn = el("button", {
     className: "now-playing__fs-btn",
@@ -116,7 +87,7 @@ export function renderNowPlaying(container: HTMLElement): void {
 
   const topBar = el("div", {
     className: "now-playing__topbar",
-    children: [closeBtn, visualSelector, fullscreenBtn],
+    children: [closeBtn, fullscreenBtn],
   });
 
   // ── Left: Artwork & Info ────────────────────────────────
