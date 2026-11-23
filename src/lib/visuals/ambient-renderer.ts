@@ -157,6 +157,7 @@ export class AmbientVisualRenderer {
   private canvas: HTMLCanvasElement;
   private gl: WebGLRenderingContext | null = null;
   private animationFrameId: number | null = null;
+  private frameTimer: number | null = null;
   private isRunning = false;
   private mode: AmbientVisualMode = "aurora";
   private targetFps = 30;
@@ -386,21 +387,41 @@ export class AmbientVisualRenderer {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+    if (this.frameTimer !== null) {
+      clearTimeout(this.frameTimer);
+      this.frameTimer = null;
+    }
+  }
+
+  /**
+   * Waits until the next frame is due, then asks the display for one. Asking
+   * for every frame and returning early from those not wanted still woke the
+   * renderer at the screen's own rate: on a 144 Hz panel, nearly five wakeups
+   * for each frame actually drawn at the default 30 FPS.
+   */
+  private scheduleFrame(delay: number): void {
+    this.frameTimer = window.setTimeout(() => {
+      this.frameTimer = null;
+      this.animationFrameId = requestAnimationFrame(this.loop);
+    }, Math.max(0, delay));
   }
 
   private loop = (): void => {
+    this.animationFrameId = null;
     if (!this.isRunning) return;
-
-    this.animationFrameId = requestAnimationFrame(this.loop);
 
     const now = performance.now();
     const elapsed = now - this.lastFrameTime;
     const interval = 1000 / this.targetFps;
 
-    if (elapsed < interval) return;
+    if (elapsed < interval) {
+      this.scheduleFrame(interval - elapsed);
+      return;
+    }
     this.lastFrameTime = now - (elapsed % interval);
 
     this.render();
+    this.scheduleFrame(this.lastFrameTime + interval - performance.now());
   };
 
   private render(): void {
