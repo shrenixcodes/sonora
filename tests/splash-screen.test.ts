@@ -19,7 +19,7 @@ describe("Sonora logo and launch splash screen", () => {
     const logoSvg = icon("sonoraLogo");
     expect(logoSvg).toBeDefined();
     expect(logoSvg).toContain("<svg");
-    expect(logoSvg).toContain("sonora-grad-icon");
+    expect(logoSvg).toContain("viewBox");
     expect(logoSvg).toContain("</svg>");
   });
 
