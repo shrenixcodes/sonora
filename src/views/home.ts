@@ -15,14 +15,16 @@ import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
 import { greetingFor } from "@/lib/greeting";
 import { dedupeById } from "@/lib/tracks";
-import { createSongCard, placeholderShelf, renderShelves, section } from "@/components/shelves";
+import { createSongCard, enableHorizontalScroll, placeholderShelf, renderShelves, section } from "@/components/shelves";
 import type { Track } from "@/types/music";
 
 const RECENT_LIMIT = 10;
 
 export function renderHome(container: HTMLElement): void {
   const recent = dedupeById(storage.getHistory()).slice(0, RECENT_LIMIT);
-  const chipsHost = el("div", { className: "home__chips", attrs: { role: "toolbar", "aria-label": "Moods and genres" } });
+  const chipsHost = enableHorizontalScroll(
+    el("div", { className: "home__chips", attrs: { role: "toolbar", "aria-label": "Moods and genres" } }),
+  );
   const shelvesHost = el("div", { className: "home__shelves", attrs: { "aria-live": "polite" } });
   /** The selected chip's params; null shows the unfiltered Home. */
   let selectedChip: string | null = null;
@@ -41,10 +43,12 @@ export function renderHome(container: HTMLElement): void {
       section(
         "Jump back in",
         recent.length > 0
-          ? el("div", {
-              className: "shelf",
-              children: recent.map((track) => createSongCard(track, recent)),
-            })
+          ? enableHorizontalScroll(
+              el("div", {
+                className: "shelf",
+                children: recent.map((track) => createSongCard(track, recent)),
+              }),
+            )
           : el("p", {
               className: "home__hint",
               text: "Songs you play will show up here so you can get back to them quickly.",

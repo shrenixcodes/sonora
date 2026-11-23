@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { greetingFor } from "../src/lib/greeting";
 import { dedupeById } from "../src/lib/tracks";
 import { formatTime } from "../src/lib/dom";
+import { enableHorizontalScroll } from "../src/components/shelves";
 import type { Track } from "../src/types/music";
 
 const at = (hour: number) => new Date(2026, 0, 1, hour, 30);
@@ -52,3 +53,36 @@ describe("formatTime", () => {
     expect(formatTime(NaN)).toBe("0:00");
   });
 });
+
+describe("enableHorizontalScroll", () => {
+  it("translates vertical wheel to horizontal scroll when overflowing horizontally", () => {
+    const element = document.createElement("div");
+    enableHorizontalScroll(element);
+
+    Object.defineProperty(element, "scrollWidth", { value: 500, configurable: true });
+    Object.defineProperty(element, "clientWidth", { value: 300, configurable: true });
+    element.scrollLeft = 0;
+
+    const event = new WheelEvent("wheel", { deltaY: 50, deltaX: 0, cancelable: true });
+    element.dispatchEvent(event);
+
+    expect(element.scrollLeft).toBe(50);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("does not intercept vertical wheel when there is no horizontal overflow", () => {
+    const element = document.createElement("div");
+    enableHorizontalScroll(element);
+
+    Object.defineProperty(element, "scrollWidth", { value: 300, configurable: true });
+    Object.defineProperty(element, "clientWidth", { value: 300, configurable: true });
+    element.scrollLeft = 0;
+
+    const event = new WheelEvent("wheel", { deltaY: 50, deltaX: 0, cancelable: true });
+    element.dispatchEvent(event);
+
+    expect(element.scrollLeft).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+});
+

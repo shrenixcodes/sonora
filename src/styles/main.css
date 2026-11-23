@@ -621,6 +621,24 @@
   background: var(--color-scrollbar);
 }
 
+@media (max-width: 1200px) {
+  .shelf {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    overflow-x: visible;
+    scroll-snap-type: none;
+    margin: 0;
+    padding-inline: 0;
+    padding-bottom: 0;
+    gap: var(--space-4);
+  }
+
+  .shelf .shelf-card {
+    margin: 0;
+    scroll-snap-align: none;
+  }
+}
+
 .shelf-card {
   display: flex;
   flex-direction: column;

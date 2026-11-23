@@ -17,6 +17,23 @@ import type { Track } from "@/types/music";
 const QUICK_PICK_LIMIT = 16;
 const PLACEHOLDER_TILES = 6;
 
+/**
+ * Translates vertical mouse wheel scroll to horizontal scroll when the element overflows horizontally.
+ */
+export function enableHorizontalScroll(element: HTMLElement): HTMLElement {
+  element.addEventListener(
+    "wheel",
+    (event: WheelEvent) => {
+      if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && element.scrollWidth > element.clientWidth) {
+        element.scrollLeft += event.deltaY;
+        event.preventDefault();
+      }
+    },
+    { passive: false },
+  );
+  return element;
+}
+
 export function renderShelves(shelves: HomeShelf[], emptyText: string): HTMLElement[] {
   if (shelves.length === 0) {
     return [
@@ -34,7 +51,9 @@ export function renderShelves(shelves: HomeShelf[], emptyText: string): HTMLElem
             className: "quick-grid",
             children: shelf.tracks.slice(0, QUICK_PICK_LIMIT).map((track) => createQuickTile(track, shelf.tracks)),
           })
-        : el("div", { className: "shelf", children: shelf.items.map((item) => createCard(item, shelf.tracks)) }),
+        : enableHorizontalScroll(
+            el("div", { className: "shelf", children: shelf.items.map((item) => createCard(item, shelf.tracks)) }),
+          ),
       shelf.strapline,
     ),
   );
