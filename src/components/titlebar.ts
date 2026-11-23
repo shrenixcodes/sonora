@@ -14,6 +14,7 @@ import { icon } from "@/icons";
 import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
 import { catalog } from "@/lib/ytm/catalog";
+import { prepareMinimize } from "@/lib/visuals/symbiote";
 
 const GRIP_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
 
@@ -119,6 +120,8 @@ export function createTitlebar(): HTMLElement {
               if (!appWindow) return;
               await appWindow.setIgnoreCursorEvents(false).catch(() => {});
               await leaveFullscreen(appWindow);
+              // Fade the shell out first, so restoring never flashes the old frame
+              await prepareMinimize();
               await appWindow.minimize();
             },
           }),

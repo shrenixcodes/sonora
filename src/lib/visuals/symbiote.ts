@@ -2,13 +2,13 @@
  * Symbiote — Sonora's liquid entrance animations.
  *
  * Restore (taskbar click on a minimized window):
- *   A connected animation: the current album art rides out of the taskbar button at
- *   the head of a liquid tendril and lands in its slot in the player bar, morphing
- *   from a small circle into the artwork's own shape. The bar spreads out from it.
- *   Then tendrils bleed in from the edges of the screen (not the window: a window
- *   dragged to a corner is reached from the screen edges around it), flood each
- *   panel and melt away as the panel pops into place. Edges, order and curves are
- *   randomized on every restore.
+ *   Music first. The current album art rises out of the taskbar button as a
+ *   spinning vinyl disc riding a liquid tendril, lands in its slot in the player
+ *   bar and settles into the artwork's own shape; the bar spreads out from it.
+ *   Only then do tendrils bleed in from the edges of the screen (not the window:
+ *   a window dragged to a corner is reached from the screen edges around it),
+ *   flood each panel and melt away as the panel pops into place. Edges, order
+ *   and curves are randomized on every restore.
  *
  * Launch:
  *   The Sonora logo rides out of the taskbar into the middle of the window, where
@@ -16,15 +16,19 @@
  *   into tendrils that build every panel, and the logo flies into the sidebar.
  *
  * The liquid takes its colors from the artwork of the playing track (black
- * symbiote when nothing is playing). It is a canvas of soft alpha blobs that an
- * SVG filter thresholds into one merged surface (the "gooey" metaball effect),
- * rims and lights with a specular sheen. The canvas is drawn at half resolution;
- * the threshold runs at full size, so edges stay sharp.
+ * symbiote when nothing is playing) and is rendered as GPU metaballs (see
+ * goo-renderer.ts). Panels only animate transform and opacity, so the
+ * compositor can run them without repainting.
+ *
+ * To avoid Windows flashing the old frame when the window is restored, the
+ * shell is faded out *before* minimizing: the native side holds back the
+ * taskbar's minimize request until the frontend has painted an empty frame.
  */
 
 import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { icon } from "@/icons";
+import { GooRenderer, type GooBlob } from "./goo-renderer";
 import { shouldReduceMotion } from "./motion";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -140,18 +144,22 @@ export interface LiquidColors {
 
 // ── Timeline ──────────────────────────────────────────────────
 
-/** Shortest album art flight from the taskbar into the player bar. */
-export const ART_FLIGHT_MS = 480;
+/** How long the disc is visibly rising before it lands in the player bar. */
+export const DISC_RISE_MS = 560;
+/** Shortest album art flight; kept for callers that time against it. */
+export const ART_FLIGHT_MS = DISC_RISE_MS;
 /** Earliest moment a panel tendril leaves its edge. */
 const TENDRIL_START_MS = 170;
 /** Tendril speed cap, px per ms: long paths take longer instead of whipping. */
 const TENDRIL_SPEED = 3.4;
 /** Time from a tendril reaching its panel to the goo being gone. */
-const MELT_MS = 660;
+const MELT_MS = 600;
 /** Upper bound for a whole sequence; cleanup is guaranteed by then. */
 export const SEQUENCE_MAX_MS = 2800;
 /** How long a launch waits for the window to be presented before giving up. */
 const PRIME_TIMEOUT_MS = 5000;
+/** The shell's fade-out before a minimize (matches the CSS transition). */
+const MINIMIZE_FADE_MS = 120;
 
 /** Panels that are revealed by their own tendrils. */
 export const PIECE_SELECTORS = [
@@ -166,13 +174,7 @@ export const PIECE_SELECTORS = [
 /** Pieces inside the player bar that follow the album art out. */
 const PLAYER_PART_SELECTORS = [".player__meta", ".player__like-btn", ".player__controls", ".player__right"];
 
-const GOO_FILTER_ID = "sonora-symbiote-goo";
-const GOO_LITE_FILTER_ID = "sonora-symbiote-goo-lite";
 const VENOM: RGB = [7, 6, 12];
-/** Canvas resolution relative to CSS pixels. */
-const GOO_SCALE = 0.5;
-/** A blob's visible radius is about this fraction of its drawn sprite radius. */
-const SPRITE_VISIBLE = 0.6;
 /** Windows parks minimized windows at -32000,-32000. */
 const MINIMIZED_POSITION = -30000;
 
@@ -501,20 +503,18 @@ export function liquidColors(palette: LiquidPalette | null, accent = "#a78bfa"):
 
 // ── Goo entities ──────────────────────────────────────────────
 
-interface Blob {
-  x: number;
-  y: number;
-  r: number;
-  c: number;
-}
+type Blob = GooBlob;
 
-interface Tendril {
+interface Curve {
   sx: number;
   sy: number;
   cx: number;
   cy: number;
   tx: number;
   ty: number;
+}
+
+interface Tendril extends Curve {
   start: number;
   travel: number;
   /** When the tendril starts melting back. */
@@ -525,7 +525,7 @@ interface Tendril {
   phase: number;
   wobble: number;
   color: number;
-  /** Keep the head alive until then (it carries the art or logo). */
+  /** Keep the head alive until then (it carries the disc or logo). */
   headHold?: number;
 }
 
@@ -550,34 +550,46 @@ interface FlightLeg {
   path: Tendril;
   size0: number;
   size1: number;
+  /** Size partway through, when the flyer swells on the way (the rising disc). */
+  peak?: number;
   radius0: number;
   radius1: number;
+  /** Degrees it turns back to rest over the leg; whole turns for the disc. */
   spin: number;
 }
 
-/** A DOM element (album art, logo) flying along legs over the goo. */
+/** A DOM element (album disc, logo) flying along legs over the goo. */
 interface Flyer {
   el: HTMLElement;
+  /** Turning layer inside the element; the outer one only moves and scales. */
+  spinner: HTMLElement | null;
   base: number;
   legs: FlightLeg[];
   fadeStart: number;
   fadeDur: number;
   /** Gentle breathing between two moments (the launch pool). */
   breathe?: [number, number];
+  /** The disc's grooves fade and it squares off into the artwork over this window. */
+  settle?: [number, number];
 }
 
-function bezier(t: Tendril, u: number): Point {
+function bezier(t: Curve, u: number): Point {
   const a = (1 - u) * (1 - u);
   const b = 2 * (1 - u) * u;
   const c = u * u;
   return { x: a * t.sx + b * t.cx + c * t.tx, y: a * t.sy + b * t.cy + c * t.ty };
 }
 
-function bezierNormal(t: Tendril, u: number): Point {
+function bezierNormal(t: Curve, u: number): Point {
   const dx = 2 * (1 - u) * (t.cx - t.sx) + 2 * u * (t.tx - t.cx);
   const dy = 2 * (1 - u) * (t.cy - t.sy) + 2 * u * (t.ty - t.cy);
   const len = Math.hypot(dx, dy) || 1;
   return { x: -dy / len, y: dx / len };
+}
+
+/** Rough length of a curve (its control polygon). */
+function pathLength(t: Curve): number {
+  return Math.hypot(t.cx - t.sx, t.cy - t.sy) + Math.hypot(t.tx - t.cx, t.ty - t.cy);
 }
 
 function tendrilHead(t: Tendril, now: number): Point {
@@ -590,6 +602,7 @@ function pushTendril(out: Blob[], t: Tendril, now: number, view: Bounds): void {
   const headU = easeLunge(p);
   const emerge = easeOutCubic(clamp01(p * 3.5));
   const melt = clamp01((now - t.melt) / t.meltDur);
+  const spacing = (pathLength(t) * headU) / t.segments;
 
   for (let i = 0; i <= t.segments; i++) {
     const k = i / t.segments; // 0 = head, 1 = root at the edge
@@ -614,8 +627,10 @@ function pushTendril(out: Blob[], t: Tendril, now: number, view: Bounds): void {
     const x = pos.x + n.x * sway;
     const y = pos.y + n.y * sway;
     // Most of a tendril from a far screen edge is outside the window
-    if (x + r < view.left || x - r > view.right || y + r < view.top || y - r > view.bottom) continue;
-    out.push({ x, y, r, c: t.color });
+    if (x + r * 2 < view.left || x - r * 2 > view.right || y + r * 2 < view.top || y - r * 2 > view.bottom) continue;
+    // Overlapping segments share the field, so a chain is as thick as one blob
+    const w = Math.min(1, Math.max(0.01, spacing / (2 * r)));
+    out.push({ x, y, r, w, c: t.color });
   }
 }
 
@@ -631,6 +646,7 @@ function pushMembrane(out: Blob[], m: Membrane, now: number): void {
     x: lerp(m.fromX, m.toX, e) + m.driftX * melt,
     y: lerp(m.fromY, m.toY, e) + m.driftY * melt,
     r,
+    w: 1,
     c: m.color,
   });
 }
@@ -638,24 +654,41 @@ function pushMembrane(out: Blob[], m: Membrane, now: number): void {
 function placeFlyer(f: Flyer, t: number): void {
   let leg = f.legs[0];
   for (const candidate of f.legs) if (t >= candidate.path.start) leg = candidate;
-  if (t < leg.path.start) {
-    f.el.style.opacity = "0";
-    return;
-  }
   const p = clamp01((t - leg.path.start) / leg.path.travel);
   const head = tendrilHead(leg.path, t);
   const landed = t - (leg.path.start + leg.path.travel);
-  const settle = landed > 0 ? Math.sin(Math.PI * clamp01(landed / 200)) * 0.07 : 0;
+  const bounce = landed > 0 ? Math.sin(Math.PI * clamp01(landed / 220)) * 0.08 : 0;
   const breathe =
     f.breathe && t > f.breathe[0] && t < f.breathe[1]
       ? Math.sin(((t - f.breathe[0]) / (f.breathe[1] - f.breathe[0])) * Math.PI) * 0.05
       : 0;
-  const size = lerp(leg.size0, leg.size1, easeOutCubic(p)) * (1 + settle + breathe);
+
+  let size: number;
+  if (leg.peak !== undefined) {
+    size =
+      p < 0.55
+        ? lerp(leg.size0, leg.peak, easeOutCubic(p / 0.55))
+        : lerp(leg.peak, leg.size1, easeInOutCubic((p - 0.55) / 0.45));
+  } else {
+    size = lerp(leg.size0, leg.size1, easeOutCubic(p));
+  }
+  size *= 1 + bounce + breathe;
   const scale = size / f.base;
-  const radius = lerp(leg.radius0, leg.radius1, easeInOutCubic(clamp01((p - 0.35) / 0.65)));
+
+  let radius: number;
+  if (f.settle) {
+    const m = easeInOutCubic(clamp01((t - f.settle[0]) / (f.settle[1] - f.settle[0])));
+    radius = lerp(size / 2, leg.radius1, m);
+    f.el.style.setProperty("--disc", String(1 - m));
+  } else {
+    radius = lerp(leg.radius0, leg.radius1, easeInOutCubic(clamp01((p - 0.35) / 0.65)));
+  }
+
+  const angle = leg.spin * (1 - easeOutCubic(p));
   f.el.style.transform =
-    `translate(${head.x - f.base / 2}px, ${head.y - f.base / 2}px) ` +
-    `rotate(${(1 - easeOutCubic(p)) * leg.spin}deg) scale(${scale})`;
+    `translate(${head.x - f.base / 2}px, ${head.y - f.base / 2}px) scale(${scale})` +
+    (f.spinner ? "" : ` rotate(${angle}deg)`);
+  if (f.spinner) f.spinner.style.transform = `rotate(${angle}deg)`;
   f.el.style.borderRadius = `${radius / Math.max(0.01, scale)}px`;
   f.el.style.opacity = String(1 - clamp01((t - f.fadeStart) / f.fadeDur));
 }
@@ -773,65 +806,6 @@ export function setLiquidPalette(palette: LiquidPalette | null): void {
 
 // ── DOM plumbing ──────────────────────────────────────────────
 
-function ensureGooFilters(colors: LiquidColors): void {
-  let defs = document.getElementById("sonora-symbiote-defs");
-  if (!defs) {
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.id = "sonora-symbiote-defs";
-    svg.setAttribute("aria-hidden", "true");
-    svg.setAttribute("width", "0");
-    svg.setAttribute("height", "0");
-    svg.setAttribute("style", "position:absolute;width:0;height:0;pointer-events:none");
-    // Threshold soft blobs into one surface, rim it, and light it like wet latex
-    const threshold = `<feColorMatrix in="SourceGraphic" type="matrix"
-          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 26 -11.6" result="goo"/>
-        <feMorphology in="goo" operator="erode" radius="1.4" result="inner"/>
-        <feComposite in="goo" in2="inner" operator="out" result="rim"/>
-        <feFlood data-rim flood-opacity="0.8" result="rimColor"/>
-        <feComposite in="rimColor" in2="rim" operator="in" result="rimPaint"/>`;
-    svg.innerHTML = `
-      <defs>
-        <filter id="${GOO_FILTER_ID}" x="-2%" y="-2%" width="104%" height="104%" color-interpolation-filters="sRGB">
-          ${threshold}
-          <feGaussianBlur in="goo" stdDeviation="5" result="soft"/>
-          <feSpecularLighting data-sheen in="soft" surfaceScale="7" specularConstant="1.25"
-            specularExponent="34" result="spec">
-            <feDistantLight azimuth="235" elevation="34"/>
-          </feSpecularLighting>
-          <feComposite in="spec" in2="inner" operator="in" result="sheen"/>
-          <feMerge><feMergeNode in="goo"/><feMergeNode in="sheen"/><feMergeNode in="rimPaint"/></feMerge>
-        </filter>
-        <filter id="${GOO_LITE_FILTER_ID}" x="-2%" y="-2%" width="104%" height="104%" color-interpolation-filters="sRGB">
-          ${threshold}
-          <feMerge><feMergeNode in="goo"/><feMergeNode in="rimPaint"/></feMerge>
-        </filter>
-      </defs>`;
-    document.body.appendChild(svg);
-    defs = svg as unknown as HTMLElement;
-  }
-  defs.querySelectorAll("[data-rim]").forEach((n) => n.setAttribute("flood-color", colors.rim));
-  defs.querySelectorAll("[data-sheen]").forEach((n) => n.setAttribute("lighting-color", colors.sheen));
-}
-
-function makeBlobSprite(rgb: RGB): HTMLCanvasElement | null {
-  const size = 128;
-  const sprite = document.createElement("canvas");
-  sprite.width = size;
-  sprite.height = size;
-  const ctx = sprite.getContext("2d");
-  if (!ctx) return null;
-  const c = rgb.join(", ");
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, `rgba(${c}, 1)`);
-  g.addColorStop(0.42, `rgba(${c}, 0.82)`);
-  g.addColorStop(0.7, `rgba(${c}, 0.3)`);
-  g.addColorStop(1, `rgba(${c}, 0)`);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  return sprite;
-}
-
 function visibleRect(node: Element): Rect | null {
   const r = node.getBoundingClientRect();
   if (r.width < 4 || r.height < 4) return null;
@@ -849,18 +823,8 @@ function readAccent(): string {
   return getComputedStyle(shell).getPropertyValue("--color-accent").trim() || "#a78bfa";
 }
 
-/** Clip inset that hides an element on the side it enters from. */
-function entryInset(v: Point): string {
-  const pad = "-48px";
-  const top = v.y > 0.3 ? "100%" : pad;
-  const bottom = v.y < -0.3 ? "100%" : pad;
-  const left = v.x > 0.3 ? "100%" : pad;
-  const right = v.x < -0.3 ? "100%" : pad;
-  return `inset(${top} ${right} ${bottom} ${left})`;
-}
-
 /** A curved path; bend is a fraction of its length, signed for the side it bows to. */
-function curve(from: Point, to: Point, bend: number, maxBend = 260): Pick<Tendril, "sx" | "sy" | "cx" | "cy" | "tx" | "ty"> {
+function curve(from: Point, to: Point, bend: number, maxBend = 260): Curve {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -897,12 +861,30 @@ function animate(scene: Scene, node: Element | null, keyframes: Keyframe[], opti
   }
 }
 
-/** Shoots tendrils at a piece. Returns when the first one lands and the direction it came in. */
+/**
+ * Fraction of a curve's (eased) travel time spent before its head is inside the
+ * window. A tendril from a far screen edge starts that much earlier, so it is
+ * already on its way when it is due on screen.
+ */
+function hiddenFraction(path: Curve, view: Bounds, margin: number): number {
+  for (let i = 0; i <= 100; i++) {
+    const h = bezier(path, easeLunge(i / 100));
+    if (h.x >= view.left - margin && h.x <= view.right + margin && h.y >= view.top - margin && h.y <= view.bottom + margin) {
+      return i / 100;
+    }
+  }
+  return 1;
+}
+
+/**
+ * Shoots tendrils at a piece, timed so the first one comes into view at enterAt.
+ * Returns when the first one lands and the direction it came in.
+ */
 function addTendrils(
   scene: Scene,
   rect: Rect,
   spawns: Point[],
-  start: number,
+  enterAt: number,
   minTravel: number,
   color: number,
   stagger = 35,
@@ -916,24 +898,27 @@ function addTendrils(
       x: rect.x + rect.width * (0.3 + Math.random() * 0.4),
       y: rect.y + rect.height * (0.3 + Math.random() * 0.4),
     };
-    const len = Math.hypot(target.x - spawn.x, target.y - spawn.y) || 1;
-    const t0 = start + i * stagger * (0.6 + Math.random() * 0.8);
-    const travel = clamp(Math.max(minTravel * (0.9 + Math.random() * 0.2), len / TENDRIL_SPEED), minTravel, 980);
+    const path = curve(spawn, target, (Math.random() - 0.5) * 0.7);
+    const len = pathLength(path) || 1;
+    const travel = clamp(Math.max(minTravel * (0.9 + Math.random() * 0.2), len / TENDRIL_SPEED), minTravel, 1800);
+    const hidden = Math.min(0.85, hiddenFraction(path, scene.view, baseR));
+    const t0 = enterAt + i * stagger * (0.6 + Math.random() * 0.8) - hidden * travel;
     scene.tendrils.push({
-      ...curve(spawn, target, (Math.random() - 0.5) * 0.7),
+      ...path,
       start: t0,
       travel,
       melt: t0 + travel + 60,
-      meltDur: 380 + Math.random() * 140,
+      meltDur: 360 + Math.random() * 120,
       baseR: baseR * (i === 0 ? 1 : 0.7 + Math.random() * 0.25),
-      segments: clamp(Math.round(len / (baseR * 0.32)), 12, 170),
+      segments: clamp(Math.round(len / (baseR * 0.4)), 12, 200),
       phase: Math.random() * 6.28,
       wobble: 8 + Math.random() * 14,
       color: i === 0 ? color : (color + i) % 3,
     });
     if (t0 + travel < arrival) {
       arrival = t0 + travel;
-      entry = { x: (target.x - spawn.x) / len, y: (target.y - spawn.y) / len };
+      const d = Math.hypot(target.x - spawn.x, target.y - spawn.y) || 1;
+      entry = { x: (target.x - spawn.x) / d, y: (target.y - spawn.y) / d };
     }
   });
   return { arrival, entry };
@@ -977,23 +962,18 @@ function addFlood(scene: Scene, rect: Rect, arrival: number, entry: Point, color
   scene.end = Math.max(scene.end, arrival + MELT_MS);
 }
 
-/** The piece rushes in along the tendril's direction, wiped open, with a small overshoot. */
+/** The piece rushes in along the tendril's direction with a small overshoot. */
 function popPiece(scene: Scene, node: HTMLElement, rect: Rect, arrival: number, entry: Point): void {
-  const distance = Math.min(90, 34 + Math.min(rect.width, rect.height) * 0.06);
-  const open = "inset(-48px -48px -48px -48px)";
+  const distance = Math.min(80, 30 + Math.min(rect.width, rect.height) * 0.05);
   animate(
     scene,
     node,
     [
-      {
-        opacity: 0,
-        transform: `translate(${-entry.x * distance}px, ${-entry.y * distance}px) scale(0.9)`,
-        clipPath: entryInset(entry),
-      },
-      { opacity: 1, transform: `translate(${entry.x * 5}px, ${entry.y * 5}px) scale(1.012)`, clipPath: open, offset: 0.62 },
-      { opacity: 1, transform: "none", clipPath: open },
+      { opacity: 0, transform: `translate(${-entry.x * distance}px, ${-entry.y * distance}px) scale(0.94)` },
+      { opacity: 1, transform: `translate(${entry.x * 4}px, ${entry.y * 4}px) scale(1.006)`, offset: 0.6 },
+      { opacity: 1, transform: "none" },
     ],
-    { duration: 600, delay: arrival + 40, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" },
+    { duration: 560, delay: arrival + 30, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" },
   );
 }
 
@@ -1074,7 +1054,7 @@ function collectPieces(): Array<{ node: HTMLElement; rect: Rect }> {
   return pieces;
 }
 
-function makeFlyer(kind: "art" | "logo", base: number, source?: string | null): HTMLElement {
+function makeFlyer(kind: "disc" | "logo", base: number, source?: string | null): { el: HTMLElement; spinner: HTMLElement | null } {
   const el = document.createElement("div");
   el.className = `symbiote-flyer symbiote-flyer--${kind}`;
   el.setAttribute("aria-hidden", "true");
@@ -1083,82 +1063,91 @@ function makeFlyer(kind: "art" | "logo", base: number, source?: string | null): 
   el.style.opacity = "0";
   if (kind === "logo") {
     el.innerHTML = icon("sonoraLogo");
-  } else {
-    const img = document.createElement("img");
-    img.src = source || "/sonora-logo.svg";
-    img.alt = "";
-    img.draggable = false;
-    if (!source) el.classList.add("symbiote-flyer--placeholder");
-    el.appendChild(img);
+    return { el, spinner: null };
   }
-  return el;
+  // A record: the artwork turns with its grooves and spindle hole, the sheen stays put
+  const spinner = document.createElement("div");
+  spinner.className = "symbiote-disc__spin";
+  const img = document.createElement("img");
+  img.src = source || "/sonora-logo.svg";
+  img.alt = "";
+  img.draggable = false;
+  if (!source) el.classList.add("symbiote-flyer--placeholder");
+  const grooves = document.createElement("div");
+  grooves.className = "symbiote-disc__grooves";
+  spinner.append(img, grooves);
+  const sheen = document.createElement("div");
+  sheen.className = "symbiote-disc__sheen";
+  el.append(spinner, sheen);
+  return { el, spinner };
 }
 
-/** When a path's head first enters the window, in ms. */
-function entryTime(path: Tendril, view: Bounds): number {
-  for (let t = path.start; t <= path.start + path.travel; t += 10) {
-    const p = tendrilHead(path, t);
-    if (p.x >= view.left && p.x <= view.right && p.y >= view.top && p.y <= view.bottom) return t;
-  }
-  return path.start + path.travel;
-}
-
-/** Restore: album art from the taskbar, panels from the screen edges. */
+/**
+ * Restore: music first. The album art rises out of the taskbar as a spinning
+ * disc and lands in the player bar; once it has, the panels form from the
+ * screen edges.
+ */
 function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
   const { right: width, bottom: height } = scene.view;
   const screen = screenBoundsInWindow(g);
   const anchor = taskbarAnchor(g);
 
-  // 1. Album art: connected animation out of the taskbar button
+  // 1. The disc: connected animation out of the taskbar button
   const player = document.querySelector<HTMLElement>(".player");
   const playerRect = player ? visibleRect(player) : null;
   const artEl = document.querySelector<HTMLElement>(".player__artwork");
   const artRect = artEl ? visibleRect(artEl) : null;
   const landing: Rect = artRect ?? { x: width / 2 - 24, y: height - 72, width: 48, height: 48 };
   const land = { x: landing.x + landing.width / 2, y: landing.y + landing.height / 2 };
-  const flightLen = Math.hypot(land.x - anchor.x, land.y - anchor.y);
-  const flight = clamp(ART_FLIGHT_MS + flightLen * 0.12, ART_FLIGHT_MS, 820);
+  const base = Math.max(landing.width, landing.height);
+  const peak = clamp(base * 2.1, 84, 124);
+
+  // On screen from the first frame: the part of the rise below the window has already happened
+  const path = curve(anchor, land, randomBend(0.15, 0.35), 220);
+  const hidden = Math.min(0.85, hiddenFraction(path, scene.view, peak / 2));
+  const travel = clamp(DISC_RISE_MS / (1 - hidden), DISC_RISE_MS, 2200);
+  const start = -hidden * travel;
+  const landsAt = start + travel;
 
   const carrier: Tendril = {
-    ...curve(anchor, land, randomBend(0.25, 0.45), 240),
-    start: 0,
-    travel: flight,
-    melt: flight + 40,
+    ...path,
+    start,
+    travel,
+    melt: landsAt + 40,
     meltDur: 420,
-    baseR: clamp(landing.width * 0.62, 20, 36),
-    segments: clamp(Math.round(flightLen / 8), 14, 170),
+    baseR: clamp(base * 0.7, 22, 40),
+    segments: clamp(Math.round(pathLength(path) / 8), 14, 200),
     phase: Math.random() * 6.28,
     wobble: 10,
     color: 0,
-    headHold: flight + 260,
+    headHold: landsAt + 260,
   };
   scene.tendrils.push(carrier);
 
-  const base = Math.max(landing.width, landing.height);
   const artRadius = artEl ? parseFloat(getComputedStyle(artEl).borderRadius) : NaN;
   const finalRadius = Number.isFinite(artRadius) ? Math.min(base / 2, artRadius) : base / 2;
-  const art = makeFlyer("art", base, artEl?.querySelector("img")?.getAttribute("src"));
+  const disc = makeFlyer("disc", base, artEl?.querySelector("img")?.getAttribute("src"));
   scene.flyers.push({
-    el: art,
+    ...disc,
     base,
-    legs: [{ path: carrier, size0: Math.min(base, 30), size1: base, radius0: 15, radius1: finalRadius, spin: -14 }],
-    fadeStart: flight + 140,
+    legs: [{ path: carrier, size0: 30, peak, size1: base, radius0: base / 2, radius1: finalRadius, spin: -900 }],
+    settle: [landsAt + 40, landsAt + 300],
+    fadeStart: landsAt + 300,
     fadeDur: 140,
   });
 
-  // 2. The player bar spreads out from where the art lands
-  if (player && playerRect) revealPlayer(scene, player, playerRect, land, landing, flight - 30, 0);
+  // 2. The player bar spreads out from where the disc lands
+  if (player && playerRect) revealPlayer(scene, player, playerRect, land, landing, landsAt - 30, 0);
 
-  // 3. Panels: tendrils from the screen edges, in the screen's frame of reference
+  // 3. Then the panels: tendrils from the screen edges, in the screen's frame of reference
   const pieces = collectPieces();
   const screenArea = { width: screen.right - screen.left, height: screen.bottom - screen.top };
-  const startAt = Math.max(TENDRIL_START_MS, entryTime(carrier, scene.view) + 100);
   const plans = planReveal(
     pieces.map(({ rect }) => ({ ...rect, x: rect.x - screen.left, y: rect.y - screen.top })),
     screenArea,
     mode,
     Math.random,
-    startAt,
+    landsAt + 80,
   );
 
   plans.forEach((plan, order) => {
@@ -1172,12 +1161,12 @@ function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
       }
     }
     const color = (order % 3 + 1) % 3;
-    const { arrival, entry } = addTendrils(scene, rect, spawns, plan.start, plan.travel, color);
+    const { arrival, entry } = addTendrils(scene, rect, spawns, plan.start, Math.min(plan.travel, 380), color);
     addFlood(scene, rect, arrival, entry, color);
     popPiece(scene, node, rect, arrival, entry);
   });
 
-  scene.end = Math.max(scene.end, flight + 700);
+  scene.end = Math.max(scene.end, landsAt + 700);
 }
 
 /** Launch: logo from the taskbar pools in the middle, then bursts into the interface. */
@@ -1186,19 +1175,23 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   const anchor = taskbarAnchor(g);
   const center = { x: width / 2, y: height * 0.47 };
   const logoSize = clamp(Math.min(width, height) * 0.15, 76, 132);
-  const flightLen = Math.hypot(center.x - anchor.x, center.y - anchor.y);
-  const flight = clamp(520 + flightLen * 0.1, 560, 860);
+
+  // 1. Logo rides a tendril out of the taskbar, on screen from the first frame
+  const path = curve(anchor, center, randomBend(0.2, 0.4), 260);
+  const hidden = Math.min(0.85, hiddenFraction(path, scene.view, logoSize / 2));
+  const travel = clamp(620 / (1 - hidden), 620, 2200);
+  const start = -hidden * travel;
+  const flight = start + travel;
   const burst = flight + 420;
 
-  // 1. Logo rides a tendril out of the taskbar
   const carrier: Tendril = {
-    ...curve(anchor, center, randomBend(0.2, 0.4), 260),
-    start: 0,
-    travel: flight,
+    ...path,
+    start,
+    travel,
     melt: flight + 20,
     meltDur: 520,
     baseR: logoSize * 0.42,
-    segments: clamp(Math.round(flightLen / 8), 16, 170),
+    segments: clamp(Math.round(pathLength(path) / 8), 16, 200),
     phase: Math.random() * 6.28,
     wobble: 14,
     color: 0,
@@ -1282,12 +1275,12 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   let fadeStart = burst + 60;
   if (slot && slotRect) {
     const home = { x: slotRect.x + slotRect.width / 2, y: slotRect.y + slotRect.height / 2 };
-    const travel = clamp(Math.hypot(home.x - center.x, home.y - center.y) / 2.2, 380, 640);
-    const path: Tendril = {
+    const legTravel = clamp(Math.hypot(home.x - center.x, home.y - center.y) / 2.2, 380, 640);
+    const leg: Tendril = {
       ...curve(center, home, randomBend(0.12, 0.3)),
       start: burst + 60,
-      travel,
-      melt: burst + 60 + travel,
+      travel: legTravel,
+      melt: burst + 60 + legTravel,
       meltDur: 1,
       baseR: 0,
       segments: 0,
@@ -1295,11 +1288,11 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
       wobble: 0,
       color: 0,
     };
-    legs.push({ path, size0: logoSize, size1: Math.max(slotRect.width, slotRect.height), radius0: 0, radius1: 0, spin: 0 });
-    fadeStart = burst + 60 + travel + 40;
+    legs.push({ path: leg, size0: logoSize, size1: Math.max(slotRect.width, slotRect.height), radius0: 0, radius1: 0, spin: 0 });
+    fadeStart = burst + 60 + legTravel + 40;
     animate(scene, slot, [{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: fadeStart - 40 });
   }
-  scene.flyers.push({ el: logo, base: logoSize, legs, fadeStart, fadeDur: 160, breathe: [flight, burst + 60] });
+  scene.flyers.push({ ...logo, base: logoSize, legs, fadeStart, fadeDur: 160, breathe: [flight, burst + 60] });
 
   scene.end = Math.max(scene.end, fadeStart + 200);
 }
@@ -1307,7 +1300,6 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
 // ── Runtime ───────────────────────────────────────────────────
 
 interface ActiveRun {
-  canvas: HTMLCanvasElement | null;
   flyers: HTMLElement[];
   animations: Animation[];
   raf: number | null;
@@ -1321,6 +1313,45 @@ let lastRestore = 0;
 let lastMode: RevealMode | null = null;
 let launched = false;
 let primeTimer: ReturnType<typeof setTimeout> | null = null;
+/** Set once the window is (about to be) minimized; the next return plays the restore. */
+let awaitingRestore = false;
+
+let renderer: GooRenderer | null = null;
+let rendererUnavailable = false;
+
+/** The shared liquid canvas, created once and kept hidden between animations. */
+function liquidRenderer(): GooRenderer | null {
+  if (renderer?.lost) {
+    renderer.canvas.remove();
+    renderer = null;
+  }
+  if (!renderer && !rendererUnavailable) {
+    renderer = GooRenderer.create();
+    if (!renderer) {
+      rendererUnavailable = true;
+      return null;
+    }
+    renderer.canvas.className = "symbiote-canvas";
+    renderer.canvas.setAttribute("aria-hidden", "true");
+    renderer.canvas.hidden = true;
+  }
+  if (renderer && !renderer.canvas.isConnected) document.body.appendChild(renderer.canvas);
+  return renderer;
+}
+
+/** Compiles the liquid shaders while idle, so the first animation starts without a hitch. */
+export function warmUpSymbiote(): void {
+  const warm = () => {
+    if (shouldReduceMotion()) return;
+    const goo = liquidRenderer();
+    goo?.resize(window.innerWidth || 1024, window.innerHeight || 768);
+    goo?.render([]);
+  };
+  const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+    .requestIdleCallback;
+  if (idle) idle(warm, { timeout: 2000 });
+  else setTimeout(warm, 600);
+}
 
 export function isSymbioteAnimating(): boolean {
   return active !== null;
@@ -1382,7 +1413,6 @@ function play(kind: "restore" | "launch", mode: RevealMode): Promise<void> {
   window.addEventListener("keydown", skip, true);
 
   const run: ActiveRun = {
-    canvas: null,
     flyers: scene.flyers.map((f) => f.el),
     animations: scene.animations,
     raf: null,
@@ -1396,29 +1426,18 @@ function play(kind: "restore" | "launch", mode: RevealMode): Promise<void> {
   active = run;
   scene.flyers.forEach((f) => document.body.appendChild(f.el));
 
-  // Goo canvas, one blob sprite per liquid color
-  const colors = liquidColors(liquidPalette, readAccent());
-  const canvas = document.createElement("canvas");
-  canvas.className = "symbiote-canvas";
-  canvas.setAttribute("aria-hidden", "true");
-  canvas.width = Math.ceil(width * GOO_SCALE);
-  canvas.height = Math.ceil(height * GOO_SCALE);
-  const ctx = canvas.getContext("2d");
-  const sprites = ctx ? colors.fills.map(makeBlobSprite) : [];
-  const ready = ctx !== null && sprites.length > 0 && sprites.every((s) => s !== null);
-  if (ready) {
-    ensureGooFilters(colors);
-    document.body.appendChild(canvas);
-    run.canvas = canvas;
+  const goo = liquidRenderer();
+  if (goo) {
+    const colors = liquidColors(liquidPalette, readAccent());
+    goo.setColors(colors.fills, colors.sheen, colors.rim);
+    goo.resize(width, height);
+    goo.canvas.hidden = false;
   }
 
   if (typeof requestAnimationFrame !== "function") return finished;
 
   const t0 = performance.now();
-  const frameTimes: number[] = [];
-  let lastFrame = t0;
   const blobs: Blob[] = [];
-
   const frame = (stamp: number): void => {
     if (active !== run) return;
     const t = stamp - t0;
@@ -1426,34 +1445,17 @@ function play(kind: "restore" | "launch", mode: RevealMode): Promise<void> {
       stopSymbiote();
       return;
     }
-
-    // Drop the specular pass if the first frames are slow
-    if (frameTimes.length < 14) {
-      frameTimes.push(stamp - lastFrame);
-      if (frameTimes.length === 14) {
-        const sorted = frameTimes.slice(2).sort((a, b) => a - b);
-        if (sorted[Math.floor(sorted.length / 2)] > 26) canvas.dataset.quality = "lite";
-      }
-    }
-    lastFrame = stamp;
-
     for (const flyer of scene.flyers) placeFlyer(flyer, t);
-
-    if (ready && ctx) {
+    if (goo) {
       blobs.length = 0;
       for (const m of scene.membranes) pushMembrane(blobs, m, t);
       for (const tendril of scene.tendrils) pushTendril(blobs, tendril, t, scene.view);
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (const b of blobs) {
-        const r = (b.r / SPRITE_VISIBLE) * GOO_SCALE;
-        ctx.drawImage(sprites[b.c] as HTMLCanvasElement, b.x * GOO_SCALE - r, b.y * GOO_SCALE - r, r * 2, r * 2);
-      }
+      goo.render(blobs);
     }
-
     run.raf = requestAnimationFrame(frame);
   };
-  run.raf = requestAnimationFrame(frame);
+  // Place everything for the first frame right away, then follow the display
+  frame(t0);
   return finished;
 }
 
@@ -1465,7 +1467,6 @@ export function stopSymbiote(): void {
     if (run.raf !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(run.raf);
     clearTimeout(run.timer);
     run.detach();
-    run.canvas?.remove();
     run.flyers.forEach((el) => el.remove());
     for (const animation of run.animations) {
       try {
@@ -1474,6 +1475,10 @@ export function stopSymbiote(): void {
         // Already finished
       }
     }
+  }
+  if (renderer) {
+    renderer.clear();
+    renderer.canvas.hidden = true;
   }
   const root = document.documentElement;
   root.classList.remove("app--restoring");
@@ -1513,6 +1518,24 @@ export function triggerRestoreAnimation(options: RestoreOptions = {}): boolean {
 }
 
 /**
+ * Fades the shell out before the window minimizes, so the frame Windows keeps
+ * (and shows first when the window is restored) is empty rather than the old
+ * interface. Resolves once that frame has been painted.
+ */
+export function prepareMinimize(): Promise<void> {
+  if (active) stopSymbiote();
+  awaitingRestore = true;
+  if (shouldReduceMotion()) return Promise.resolve();
+  primeShell();
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
+      else resolve();
+    }, MINIMIZE_FADE_MS);
+  });
+}
+
+/**
  * Hides the shell before the window is first shown, so the launch starts from
  * an empty window. Returns whether a launch animation will play. If nothing
  * plays it within a few seconds, the shell is shown anyway.
@@ -1541,6 +1564,7 @@ export function resetSymbioteState(): void {
   lastRestore = 0;
   lastMode = null;
   launched = false;
+  awaitingRestore = false;
   nativeGeometry = null;
   domGeometry = null;
 }
@@ -1552,21 +1576,20 @@ export function resetSymbioteState(): void {
  * the animation starts from wherever it was last dragged.
  */
 export function initRestoreAnimation(): void {
-  let minimized = false;
-
   const onHidden = () => {
     if (active) stopSymbiote();
-    minimized = true;
+    awaitingRestore = true;
     if (!shouldReduceMotion()) primeShell();
   };
   const onBack = () => {
-    if (!minimized) return;
-    minimized = false;
+    if (!awaitingRestore) return;
+    awaitingRestore = false;
     triggerRestoreAnimation();
   };
 
   rememberWindowPosition();
   scheduleNativeRefresh();
+  warmUpSymbiote();
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") onHidden();
@@ -1581,7 +1604,14 @@ export function initRestoreAnimation(): void {
     const appWindow = getCurrentWindow();
     appWindow.onMoved(scheduleNativeRefresh).catch(() => {});
     appWindow.onResized(scheduleNativeRefresh).catch(() => {});
-    // Emitted by the native sampler in window_mode.rs, which polls is_minimized()
+    // The native side holds a taskbar minimize until the shell has faded out
+    appWindow
+      .listen("sonora://will-minimize", async () => {
+        await prepareMinimize();
+        await appWindow.minimize().catch(() => {});
+      })
+      .catch(() => {});
+    // Emitted by the window subclass and the sampler in window_mode.rs
     appWindow.listen("sonora://minimize", onHidden).catch(() => {});
     appWindow.listen("sonora://restore", onBack).catch(() => {});
     appWindow

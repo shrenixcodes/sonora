@@ -16,6 +16,7 @@ import {
   pickMode,
   planReveal,
   playLaunchAnimation,
+  prepareMinimize,
   primeLaunch,
   resetSymbioteState,
   screenBoundsInWindow,
@@ -248,7 +249,7 @@ describe("symbiote restore — runtime", () => {
     expect(isSymbioteAnimating()).toBe(true);
     expect(document.documentElement.classList.contains("app--restoring")).toBe(true);
     expect(document.documentElement.dataset.symbioteMode).toBe("natural");
-    expect(document.querySelector(".symbiote-flyer--art img")?.getAttribute("src")).toBe("/cover.jpg");
+    expect(document.querySelector(".symbiote-flyer--disc img")?.getAttribute("src")).toBe("/cover.jpg");
 
     vi.advanceTimersByTime(SEQUENCE_MAX_MS + 100);
     expect(isSymbioteAnimating()).toBe(false);
@@ -260,7 +261,7 @@ describe("symbiote restore — runtime", () => {
   it("falls back to the Sonora logo when nothing is playing", () => {
     document.querySelector(".player__artwork")!.innerHTML = "";
     triggerRestoreAnimation({ force: true });
-    expect(document.querySelector(".symbiote-flyer--art img")?.getAttribute("src")).toBe("/sonora-logo.svg");
+    expect(document.querySelector(".symbiote-flyer--disc img")?.getAttribute("src")).toBe("/sonora-logo.svg");
   });
 
   it("ignores a second trigger for the same restore", () => {
@@ -281,6 +282,17 @@ describe("symbiote restore — runtime", () => {
     triggerRestoreAnimation({ force: true });
     window.dispatchEvent(new Event("pointerdown"));
     expect(isSymbioteAnimating()).toBe(false);
+  });
+
+  it("fades the shell out before minimizing, then plays on the way back", async () => {
+    initRestoreAnimation();
+    const ready = prepareMinimize();
+    expect(document.documentElement.classList.contains("symbiote-primed")).toBe(true);
+    vi.advanceTimersByTime(200);
+    await ready;
+    window.dispatchEvent(new Event("focus"));
+    expect(isSymbioteAnimating()).toBe(true);
+    expect(document.documentElement.classList.contains("symbiote-primed")).toBe(false);
   });
 
   it("plays after a minimize, but not on plain focus changes", () => {

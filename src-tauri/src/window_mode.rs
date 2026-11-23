@@ -294,13 +294,78 @@ pub fn install_centre_snap<R: Runtime>(_window: &WebviewWindow<R>) {}
 
 #[cfg(windows)]
 mod centre_snap {
-    use tauri::{Runtime, WebviewWindow};
+    use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::thread;
+    use std::time::Duration;
+
+    use tauri::{Emitter, Runtime, WebviewWindow};
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
     use windows::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
     use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
-    use windows::Win32::UI::WindowsAndMessaging::WM_MOVING;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SC_MINIMIZE, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SW_MINIMIZE, ShowWindowAsync, WM_MOVING,
+        WM_SIZE, WM_SYSCOMMAND,
+    };
+
+    /* -- Minimize hand-off ---------------------------------------------------
+     * Windows keeps the last frame a window painted and shows it first when the
+     * window is restored, so restoring would flash the old interface before the
+     * entrance animation could start. A minimize from the taskbar (or the system
+     * menu) is therefore held back: the frontend is told, fades the interface
+     * out, and minimizes itself once that empty frame has been painted. If it
+     * does not answer in time the window is minimized anyway.
+     */
+    const MINIMIZE_GRACE: Duration = Duration::from_millis(320);
+    static EMIT: OnceLock<Box<dyn Fn(&'static str) + Send + Sync>> = OnceLock::new();
+    static MINIMIZE_PENDING: AtomicBool = AtomicBool::new(false);
+    static MINIMIZED: AtomicBool = AtomicBool::new(false);
+
+    fn emit(event: &'static str) {
+        if let Some(emit) = EMIT.get() {
+            emit(event);
+        }
+    }
+
+    /// Handles the minimize hand-off and reports minimize/restore right away
+    /// (the sampler's polling would otherwise add up to 100 ms). Returns true
+    /// when the message was consumed.
+    fn on_window_state(hwnd: HWND, message: u32, wparam: WPARAM) -> bool {
+        if message == WM_SYSCOMMAND && (wparam.0 as u32 & 0xFFF0) == SC_MINIMIZE {
+            // A second request while one is held is the follow-through: let it pass
+            if MINIMIZE_PENDING.swap(true, Ordering::SeqCst) {
+                MINIMIZE_PENDING.store(false, Ordering::SeqCst);
+                return false;
+            }
+            emit("sonora://will-minimize");
+            let raw = hwnd.0 as isize;
+            thread::spawn(move || {
+                thread::sleep(MINIMIZE_GRACE);
+                if MINIMIZE_PENDING.swap(false, Ordering::SeqCst) {
+                    log::debug!("frontend did not minimize in time; minimizing");
+                    // Safety: ShowWindowAsync only posts to the window's thread.
+                    unsafe {
+                        let _ = ShowWindowAsync(HWND(raw as *mut _), SW_MINIMIZE);
+                    }
+                }
+            });
+            return true;
+        }
+        if message == WM_SIZE {
+            let kind = wparam.0 as u32;
+            if kind == SIZE_MINIMIZED {
+                MINIMIZE_PENDING.store(false, Ordering::SeqCst);
+                if !MINIMIZED.swap(true, Ordering::SeqCst) {
+                    emit("sonora://minimize");
+                }
+            } else if (kind == SIZE_RESTORED || kind == SIZE_MAXIMIZED) && MINIMIZED.swap(false, Ordering::SeqCst) {
+                emit("sonora://restore");
+            }
+        }
+        false
+    }
 
     /// How near the middle, in device pixels, a drag has to pass for the window
     /// to be taken the rest of the way. Small enough that every other resting
@@ -349,6 +414,9 @@ mod centre_snap {
         _id: usize,
         _data: usize,
     ) -> LRESULT {
+        if on_window_state(hwnd, message, wparam) {
+            return LRESULT(0);
+        }
         if message == WM_MOVING {
             let proposed = lparam.0 as *mut RECT;
             if !proposed.is_null() {
@@ -372,6 +440,14 @@ mod centre_snap {
             log::warn!("no window handle; centre snapping is off");
             return;
         };
+        let target = window.clone();
+        let _ = EMIT.set(Box::new(move |event| {
+            // Emit off the window procedure; Tauri hands it to the webview
+            let target = target.clone();
+            thread::spawn(move || {
+                let _ = target.emit(event, ());
+            });
+        }));
         // Safety: the subclass lives as long as the window it is attached to.
         let installed = unsafe { SetWindowSubclass(hwnd, Some(on_message), SUBCLASS_ID, 0) };
         if !installed.as_bool() {
