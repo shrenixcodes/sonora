@@ -72,11 +72,16 @@
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
   flex-shrink: 0;
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-spring);
 }
 
 .player__like-btn:hover {
   color: var(--color-accent);
+}
+
+.player__like-btn:active {
+  transform: scale(0.88);
 }
 
 .player__like-btn svg {
@@ -116,6 +121,10 @@
 
 .player__btn:hover {
   color: var(--color-text);
+}
+
+.player__btn:active:not(:disabled) {
+  transform: scale(0.88);
 }
 
 .player__btn--active {
@@ -274,11 +283,16 @@
   height: 32px;
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-spring);
 }
 
 .player__volume-btn:hover {
   color: var(--color-text);
+}
+
+.player__volume-btn:active {
+  transform: scale(0.88);
 }
 
 .player__volume-btn svg {
@@ -298,11 +312,16 @@
   height: 32px;
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-spring);
 }
 
 .player__extra-btn:hover {
   color: var(--color-text);
+}
+
+.player__extra-btn:active {
+  transform: scale(0.88);
 }
 
 .player__extra-btn svg {
