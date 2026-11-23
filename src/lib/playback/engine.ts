@@ -237,6 +237,15 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   handleBridgeState(report: YtmState): void {
     // Sign-in status only; it says nothing about playback.
     if (report.reason === "account") return;
+    // Media keys and the system media controls skip through Sonora's queue.
+    if (report.reason === "media-next") {
+      this.next();
+      return;
+    }
+    if (report.reason === "media-previous") {
+      this.previous();
+      return;
+    }
     this.state.isAd = report.ad;
 
     if (report.videoId) {

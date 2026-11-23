@@ -78,6 +78,30 @@
     }).catch(() => {});
   };
 
+  // Media keys and the system media controls reach this page through
+  // mediaSession, where the page's own handlers skip within YouTube Music's
+  // queue. Sonora loads one track at a time, so that queue is empty and the
+  // keys did nothing. Skips go to Sonora, which owns the queue, and the page
+  // is kept from taking these two actions back.
+  const SKIP_ACTIONS = new Map([
+    ["nexttrack", "media-next"],
+    ["previoustrack", "media-previous"],
+  ]);
+  const session = navigator.mediaSession;
+  if (session && typeof session.setActionHandler === "function") {
+    const setActionHandler = session.setActionHandler.bind(session);
+    for (const [action, reason] of SKIP_ACTIONS) {
+      try {
+        setActionHandler(action, () => send(reason));
+      } catch {
+        // An action this browser does not support.
+      }
+    }
+    session.setActionHandler = (action, handler) => {
+      if (!SKIP_ACTIONS.has(action)) setActionHandler(action, handler);
+    };
+  }
+
   const attach = (element) => {
     video = element;
     for (const type of ["play", "pause", "ended", "volumechange", "seeked"]) {

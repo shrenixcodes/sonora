@@ -93,6 +93,28 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     expect(engine.currentTrack?.id).toBe("bbbbbbbbbbb");
   });
 
+  it("skips through Sonora's queue from media keys", () => {
+    const { engine, sent } = setup();
+    engine.playTrack(list[0], list);
+    engine.handleBridgeState(report({ reason: "play", videoId: "aaaaaaaaaaa" }));
+
+    engine.handleBridgeState(report({ reason: "media-next", videoId: "aaaaaaaaaaa" }));
+
+    expect(sent.at(-1)).toEqual({ action: "load", value: "bbbbbbbbbbb" });
+    expect(engine.currentTrack?.id).toBe("bbbbbbbbbbb");
+  });
+
+  it("goes back a track from media keys near the start of a song", () => {
+    const { engine, sent } = setup();
+    engine.playTrack(list[1], list);
+    engine.handleBridgeState(report({ reason: "play", videoId: "bbbbbbbbbbb", currentTime: 1 }));
+
+    engine.handleBridgeState(report({ reason: "media-previous", videoId: "bbbbbbbbbbb", currentTime: 1 }));
+
+    expect(sent.at(-1)).toEqual({ action: "load", value: "aaaaaaaaaaa" });
+    expect(engine.currentTrack?.id).toBe("aaaaaaaaaaa");
+  });
+
   it("follows the page when it moves on by itself", () => {
     const { engine } = setup();
     engine.playTrack(list[2], list);
