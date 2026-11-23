@@ -4,7 +4,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const DEFAULT_DISCORD_CLIENT_ID: &str = "1116547948065386536";
+pub const DEFAULT_DISCORD_CLIENT_ID: &str = "463151177836658699";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -168,3 +168,28 @@ fn run_discord_worker(receiver: Receiver<DiscordCommand>) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_discord_payload_serialization() {
+        let payload = DiscordActivityPayload {
+            title: "Test Track".into(),
+            artist: "Test Artist".into(),
+            album: Some("Test Album".into()),
+            artwork_url: Some("https://example.com/art.jpg".into()),
+            duration_seconds: Some(180),
+            elapsed_seconds: Some(45),
+            is_playing: true,
+            client_id: None,
+        };
+
+        let json = serde_json::to_string(&payload).expect("serialization failed");
+        assert!(json.contains("Test Track"));
+        assert!(json.contains("Test Artist"));
+        assert!(json.contains("isPlaying"));
+    }
+}
+

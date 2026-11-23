@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   volume: 0.8,
   normalizeVolume: true,
   autoPlayNext: true,
-  enableDiscordRpc: false,
+  enableDiscordRpc: true,
 };
 
 class StorageService extends EventEmitter<StorageEvents> {
