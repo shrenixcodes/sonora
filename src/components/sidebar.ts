@@ -8,7 +8,7 @@
 import { el } from "@/lib/dom";
 import { icon, type IconName } from "@/icons";
 import { router } from "@/lib/router";
-import { showLaunchSplash } from "@/lib/visuals/splash-screen";
+import { showAboutPopup } from "@/components/about-popup";
 
 interface NavItem {
   label: string;
@@ -70,22 +70,16 @@ function createNavSection(label: string | null, items: NavItem[]): HTMLElement {
 }
 
 export function createSidebar(): HTMLElement {
-  const brand = el("a", {
+  const brand = el("button", {
     className: "sidebar__brand",
-    attrs: { href: "#/", title: "Sonora Home" },
+    attrs: { type: "button", title: "About Sonora", "aria-label": "About Sonora" },
     children: [
       el("span", { className: "sidebar__brand-icon", html: icon("sonoraLogo") }),
-      el("span", { className: "sidebar__brand-title", text: "Sonora" }),
     ],
   });
   brand.addEventListener("click", (e) => {
     e.preventDefault();
-    const currentHash = window.location.hash.slice(1) || "/";
-    if (currentHash === "/") {
-      showLaunchSplash({ force: true }).catch(() => {});
-    } else {
-      router.navigate("/");
-    }
+    void showAboutPopup();
   });
 
   const sidebar = el("aside", {

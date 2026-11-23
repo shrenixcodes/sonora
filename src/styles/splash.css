@@ -104,47 +104,6 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* Sidebar brand element styling */
-.sidebar__brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3, 12px);
-  padding: 10px 14px;
-  margin-bottom: 6px;
-  text-decoration: none;
-  color: var(--color-text, #ffffff);
-  border-radius: var(--radius-md, 8px);
-  transition: background var(--duration-fast, 150ms) var(--ease-out, ease-out);
-}
-
-.sidebar__brand:hover {
-  background: var(--color-surface-hover, rgba(255, 255, 255, 0.06));
-}
-
-.sidebar__brand-icon {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.sidebar__brand-icon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.sidebar__brand-title {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
 @keyframes splashPulse {
   0%, 100% {
     transform: scale(1);
