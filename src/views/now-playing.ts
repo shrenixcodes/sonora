@@ -13,6 +13,7 @@ import { LyricsController } from "@/lib/lyrics/synced-lyrics";
 import { AmbientVisualRenderer } from "@/lib/visuals/ambient-renderer";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
+import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Track } from "@/types/music";
 
@@ -64,26 +65,51 @@ export function renderNowPlaying(container: HTMLElement): void {
     },
   });
 
-  // Fullscreen button
+  // ── Immersive lyrics ──────────────────────
+  // Not the same thing as a maximized window: the rest of the interface steps
+  // aside and the screen becomes artwork on the left, lyrics on the right.
+  let immersive = false;
+
+  const setImmersive = async (on: boolean): Promise<void> => {
+    immersive = on;
+    if (on) document.documentElement.dataset.immersive = "";
+    else delete document.documentElement.dataset.immersive;
+    fullscreenBtn.setAttribute("aria-pressed", String(on));
+    fullscreenBtn.setAttribute("title", on ? "Leave fullscreen lyrics" : "Fullscreen lyrics");
+
+    try {
+      if (isTauri()) {
+        await getCurrentWindow().setFullscreen(on);
+      } else if (on && !document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else if (!on && document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      // The presentation still stands if the window refuses to go fullscreen.
+      console.error("[now-playing] fullscreen failed:", err);
+    }
+  };
+
   const fullscreenBtn = el("button", {
     className: "now-playing__fs-btn",
     html: icon("fullscreen"),
-    attrs: { "aria-label": "Toggle fullscreen", title: "Fullscreen" },
-    onClick: async () => {
-      try {
-        const appWindow = getCurrentWindow();
-        const current = await appWindow.isFullscreen();
-        await appWindow.setFullscreen(!current);
-      } catch {
-        // Fallback to DOM fullscreen API
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen();
-        } else {
-          document.exitFullscreen();
-        }
-      }
+    attrs: {
+      "aria-label": "Fullscreen lyrics",
+      title: "Fullscreen lyrics",
+      "aria-pressed": "false",
     },
+    onClick: () => void setImmersive(!immersive),
   });
+
+  // Escape is the way out of the presentation.
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === "Escape" && immersive) {
+      e.preventDefault();
+      void setImmersive(false);
+    }
+  };
+  window.addEventListener("keydown", onKeyDown);
 
   const topBar = el("div", {
     className: "now-playing__topbar",
@@ -184,6 +210,9 @@ export function renderNowPlaying(container: HTMLElement): void {
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
+    window.removeEventListener("keydown", onKeyDown);
+    // Leaving the page must not strand the window in a lyrics presentation.
+    if (immersive) void setImmersive(false);
     visualEngine.destroy();
     lyricsController.destroy();
     unsubs.forEach((unsub) => unsub());

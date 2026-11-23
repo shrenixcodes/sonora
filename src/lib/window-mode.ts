@@ -28,6 +28,7 @@ const INTERACTIVE_PARTS = [
   ".titlebar__right",
   ".sidebar",
   ".main",
+  ".now-playing",
   ".queue-panel",
   ".player",
   "dialog[open]",

@@ -191,3 +191,75 @@
   font-size: var(--text-lg);
   color: var(--color-text-tertiary);
 }
+
+/* ── Immersive lyrics ─────────────────────── 
+ * The fullscreen button on this page is not a window maximize: the rest of the
+ * interface stands down and the whole screen becomes the song — artwork and
+ * title on the left, lyrics running on the right. The grid collapses to the one
+ * whole window, over whatever layout the window happens to be using.
+ */
+
+/* Fixed rather than stretched into the grid: the layout underneath is laid out
+   differently for the floating and the maximized window, and the presentation
+   should not have to care which one it is covering. */
+html[data-immersive] .now-playing {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+}
+
+html[data-immersive] .titlebar,
+html[data-immersive] .sidebar,
+html[data-immersive] .player,
+html[data-immersive] .queue-panel,
+html[data-immersive] #app::before {
+  display: none;
+}
+
+html[data-immersive] .main {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-immersive] .now-playing__content {
+  padding: var(--space-6) clamp(var(--space-6), 5vw, var(--space-12));
+}
+
+/* The controls stay reachable but stop competing with the song. */
+html[data-immersive] .now-playing__topbar {
+  opacity: 0.35;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+html[data-immersive] .now-playing__topbar:hover,
+html[data-immersive] .now-playing__topbar:focus-within {
+  opacity: 1;
+}
+
+html[data-immersive] .now-playing__body {
+  gap: clamp(var(--space-8), 6vw, var(--space-12));
+}
+
+html[data-immersive] .now-playing__left {
+  max-width: 520px;
+}
+
+html[data-immersive] .now-playing__art-wrapper {
+  max-width: min(460px, 34vh);
+}
+
+html[data-immersive] .now-playing__title {
+  font-size: var(--text-4xl);
+}
+
+html[data-immersive] .now-playing__artist {
+  font-size: var(--text-xl);
+}
+
+html[data-immersive] .lyrics__line {
+  font-size: var(--text-3xl);
+}
