@@ -151,7 +151,7 @@ export class DiscordRpcService {
     this.lastActivity = payload;
     this.lastSendTimestamp = Date.now();
     invoke("discord_set_activity", { payload }).catch((err) => {
-      console.debug("[Discord RPC] Failed to set activity:", err);
+      console.warn("[Discord RPC] Failed to set activity:", err);
     });
   }
 
@@ -159,7 +159,7 @@ export class DiscordRpcService {
     if (!isTauri()) return;
     this.lastActivity = null;
     invoke("discord_clear_activity").catch((err) => {
-      console.debug("[Discord RPC] Failed to clear activity:", err);
+      console.warn("[Discord RPC] Failed to clear activity:", err);
     });
   }
 }

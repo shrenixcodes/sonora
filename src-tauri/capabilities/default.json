@@ -12,6 +12,8 @@
     "shell:allow-open",
     "allow-get-app-info",
     "allow-get-platform-info",
+    "allow-discord-set-activity",
+    "allow-discord-clear-activity",
     "allow-ytm-control",
     "allow-ytm-set-signin-visible",
     "allow-ytm-sign-out",
