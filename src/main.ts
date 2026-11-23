@@ -34,6 +34,7 @@ import { applyAccent } from "@/lib/accent";
 import type { ArtworkPalette } from "@/lib/visuals/color-extractor";
 import { initPlasmaRestore } from "@/lib/visuals/plasma-restore";
 import { initRubberbandUX } from "@/lib/rubberband";
+import { showLaunchSplash } from "@/lib/visuals/splash-screen";
 
 const ARTWORK_PLACEHOLDER = "/artwork-placeholder.svg";
 
@@ -67,6 +68,7 @@ function init(): void {
   discordRpc.init();
   initPlasmaRestore();
   initRubberbandUX();
+  showLaunchSplash().catch((err) => console.error("[main] splash screen failed:", err));
 
   // Floating vs full layout; also reveals the window after first paint
   initWindowMode().catch((err) => console.error("[main] window mode setup failed:", err));

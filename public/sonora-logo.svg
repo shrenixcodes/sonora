@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="sonora-accent" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="45%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="sonora-glow" x1="64" y1="20" x2="64" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.05"/>
+    </linearGradient>
+    <filter id="sonora-filter" x="0" y="0" width="128" height="128" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#6366f1" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Ambient resonance backplate -->
+  <circle cx="64" cy="64" r="52" fill="url(#sonora-glow)"/>
+
+  <!-- Concentric acoustic soundwave rings (geometric cymatic resonance) -->
+  <circle cx="64" cy="64" r="46" stroke="url(#sonora-accent)" stroke-width="1.5" stroke-opacity="0.2" stroke-dasharray="2 6"/>
+  <circle cx="64" cy="64" r="38" stroke="url(#sonora-accent)" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="4 4"/>
+
+  <!-- Primary Sonora "S" Resonance Waveform (Crafted soundwave ribbon) -->
+  <g filter="url(#sonora-filter)">
+    <!-- Upper acoustic horn curve -->
+    <path d="M86 36 C72 24, 46 25, 38 41 C31 55, 45 68, 64 71 C82 74, 94 84, 88 100 C81 114, 52 116, 38 104"
+          stroke="url(#sonora-accent)"
+          stroke-width="7"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+
+    <!-- Dynamic acoustic pulse harmonics -->
+    <path d="M78 47 C70 39, 54 40, 50 49 C46 58, 56 65, 68 67 C80 69, 87 76, 84 86 C80 94, 62 96, 52 89"
+          stroke="url(#sonora-accent)"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-opacity="0.85"/>
+
+    <!-- Central resonant sonic focal point -->
+    <circle cx="64" cy="71" r="3.5" fill="#38bdf8"/>
+    <circle cx="64" cy="71" r="7" stroke="#38bdf8" stroke-width="1.2" stroke-opacity="0.6"/>
+  </g>
+</svg>

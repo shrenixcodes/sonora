@@ -69,9 +69,23 @@ function createNavSection(label: string | null, items: NavItem[]): HTMLElement {
 }
 
 export function createSidebar(): HTMLElement {
+  const brand = el("a", {
+    className: "sidebar__brand",
+    attrs: { href: "#/", title: "Sonora Home" },
+    children: [
+      el("span", { className: "sidebar__brand-icon", html: icon("sonoraLogo") }),
+      el("span", { className: "sidebar__brand-title", text: "Sonora" }),
+    ],
+  });
+  brand.addEventListener("click", (e) => {
+    e.preventDefault();
+    router.navigate("/");
+  });
+
   const sidebar = el("aside", {
     className: "sidebar",
     children: [
+      brand,
       createNavSection(null, mainNav),
       createNavSection("Library", libraryNav),
       el("div", { className: "sidebar__playlists" }), // future: playlist list
