@@ -255,7 +255,7 @@
   border-radius: var(--radius-2xl);
   background: var(--glass-sheen), var(--color-surface);
   color: var(--color-text);
-  box-shadow: var(--glass-edge), 0 20px 48px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--glass-edge), var(--elevation-3);
   -webkit-backdrop-filter: var(--glass-backdrop-deep);
   backdrop-filter: var(--glass-backdrop-deep);
   text-align: center;
