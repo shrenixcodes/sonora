@@ -148,10 +148,22 @@
   border-radius: var(--radius-lg);
   text-align: left;
   transition: background var(--duration-fast) var(--ease-out);
+  cursor: pointer;
+  user-select: none;
+}
+
+.queue-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
 }
 
 .queue-row--upcoming {
   grid-template-columns: 18px 40px 1fr auto 24px;
+  cursor: grab;
+}
+
+.queue-row--upcoming:active {
+  cursor: grabbing;
 }
 
 .queue-row__grip {
@@ -162,6 +174,10 @@
   cursor: grab;
   opacity: 0.4;
   transition: opacity var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.queue-row__grip:active {
+  cursor: grabbing;
 }
 
 .queue-row:hover .queue-row__grip {

@@ -183,6 +183,12 @@ html[data-window="floating"] .titlebar__grip {
   margin-left: var(--space-1);
   color: var(--color-text-tertiary);
   cursor: grab;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+html[data-window="floating"] .titlebar__grip:active {
+  cursor: grabbing;
 }
 
 html[data-window="floating"] .titlebar__grip svg {
@@ -269,6 +275,16 @@ html[data-window="floating"] .shelf {
   padding-inline: 0;
   padding-bottom: 0;
   gap: var(--space-3);
+}
+
+@media (min-width: 1040px) {
+  html[data-window="floating"] #app.app--queue-open .shelf {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  html[data-window="floating"] #app:not(.app--queue-open) .shelf {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 
 html[data-window="floating"] .shelf .shelf-card {

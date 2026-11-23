@@ -34,6 +34,14 @@ export function createTitlebar(): HTMLElement {
   // Window controls need the Tauri runtime; in a plain browser (UI development) they do nothing.
   const appWindow = isTauri() ? getCurrentWindow() : null;
 
+  const startWindowDrag = (e: MouseEvent) => {
+    if (e.button === 0 && appWindow) {
+      appWindow.startDragging().catch((err) => {
+        console.error("[titlebar] startDragging failed:", err);
+      });
+    }
+  };
+
   const titlebar = el("header", {
     className: "titlebar",
     // Tauri only starts a window drag when the pressed element itself carries this attribute.
@@ -48,6 +56,12 @@ export function createTitlebar(): HTMLElement {
             className: "titlebar__grip",
             attrs: { "data-tauri-drag-region": "", title: "Drag to move", "aria-hidden": "true" },
             html: GRIP_ICON,
+            onMouseDown: (e: MouseEvent) => {
+              if (e.button === 0) {
+                e.preventDefault();
+                startWindowDrag(e);
+              }
+            },
           }),
           el("div", {
             className: "titlebar__nav",
@@ -123,6 +137,16 @@ export function createTitlebar(): HTMLElement {
         ],
       }),
     ],
+  });
+
+  titlebar.addEventListener("mousedown", (e: MouseEvent) => {
+    if (e.button !== 0 || !appWindow) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("button, input, select, textarea, a, .no-drag")) return;
+    if (target.closest("[data-tauri-drag-region]") || target === titlebar) {
+      startWindowDrag(e);
+    }
   });
 
   return titlebar;

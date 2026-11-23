@@ -38,7 +38,16 @@ class StorageService extends EventEmitter<StorageEvents> {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (!data) return { ...DEFAULT_SETTINGS };
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
+      const parsed = JSON.parse(data);
+      // Migration: enable Discord RPC by default for all existing user configurations
+      if (localStorage.getItem("sonora:discord_rpc_migrated") !== "true") {
+        parsed.enableDiscordRpc = true;
+        localStorage.setItem("sonora:discord_rpc_migrated", "true");
+        try {
+          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...DEFAULT_SETTINGS, ...parsed, enableDiscordRpc: true }));
+        } catch {}
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
     } catch {
       return { ...DEFAULT_SETTINGS };
     }

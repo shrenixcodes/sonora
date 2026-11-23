@@ -23,6 +23,7 @@ export interface DiscordActivityPayload {
 
 export class DiscordRpcService {
   private lastActivity: DiscordActivityPayload | null = null;
+  private lastSendTimestamp: number = 0;
   private enabled: boolean = false;
   private unlisteners: Array<() => void> = [];
 
@@ -119,13 +120,19 @@ export class DiscordRpcService {
     }
 
     const isPlaying = state.status === "playing";
-    if (
+    const trackChanged =
       !this.lastActivity ||
-      this.lastActivity.isPlaying !== isPlaying ||
       this.lastActivity.title !== state.currentTrack.title ||
-      this.lastActivity.artist !== state.currentTrack.artist ||
-      Math.abs((this.lastActivity.elapsedSeconds ?? 0) - Math.round(state.currentTime)) > 5
-    ) {
+      this.lastActivity.artist !== state.currentTrack.artist;
+    const playStateChanged = !this.lastActivity || this.lastActivity.isPlaying !== isPlaying;
+
+    // Check for user seeking: significant drift (>4s) from expected wall-clock progression
+    const now = Date.now();
+    const elapsedRealSec = (now - this.lastSendTimestamp) / 1000;
+    const expectedElapsed = (this.lastActivity?.elapsedSeconds ?? 0) + (isPlaying ? elapsedRealSec : 0);
+    const seekDetected = Math.abs(expectedElapsed - state.currentTime) > 4;
+
+    if (trackChanged || playStateChanged || seekDetected) {
       this.sendActivity({
         title: state.currentTrack.title,
         artist: state.currentTrack.artist,
@@ -142,6 +149,7 @@ export class DiscordRpcService {
   sendActivity(payload: DiscordActivityPayload): void {
     if (!isTauri()) return;
     this.lastActivity = payload;
+    this.lastSendTimestamp = Date.now();
     invoke("discord_set_activity", { payload }).catch((err) => {
       console.debug("[Discord RPC] Failed to set activity:", err);
     });

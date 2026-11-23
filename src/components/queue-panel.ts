@@ -9,6 +9,8 @@ import { el, formatTime } from "@/lib/dom";
 import { icon } from "@/icons";
 import { EventEmitter } from "@/lib/events";
 import { playerEngine } from "@/lib/playback/engine";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Track } from "@/types/music";
 
 const STORAGE_KEY = "sonora-queue-panel";
@@ -17,6 +19,7 @@ const OPEN_CLASS = "app--queue-open";
 const AUTO_OPEN_MIN_WIDTH = 1200;
 
 let dragSourceIndex: number | null = null;
+let isDraggingActive = false;
 
 class QueuePanelState extends EventEmitter<{ change: boolean }> {
   private open = false;
@@ -46,6 +49,7 @@ class QueuePanelState extends EventEmitter<{ change: boolean }> {
 export const queuePanel = new QueuePanelState();
 
 export function createQueuePanel(): HTMLElement {
+  const appWindow = isTauri() ? getCurrentWindow() : null;
   const list = el("div", { className: "queue-panel__list" });
   const count = el("span", { className: "queue-panel__count" });
 
@@ -66,13 +70,20 @@ export function createQueuePanel(): HTMLElement {
     children: [
       el("div", {
         className: "queue-panel__header",
+        attrs: { "data-tauri-drag-region": "" },
         children: [
           el("div", {
             className: "queue-panel__header-title",
-            children: [el("h2", { className: "queue-panel__title", text: "Up next" }), count],
+            attrs: { "data-tauri-drag-region": "" },
+            children: [el("h2", { className: "queue-panel__title", attrs: { "data-tauri-drag-region": "" }, text: "Up next" }), count],
           }),
           closeBtn,
         ],
+        onMouseDown: (e: MouseEvent) => {
+          if (e.button === 0 && appWindow && !(e.target as HTMLElement).closest("button")) {
+            appWindow.startDragging().catch(() => {});
+          }
+        },
       }),
       list,
     ],
@@ -153,6 +164,7 @@ function setupDragHandlers(item: HTMLElement, index: number): void {
   item.setAttribute("draggable", "true");
 
   item.addEventListener("dragstart", (e) => {
+    isDraggingActive = true;
     dragSourceIndex = index;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = "move";
@@ -171,8 +183,11 @@ function setupDragHandlers(item: HTMLElement, index: number): void {
     item.classList.add("is-drag-over");
   });
 
-  item.addEventListener("dragleave", () => {
-    item.classList.remove("is-drag-over");
+  item.addEventListener("dragleave", (e) => {
+    const related = e.relatedTarget as Node | null;
+    if (!item.contains(related)) {
+      item.classList.remove("is-drag-over");
+    }
   });
 
   item.addEventListener("drop", (e) => {
@@ -188,6 +203,9 @@ function setupDragHandlers(item: HTMLElement, index: number): void {
     item.classList.remove("is-dragging");
     document.querySelectorAll(".queue-item.is-drag-over").forEach((el) => el.classList.remove("is-drag-over"));
     dragSourceIndex = null;
+    setTimeout(() => {
+      isDraggingActive = false;
+    }, 80);
   });
 }
 
@@ -234,17 +252,25 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
     );
   }
 
-  return el("button", {
+  return el("div", {
     className: `queue-row${isCurrent ? " is-playing" : " queue-row--upcoming"}`,
     attrs: {
-      type: "button",
+      role: "button",
+      tabindex: "0",
       "aria-label": isCurrent ? `Now playing: ${track.title} by ${track.artist}` : `Play ${track.title} by ${track.artist}`,
       ...(isCurrent ? { "aria-current": "true" } : {}),
     },
     children,
     // Restarting the same queue from this track keeps next/previous in order.
     onClick: () => {
+      if (isDraggingActive) return;
       if (!isCurrent) playerEngine.playTrack(track, playerEngine.currentQueue);
+    },
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (!isCurrent) playerEngine.playTrack(track, playerEngine.currentQueue);
+      }
     },
   });
 }

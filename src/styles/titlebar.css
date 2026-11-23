@@ -21,6 +21,19 @@
   app-region: no-drag;
 }
 
+.titlebar__grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: drag;
+  app-region: drag;
+  cursor: grab;
+}
+
+.titlebar__grip:active {
+  cursor: grabbing;
+}
+
 .titlebar__nav {
   display: flex;
   align-items: center;

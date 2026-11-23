@@ -150,5 +150,14 @@ describe("createQueuePanel", () => {
     closeBtn?.click();
     expect(queuePanel.isOpen).toBe(!initialState);
   });
+
+  it("renders rows as accessible buttons with drag support", () => {
+    const panel = createQueuePanel();
+    const rows = panel.querySelectorAll(".queue-row");
+    rows.forEach((row) => {
+      expect(row.getAttribute("role")).toBe("button");
+      expect(row.getAttribute("tabindex")).toBe("0");
+    });
+  });
 });
 
