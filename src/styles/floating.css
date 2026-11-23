@@ -215,3 +215,15 @@ html[data-window="floating"] .player {
 html[data-window="floating"] .player__artwork {
   border-radius: var(--radius-full);
 }
+
+/* The capsule is shorter (64px) than the docked bar, leaving no room to centre
+   the play button and still hang the seek bar below it. Stack them as one
+   centred block here so the play button never overlaps the progress bar. */
+html[data-window="floating"] .player__controls {
+  height: auto;
+  gap: var(--space-1);
+}
+
+html[data-window="floating"] .player__progress {
+  position: static;
+}
