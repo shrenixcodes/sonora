@@ -112,3 +112,228 @@
   flex-shrink: 0;
   object-fit: cover;
 }
+
+/* ── Centered Musical Brand Icon (No Text) ─────────────────── */
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin: var(--space-2) auto var(--space-2);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xl);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-spring),
+              background var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.sidebar__brand:hover {
+  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+  box-shadow: 0 0 20px color-mix(in oklab, var(--color-accent) 35%, transparent);
+  transform: scale(1.08);
+}
+
+.sidebar__brand:active {
+  transform: scale(0.94);
+}
+
+.sidebar__brand-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 2px 8px color-mix(in oklab, var(--color-accent) 45%, transparent));
+}
+
+.sidebar__brand-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+/* ── About Sonora Pop-up Dialog ────────────────────────────── */
+.about-popup {
+  margin: auto;
+  width: min(390px, calc(100vw - 36px));
+  padding: var(--space-6);
+  border: 1px solid var(--color-panel-border, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-2xl, 20px);
+  background: var(--glass-sheen, rgba(255, 255, 255, 0.04)), var(--color-surface, #181422);
+  color: var(--color-text, #ffffff);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), 0 0 32px color-mix(in oklab, var(--color-accent, #6366f1) 20%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  animation: aboutPopupEnter 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.about-popup.is-closing {
+  animation: aboutPopupExit 0.18s ease-in forwards;
+}
+
+.about-popup::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.about-popup__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.65));
+  cursor: pointer;
+  transition: background var(--duration-fast, 150ms), color var(--duration-fast, 150ms);
+}
+
+.about-popup__close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.about-popup__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-4, 16px);
+}
+
+.about-popup__logo {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl, 16px);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(129, 140, 248, 0.25));
+  box-shadow: 0 0 24px color-mix(in oklab, var(--color-accent, #6366f1) 40%, transparent);
+  color: var(--color-accent, #818cf8);
+  margin-bottom: 4px;
+}
+
+.about-popup__logo svg {
+  width: 44px;
+  height: 44px;
+}
+
+.about-popup__title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+  color: #ffffff;
+}
+
+.about-popup__version {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  background: color-mix(in oklab, var(--color-accent, #6366f1) 25%, transparent);
+  color: #38bdf8;
+  border: 1px solid color-mix(in oklab, var(--color-accent, #6366f1) 40%, transparent);
+}
+
+.about-popup__tagline {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+  margin: 0;
+}
+
+.about-popup__body {
+  margin-bottom: var(--space-5, 20px);
+}
+
+.about-popup__desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.75));
+  margin: 0 0 14px 0;
+}
+
+.about-popup__meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+}
+
+.about-popup__meta-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.about-popup__meta-label {
+  color: var(--color-text-tertiary, rgba(255, 255, 255, 0.45));
+}
+
+.about-popup__meta-val {
+  font-weight: 500;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.9));
+}
+
+.about-popup__actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.about-popup__replay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.about-popup__replay-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes aboutPopupEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes aboutPopupExit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}

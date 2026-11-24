@@ -11,8 +11,10 @@ import { listen } from "@tauri-apps/api/event";
 
 export type CatalogRequest =
   | { kind: "home"; params?: string }
-  | { kind: "search"; query: string }
+  | { kind: "search"; query: string; params?: string }
   | { kind: "likedSongs" }
+  | { kind: "history" }
+  | { kind: "rate"; videoId: string; rating: "LIKE" | "INDIFFERENT" }
   | { kind: "libraryPlaylists" }
   | { kind: "libraryAlbums" }
   | { kind: "libraryArtists" }

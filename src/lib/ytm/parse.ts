@@ -146,6 +146,76 @@ export function parseSearchSongs(response: unknown): Track[] {
   return uniqueById(items.map(parseListItem).filter((t): t is Track => t !== null));
 }
 
+/** Collections (albums, playlists, artists) from a search response. */
+export function parseSearchCollections(response: unknown): HomeCollection[] {
+  const seen = new Set<string>();
+  const results: HomeCollection[] = [];
+
+  const listItems = findAll(response, "musicShelfRenderer").flatMap((shelf) =>
+    findAll(shelf.contents, "musicResponsiveListItemRenderer"),
+  );
+
+  for (const item of listItems) {
+    const columns = (Array.isArray(item.flexColumns) ? item.flexColumns : []).map((col) =>
+      runsOf(get(col, "musicResponsiveListItemFlexColumnRenderer", "text")),
+    );
+    const titleRuns = columns[0] ?? [];
+    const title = joined(titleRuns);
+    if (!title) continue;
+
+    const firstColRun = get(item, "flexColumns", 0, "musicResponsiveListItemFlexColumnRenderer", "text", "runs", 0);
+    const endpoint = get(firstColRun, "navigationEndpoint") ?? item.navigationEndpoint;
+    const pageType = titleRuns[0]?.pageType ?? pageTypeOf(endpoint);
+    const browseId = get(endpoint, "browseEndpoint", "browseId") as string | undefined;
+
+    let kind: "album" | "playlist" | "artist" | null = null;
+    if (pageType === "MUSIC_PAGE_TYPE_ALBUM" || pageType === "MUSIC_PAGE_TYPE_AUDIOBOOK" || (browseId && browseId.startsWith("MPRE"))) {
+      kind = "album";
+    } else if (pageType === "MUSIC_PAGE_TYPE_PLAYLIST" || (browseId && (browseId.startsWith("VL") || browseId.startsWith("PL")))) {
+      kind = "playlist";
+    } else if (pageType === "MUSIC_PAGE_TYPE_ARTIST" || pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") {
+      kind = "artist";
+    }
+
+    let playlistId = playlistIdOf(item);
+    if (!playlistId && browseId) {
+      if (browseId.startsWith("VL")) playlistId = browseId.slice(2);
+      else if (browseId.startsWith("MPRE")) playlistId = browseId;
+      else if (kind === "playlist" || kind === "album") playlistId = browseId;
+    }
+
+    if (!kind && playlistId) kind = "playlist";
+    if (!kind) continue;
+    if (kind !== "artist" && !playlistId) continue;
+
+    const key = playlistId || title;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const subtitle = columns.slice(1).flatMap((runs) => runs.map((r) => r.text)).join("").trim();
+    const artwork = artworkUrl(get(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"));
+
+    results.push({
+      kind,
+      title,
+      subtitle,
+      artworkUrl: artwork,
+      ...(playlistId ? { playlistId } : {}),
+    });
+  }
+
+  const twoRows = findAll(response, "musicTwoRowItemRenderer");
+  for (const item of twoRows) {
+    const col = parseCollectionItem(item);
+    if (col && !seen.has(col.playlistId || col.title)) {
+      seen.add(col.playlistId || col.title);
+      results.push(col);
+    }
+  }
+
+  return results;
+}
+
 /** Something on a Home shelf other than a single song. */
 export interface HomeCollection {
   kind: "album" | "playlist" | "artist";

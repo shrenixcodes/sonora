@@ -1,0 +1,55 @@
+/*
+ * Rubberband UX — tactile elastic overscroll and slider overdrag resistance.
+ */
+
+.rubberband-target {
+  --rubberband-x: 0px;
+  --rubberband-y: 0px;
+  transform: translate3d(var(--rubberband-x, 0px), var(--rubberband-y, 0px), 0);
+  overscroll-behavior: contain;
+}
+
+.rubberband-target.is-rebounding {
+  transition: transform 0.36s cubic-bezier(0.175, 0.885, 0.32, 1.25) !important;
+}
+
+/* Horizontal shelf rubberband */
+.shelf__scroll.rubberband-target {
+  will-change: transform;
+}
+
+/* Sliders elastic overdrag */
+.player__progress-bar,
+.player__volume-slider {
+  --rubberband-pull: 0px;
+}
+
+.player__progress-bar::after,
+.player__volume-slider::after {
+  left: calc(var(--value) * 100% + var(--rubberband-pull, 0px)) !important;
+}
+
+.player__progress-fill,
+.player__volume-fill {
+  width: clamp(0px, calc(var(--value) * 100% + var(--rubberband-pull, 0px)), calc(100% + 24px)) !important;
+}
+
+.player__progress-bar.is-rebounding::after,
+.player__volume-slider.is-rebounding::after,
+.player__progress-bar.is-rebounding .player__progress-fill,
+.player__volume-slider.is-rebounding .player__volume-fill {
+  transition: left 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.25),
+              width 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.25) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rubberband-target,
+  .rubberband-target.is-rebounding,
+  .player__progress-bar.is-rebounding::after,
+  .player__volume-slider.is-rebounding::after,
+  .player__progress-bar.is-rebounding .player__progress-fill,
+  .player__volume-slider.is-rebounding .player__volume-fill {
+    transform: none !important;
+    transition: none !important;
+  }
+}

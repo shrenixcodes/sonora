@@ -8,6 +8,7 @@
 import { el } from "@/lib/dom";
 import { icon, type IconName } from "@/icons";
 import { router } from "@/lib/router";
+import { showAboutPopup } from "@/components/about-popup";
 
 interface NavItem {
   label: string;
@@ -69,9 +70,22 @@ function createNavSection(label: string | null, items: NavItem[]): HTMLElement {
 }
 
 export function createSidebar(): HTMLElement {
+  const brand = el("button", {
+    className: "sidebar__brand",
+    attrs: { type: "button", title: "About Sonora", "aria-label": "About Sonora" },
+    children: [
+      el("span", { className: "sidebar__brand-icon", html: icon("sonoraLogo") }),
+    ],
+  });
+  brand.addEventListener("click", (e) => {
+    e.preventDefault();
+    void showAboutPopup();
+  });
+
   const sidebar = el("aside", {
     className: "sidebar",
     children: [
+      brand,
       createNavSection(null, mainNav),
       createNavSection("Library", libraryNav),
       el("div", { className: "sidebar__playlists" }), // future: playlist list

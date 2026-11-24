@@ -168,7 +168,7 @@ export function createSongCard(track: Track, queue: Track[]): HTMLElement {
 }
 
 /** Albums, playlists and mixes play from the top; artists open a search for their songs. */
-function createCollectionCard(item: HomeCollection): HTMLElement {
+export function createCollectionCard(item: HomeCollection): HTMLElement {
   if (item.kind === "artist") {
     return cardShell({
       artworkUrl: item.artworkUrl,

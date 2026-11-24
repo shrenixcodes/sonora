@@ -263,12 +263,12 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
     // Restarting the same queue from this track keeps next/previous in order.
     onClick: () => {
       if (isDraggingActive) return;
-      if (!isCurrent) playerEngine.playTrack(track, playerEngine.currentQueue);
+      if (!isCurrent) playerEngine.playTrack(track);
     },
     onKeyDown: (e: KeyboardEvent) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        if (!isCurrent) playerEngine.playTrack(track, playerEngine.currentQueue);
+        if (!isCurrent) playerEngine.playTrack(track);
       }
     },
   });
