@@ -23,9 +23,11 @@ env_logger = "0.11"
 thiserror = "2"
 discord-rich-presence = "1.1.0"
 
-# Already in the dependency tree by way of Tauri; declared here for the one
-# window message Sonora handles itself (see window_mode.rs).
 [target.'cfg(windows)'.dependencies]
+adblock = { version = "0.13.6", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
+webview2-com = "0.39.1"
+ureq = "3.5.2"
+# Already in the dependency tree through Tauri.
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
