@@ -122,7 +122,7 @@ export function renderSearch(container: HTMLElement): void {
               }),
               el("div", {
                 className: "track-list",
-                children: songs.map((song, i) => createTrackRow(song, i + 1, songs)),
+                children: songs.map((song, i) => createTrackRow(song, i + 1)),
               }),
             ],
           }),
@@ -201,8 +201,22 @@ export function renderSearch(container: HTMLElement): void {
   }
 }
 
-function createTrackRow(track: Track, index: number, queue: Track[]): HTMLElement {
-  const play = () => playerEngine.playTrack(track, queue);
+let searchPlaybackRequest = 0;
+
+export function playSearchResult(track: Track): void {
+  const request = ++searchPlaybackRequest;
+  void playerEngine.playTrack(track, [track]);
+  if (!storage.getSettings().autoPlayNext) return;
+  void catalog.getPlaylistTracks(`RDAMVM${track.id}`).then((radio) => {
+    if (request !== searchPlaybackRequest || playerEngine.currentTrack?.id !== track.id ||
+        playerEngine.currentQueue.length !== 1 || playerEngine.currentQueue[0]?.id !== track.id) return;
+    const title = track.title.trim().toLocaleLowerCase();
+    playerEngine.extendQueue(track, radio.filter((song) => song.title.trim().toLocaleLowerCase() !== title));
+  }).catch((err) => console.warn("[search] could not load song radio:", err));
+}
+
+function createTrackRow(track: Track, index: number): HTMLElement {
+  const play = () => playSearchResult(track);
   const liked = storage.isLiked(track.id);
   const isPlaying = playerEngine.currentTrack?.id === track.id;
 
