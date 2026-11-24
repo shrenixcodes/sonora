@@ -18,6 +18,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Track } from "@/types/music";
 
 export function renderNowPlaying(container: HTMLElement): void {
+  // Ensure scrolled views don't offset the absolute-positioned Now Playing stage.
+  if (container.parentElement) container.parentElement.scrollTop = 0;
   const currentTrack = playerEngine.currentTrack;
   const settings = storage.getSettings();
 
@@ -70,7 +72,7 @@ export function renderNowPlaying(container: HTMLElement): void {
   // aside and the screen becomes artwork on the left, lyrics on the right.
   let immersive = false;
 
-  const setImmersive = async (on: boolean): Promise<void> => {
+  const applyImmersiveUi = (on: boolean): void => {
     immersive = on;
     if (on) document.documentElement.dataset.immersive = "";
     else delete document.documentElement.dataset.immersive;
@@ -79,6 +81,11 @@ export function renderNowPlaying(container: HTMLElement): void {
     const label = on ? "Leave fullscreen lyrics" : "Fullscreen lyrics";
     fullscreenBtn.setAttribute("title", label);
     fullscreenBtn.setAttribute("aria-label", label);
+    requestAnimationFrame(() => visualEngine.handleResize());
+  };
+
+  const setImmersive = async (on: boolean): Promise<void> => {
+    applyImmersiveUi(on);
 
     try {
       if (isTauri()) {
@@ -93,6 +100,13 @@ export function renderNowPlaying(container: HTMLElement): void {
       console.error("[now-playing] fullscreen failed:", err);
     }
   };
+
+  const onFullscreenChange = (): void => {
+    if (!isTauri() && immersive && !document.fullscreenElement) {
+      applyImmersiveUi(false);
+    }
+  };
+  document.addEventListener("fullscreenchange", onFullscreenChange);
 
   const fullscreenBtn = el("button", {
     className: "now-playing__fs-btn",
@@ -222,10 +236,17 @@ export function renderNowPlaying(container: HTMLElement): void {
   unsubs.push(
     playerEngine.on("trackChange", (track: Track | null) => {
       if (track) {
-        artImg.src = track.artworkUrl;
+        artImg.src = track.artworkUrl || "/artwork-placeholder.svg";
+        artImg.alt = track.title || "Track artwork";
         titleEl.textContent = track.title;
         artistEl.textContent = track.artist;
         albumEl.textContent = track.album || "";
+      } else {
+        artImg.src = "/artwork-placeholder.svg";
+        artImg.alt = "Track artwork";
+        titleEl.textContent = "No track playing";
+        artistEl.textContent = "Select a song from the library";
+        albumEl.textContent = "";
       }
     }),
   );
@@ -248,6 +269,7 @@ export function renderNowPlaying(container: HTMLElement): void {
     if (destroyed) return;
     destroyed = true;
     window.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
     // Leaving the page must not strand the window in a lyrics presentation.
     if (immersive) void setImmersive(false);
     visualEngine.destroy();

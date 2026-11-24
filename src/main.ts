@@ -205,7 +205,11 @@ function setupGlobalShortcuts(): void {
       }
       case "KeyF":
         if (window.location.hash === "#/now-playing") {
-          window.history.back();
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            router.navigate("/");
+          }
         } else {
           router.navigate("/now-playing");
         }

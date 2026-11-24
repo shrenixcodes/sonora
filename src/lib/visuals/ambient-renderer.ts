@@ -158,6 +158,15 @@ export class AmbientVisualRenderer {
   private gl: WebGLRenderingContext | null = null;
   private animationFrameId: number | null = null;
   private frameTimer: number | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private readonly onWindowResize = () => this.handleResize();
+  private readonly onVisibilityChange = () => {
+    if (document.hidden) {
+      this.pause();
+    } else {
+      this.resume();
+    }
+  };
   private isRunning = false;
   private mode: AmbientVisualMode = "aurora";
   private targetFps = 30;
@@ -209,16 +218,14 @@ export class AmbientVisualRenderer {
   }
 
   private setupListeners(): void {
-    window.addEventListener("resize", () => this.handleResize());
+    window.addEventListener("resize", this.onWindowResize);
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.handleResize());
+      this.resizeObserver.observe(this.canvas);
+    }
 
     // Pause when app is hidden/minimized
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        this.pause();
-      } else {
-        this.resume();
-      }
-    });
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
 
     // Check reduced motion preference
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -362,8 +369,10 @@ export class AmbientVisualRenderer {
   handleResize(): void {
     // Render at lower internal resolution for massive performance savings
     const scale = 0.5;
-    const width = Math.max(1, Math.floor(window.innerWidth * scale));
-    const height = Math.max(1, Math.floor(window.innerHeight * scale));
+    const cssWidth = this.canvas.clientWidth || window.innerWidth;
+    const cssHeight = this.canvas.clientHeight || window.innerHeight;
+    const width = Math.max(1, Math.floor(cssWidth * scale));
+    const height = Math.max(1, Math.floor(cssHeight * scale));
 
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
@@ -457,6 +466,10 @@ export class AmbientVisualRenderer {
 
   destroy(): void {
     this.pause();
+    window.removeEventListener("resize", this.onWindowResize);
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     if (this.gl && this.currentProgram) {
       this.gl.deleteProgram(this.currentProgram);
     }

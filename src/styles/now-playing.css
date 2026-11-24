@@ -8,6 +8,11 @@
   z-index: var(--z-overlay);
   display: flex;
   flex-direction: column;
+  /* Now Playing is always a dark theater stage over the ambient shader, even in light theme. */
+  --color-bg: #17151C;
+  --color-text: #F4F0F6;
+  --color-text-secondary: #A9A3B3;
+  --color-text-tertiary: #736D7E;
   background: var(--color-bg);
   overflow: hidden;
   animation: fadeIn var(--duration-normal) var(--ease-out);
@@ -100,6 +105,7 @@
   gap: var(--space-10);
   align-items: center;
   min-height: 0;
+  container-type: size;
 }
 
 /* ── Left Column: Artwork + Meta ─────────────────────────── */
@@ -109,6 +115,7 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  width: 100%;
   max-width: 440px;
   margin: 0 auto;
 }
@@ -116,13 +123,15 @@
 .now-playing__art-wrapper {
   width: 100%;
   aspect-ratio: 1;
-  max-width: 380px;
+  max-width: min(380px, 46vh);
+  max-width: min(380px, calc(100cqh - 130px));
   border-radius: var(--radius-2xl);
   overflow: hidden;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   margin-bottom: var(--space-6);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: transform var(--duration-slow) var(--ease-spring);
+  transition: max-width var(--duration-slow) var(--ease-out),
+              transform var(--duration-slow) var(--ease-spring);
 }
 
 .now-playing__art-img {
@@ -175,13 +184,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  padding: var(--space-12) 0;
+  padding: var(--space-12) var(--space-8) var(--space-12) var(--space-1);
 }
 
 .lyrics__line {
   font-size: var(--lyrics-font-size, var(--text-2xl));
   font-weight: var(--weight-bold);
   color: rgba(255, 255, 255, 0.25);
+  transform-origin: left center;
   transition: color var(--duration-normal) var(--ease-out),
               transform var(--duration-normal) var(--ease-spring),
               font-size var(--duration-fast) var(--ease-out);
@@ -201,8 +211,8 @@
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
   background: rgba(23, 21, 28, 0.85);
-  -webkit-backdrop-filter: var(--glass-backdrop-regular);
-  backdrop-filter: var(--glass-backdrop-regular);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  backdrop-filter: var(--glass-backdrop);
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   color: var(--color-text);
@@ -235,8 +245,8 @@
 
 .lyrics__line--active {
   color: var(--color-text);
-  transform: scale(1.04) translateX(8px);
-  text-shadow: 0 0 24px rgba(167, 139, 250, 0.4);
+  transform: scale(1.04) translateX(6px);
+  text-shadow: 0 0 24px color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
 
 .lyrics__line--passed {
@@ -262,27 +272,48 @@
 /* Fixed rather than stretched into the grid: the layout underneath is laid out
    differently for the floating and the maximized window, and the presentation
    should not have to care which one it is covering. */
+html[data-immersive] #app,
+html[data-immersive] #app.app--queue-open,
+html[data-immersive][data-window] #app,
+html[data-immersive][data-window] #app.app--queue-open {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "main";
+  gap: 0;
+  padding: 0;
+  background: var(--color-bg);
+}
+
 html[data-immersive] .now-playing {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: var(--z-modal);
+  --lyrics-font-size: var(--text-3xl);
 }
 
 html[data-immersive] .titlebar,
 html[data-immersive] .sidebar,
 html[data-immersive] .player,
 html[data-immersive] .queue-panel,
-html[data-immersive] #app::before {
+html[data-immersive] #app::before,
+html[data-immersive] .window-resize-handle,
+html[data-immersive][data-window] .window-resize-handle {
   display: none;
 }
 
-html[data-immersive] .main {
+html[data-immersive] .main,
+html[data-immersive][data-window] .main {
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  transform: none !important;
+  will-change: auto !important;
+  overflow: hidden;
 }
 
 html[data-immersive] .now-playing__content {
@@ -309,7 +340,8 @@ html[data-immersive] .now-playing__left {
 }
 
 html[data-immersive] .now-playing__art-wrapper {
-  max-width: min(460px, 34vh);
+  max-width: min(440px, 44vh);
+  max-width: min(440px, calc(100cqh - 150px));
 }
 
 html[data-immersive] .now-playing__title {
@@ -320,18 +352,14 @@ html[data-immersive] .now-playing__artist {
   font-size: var(--text-xl);
 }
 
-html[data-immersive] .now-playing[data-lyrics-size="sm"] .lyrics__line {
-  font-size: var(--text-2xl);
+html[data-immersive] .now-playing[data-lyrics-size="sm"] {
+  --lyrics-font-size: var(--text-2xl);
 }
 
-html[data-immersive] .now-playing[data-lyrics-size="md"] .lyrics__line {
-  font-size: var(--text-3xl);
+html[data-immersive] .now-playing[data-lyrics-size="md"] {
+  --lyrics-font-size: var(--text-3xl);
 }
 
-html[data-immersive] .now-playing[data-lyrics-size="lg"] .lyrics__line {
-  font-size: var(--text-4xl);
-}
-
-html[data-immersive] .lyrics__line {
-  font-size: var(--lyrics-font-size, var(--text-3xl));
+html[data-immersive] .now-playing[data-lyrics-size="lg"] {
+  --lyrics-font-size: var(--text-4xl);
 }
