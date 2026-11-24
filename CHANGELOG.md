@@ -8,15 +8,20 @@ All notable changes to Sonora are documented in this file.
 
 ### ✨ New Features
 
+#### Artist Pages & Clickable Artist / Album Navigation
+- **Dedicated Artist view (`/artist`)**: Displays artist artwork, subscribers, description, Play/Shuffle actions, top songs with Show All, and release shelves, resolving both browse IDs and artist-name fallbacks.
+- **Direct artist & album links across the UI**: Clicking an artist name in the bottom player bar, Now Playing (including fullscreen/immersive mode, exiting fullscreen smoothly), Quick picks tiles, song cards, track rows, or queue rows opens the artist page; clicking an album name opens its album track list view without disrupting track playback semantics.
+
 #### Collection & Playlist Track Lists
-- **Dedicated playlist & album views**: Clicking a playlist, album, or mix card across Home shelves and Library opens a dedicated collection view (`/playlist`) listing its tracks with Play All, Shuffle, progressive loading, and track action menus.
+- **Dedicated playlist & album views**: Clicking a playlist, album, or mix card across Home shelves and Library opens a dedicated collection view (`/playlist`) listing its tracks with Play All, Shuffle, progressive loading, clickable artist headers on albums, and track action menus.
 - **Direct corner play buttons**: Clicking the hover/focus play button on a collection card starts playback immediately without opening the detail view.
 
 #### Lyrics: Off Mode
 - **Fourth lyrics display mode**: Added `"off"` alongside `"sm"`, `"md"`, and `"lg"` in Settings and the Now Playing `Aa` cycler, hiding the lyrics pane while centering and enlarging the album artwork stage.
 
 ### 🛠 Fixes & Improvements
-- **Fullscreen Now Playing layout**: Fixed immersive bounds clipping, active lyric right-edge scrollbar collision, glass backdrop token styling, and dynamic ambient shader canvas resizing on fullscreen transitions.
+- **Smooth animations & low-end UI responsiveness**: Eliminated redundant panel `backdrop-filter` passes, lowered blur radii with dedicated composited layers for ambient art, optimized `GooRenderer` shaders/metaballs/DPR and player restore reveals to use GPU `transform`/`opacity` instead of per-frame `clipPath`, replaced forced layout reflows in sidebar/refresh animations with Web Animations API resets, capped `AmbientVisualRenderer` backing size, promoted GPU CSS properties (`@property`) for rubberband scrolling, and isolated list card/row layout containment.
+- **Fullscreen Now Playing layout**: Fixed immersive bounds clipping, active lyric right-edge scrollbar collision, centered album art and track details when lyrics are off, glass backdrop token styling, and dynamic ambient shader canvas resizing on fullscreen transitions.
 - **Continuous rubberband scrolling & floating stage sync**: Extended elastic pull to mid-scroll wheel gestures, isolated queue rubberband transforms to `.queue-panel`, and synchronized `#app` floating backdrop offsets with `.main` so content no longer spills over a stationary background box.
 - **Sidebar tap jiggle**: Added a lightweight single-tap rubberband jiggle animation when clicking left sidebar navigation or brand controls.
 
