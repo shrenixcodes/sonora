@@ -7,6 +7,7 @@
 
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
+import { createSongRadioButton } from "@/components/song-radio";
 import { icon } from "@/icons";
 import { EventEmitter } from "@/lib/events";
 import { playerEngine } from "@/lib/playback/engine";
@@ -236,6 +237,7 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
       ],
     }),
     el("span", { className: "queue-row__duration", text: track.duration ? formatTime(track.duration) : "" }),
+    createSongRadioButton(track),
   );
 
   if (!isCurrent && upcomingIndex !== undefined) {

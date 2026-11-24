@@ -36,7 +36,7 @@ describe("song context menu", () => {
     const card = createSongCard(song, [song]);
     const menu = open(card);
     expect(Array.from(menu.querySelectorAll("button")).map((item) => item.textContent)).toEqual([
-      "Play Next", "Add to Queue", "Add to Playlist", "Go to Artist", "Go to Album", "Copy Link",
+      "Play Next", "Add to Queue", "Add to Playlist", "Start Song Radio", "Go to Artist", "Go to Album", "Copy Link",
     ]);
     expect(play).not.toHaveBeenCalled();
     button(menu, "Play Next").click();
@@ -114,7 +114,7 @@ describe("song context menu", () => {
     const host = document.createElement("div");
     const shelves = renderShelves([{ title: "Quick picks", layout: "list", tracks: [song], items: [] }]);
     host.append(...shelves);
-    const tile = host.querySelector<HTMLElement>(".quick-tile")!;
+    const tile = host.querySelector<HTMLElement>(".quick-tile__main")!;
     document.body.appendChild(host);
     tile.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
     expect(document.querySelector('[role="menu"]')).not.toBeNull();

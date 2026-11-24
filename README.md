@@ -25,7 +25,7 @@ Sonora is designed to make desktop music listening visual, atmospheric, and resp
 - Integrated YouTube playback engine with official stream synchronization.
 - Windows ad filtering powered by Brave's adblock engine and EasyList/Brave rules. Lists are checked for updates at startup, at most once a day; a bundled copy is used offline. Some ads can still play, and Brave browser cosmetic filters and its full scriptlet set are not included.
 - Persistent player dock with scrubbable progress bar, volume slider, shuffle, and repeat modes.
-- Full queue management with automatic playlist continuation.
+- Full queue management with automatic playlist continuation and song radio that queues up to 25 YouTube Music recommendations and continues with more as they run low.
 - Right-click songs to queue them, add them to Sonora playlists, copy links, or find their artist and album in search.
 - System Media Transport Controls (SMTC) integration for Windows 10 and 11 hardware media keys and lockscreen overlay.
 

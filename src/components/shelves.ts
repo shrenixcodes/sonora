@@ -8,6 +8,7 @@
 
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
+import { createSongRadioButton } from "@/components/song-radio";
 import { icon } from "@/icons";
 import { catalog, CatalogError, type HomeCollection, type HomeItem, type HomeShelf } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
@@ -96,18 +97,11 @@ export function section(title: string, body: HTMLElement, strapline?: string): H
 }
 
 function createQuickTile(track: Track, queue: Track[]): HTMLElement {
-  const tile = el("button", {
-    className: "quick-tile",
-    attrs: {
-      type: "button",
-      "data-track-id": track.id,
-      "aria-label": `Play ${track.title} by ${track.artist}`,
-    },
+  const play = el("button", {
+    className: "quick-tile__main",
+    attrs: { type: "button", "aria-label": `Play ${track.title} by ${track.artist}` },
     children: [
-      el("img", {
-        className: "quick-tile__art",
-        attrs: { src: track.artworkUrl, alt: "", loading: "lazy" },
-      }),
+      el("img", { className: "quick-tile__art", attrs: { src: track.artworkUrl, alt: "", loading: "lazy" } }),
       el("span", {
         className: "quick-tile__meta",
         children: [
@@ -119,7 +113,12 @@ function createQuickTile(track: Track, queue: Track[]): HTMLElement {
     ],
     onClick: () => playerEngine.playTrack(track, queue),
   });
-  attachSongContextMenu(tile, track);
+  const tile = el("div", {
+    className: "quick-tile",
+    attrs: { "data-track-id": track.id },
+    children: [play, createSongRadioButton(track)],
+  });
+  attachSongContextMenu(play, track);
   return tile;
 }
 

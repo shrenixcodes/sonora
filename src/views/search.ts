@@ -7,6 +7,7 @@
 
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
+import { createSongRadioButton } from "@/components/song-radio";
 import { icon } from "@/icons";
 import { catalog, CatalogError, type SearchFilter } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
@@ -262,6 +263,7 @@ function createTrackRow(track: Track, index: number): HTMLElement {
         ],
       }),
       el("span", { className: "track-row__album truncate", text: track.album ?? "" }),
+      createSongRadioButton(track),
       el("button", {
         className: `track-row__like-btn${liked ? " track-row__like-btn--active" : ""}`,
         html: icon("heart"),
