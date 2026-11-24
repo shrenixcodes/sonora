@@ -8,6 +8,7 @@
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
+import { createTrackAlbumControl, createTrackArtistControl } from "@/components/track-links";
 import { icon } from "@/icons";
 import { catalog, CatalogError, type SearchFilter } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
@@ -259,10 +260,10 @@ function createTrackRow(track: Track, index: number): HTMLElement {
         className: "track-row__info",
         children: [
           el("span", { className: "track-row__title truncate", text: track.title }),
-          el("span", { className: "track-row__artist truncate", text: track.artist }),
+          createTrackArtistControl(track),
         ],
       }),
-      el("span", { className: "track-row__album truncate", text: track.album ?? "" }),
+      createTrackAlbumControl(track),
       createSongRadioButton(track),
       el("button", {
         className: `track-row__like-btn${liked ? " track-row__like-btn--active" : ""}`,

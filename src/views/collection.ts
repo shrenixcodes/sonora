@@ -5,51 +5,23 @@
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
+import { createTrackAlbumControl, createTrackArtistControl } from "@/components/track-links";
 import { icon } from "@/icons";
+import {
+  getCachedCollection,
+  openAlbum,
+  openArtist,
+  openCollection,
+  type CollectionTarget,
+} from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { router } from "@/lib/router";
+import { searchQuery } from "@/lib/search-query";
 import { storage } from "@/lib/storage";
 import { catalog, CatalogError } from "@/lib/ytm/catalog";
 import type { Playlist, Track } from "@/types/music";
 
-export type CollectionTarget =
-  | {
-      source: "ytm";
-      id: string;
-      kind: "playlist" | "album";
-      title: string;
-      subtitle: string;
-      artworkUrl: string;
-    }
-  | {
-      source: "local";
-      id: string;
-    };
-
-const collectionCache = new Map<string, Extract<CollectionTarget, { source: "ytm" }>>();
-
-/** Navigates to the playlist/album track list view without starting playback. */
-export function openCollection(target: CollectionTarget): void {
-  if (target.source === "ytm") {
-    collectionCache.set(target.id, target);
-    const params = new URLSearchParams({
-      source: "ytm",
-      id: target.id,
-      kind: target.kind,
-      title: target.title,
-    });
-    if (target.subtitle) params.set("subtitle", target.subtitle);
-    if (target.artworkUrl) params.set("art", target.artworkUrl);
-    router.navigate(`/playlist?${params.toString()}`);
-    return;
-  }
-
-  const params = new URLSearchParams({
-    source: "local",
-    id: target.id,
-  });
-  router.navigate(`/playlist?${params.toString()}`);
-}
+export { openAlbum, openCollection, type CollectionTarget };
 
 /** Fetches a YouTube Music playlist or album and starts playing from its first track. */
 export async function playYtmCollection(
@@ -75,14 +47,16 @@ function targetFromHash(): CollectionTarget | null {
   if (queryStart === -1) return null;
   const params = new URLSearchParams(hash.slice(queryStart + 1));
   const source = params.get("source");
-  const id = params.get("id");
-  if (!id) return null;
+  const id = params.get("id") ?? "";
+  const query = params.get("query") ?? "";
 
   if (source === "local") {
-    return { source: "local", id };
+    return id ? { source: "local", id } : null;
   }
 
-  const cached = collectionCache.get(id);
+  if (!id && !query) return null;
+
+  const cached = id ? getCachedCollection(id) : undefined;
   const kindParam = params.get("kind");
   const kind: "playlist" | "album" = kindParam === "album" ? "album" : cached?.kind ?? "playlist";
   return {
@@ -92,6 +66,7 @@ function targetFromHash(): CollectionTarget | null {
     title: params.get("title") || cached?.title || (kind === "album" ? "Album" : "Playlist"),
     subtitle: params.get("subtitle") ?? cached?.subtitle ?? "",
     artworkUrl: params.get("art") ?? cached?.artworkUrl ?? "",
+    ...(query ? { query } : {}),
   };
 }
 
@@ -287,6 +262,10 @@ function renderYtmCollectionView(
   markPlaying: (track: Track | null) => void,
 ): void {
   let tracks: Track[] = [];
+  let resolvedId = target.id;
+  let resolvedArtistName = target.kind === "album" ? target.subtitle.trim() : "";
+  let resolvedArtistId: string | undefined;
+
   const subtitleNode = el("p", {
     className: "collection__subtitle",
     text: target.subtitle || "Loading songs…",
@@ -318,34 +297,50 @@ function renderYtmCollectionView(
     attrs: { "aria-live": "polite" },
   });
 
-  host.append(
-    createBackButton(),
-    createHeroHeader({
-      eyebrow: target.kind === "album" ? "Album" : "Playlist",
-      title: target.title,
-      subtitleNode,
-      artworkUrl: target.artworkUrl,
-      playBtn,
-      shuffleBtn,
-    }),
-    listHost,
-  );
+  const header = createHeroHeader({
+    eyebrow: target.kind === "album" ? "Album" : "Playlist",
+    title: target.title,
+    subtitleNode,
+    artworkUrl: target.artworkUrl,
+    playBtn,
+    shuffleBtn,
+  });
+  const artworkImg = header.querySelector<HTMLImageElement>(".collection__artwork img");
+  const titleEl = header.querySelector<HTMLElement>(".collection__title");
+
+  host.append(createBackButton(), header, listHost);
+
+  const renderSubtitle = (countText?: string) => {
+    if (target.kind === "album" && resolvedArtistName) {
+      const artistBtn = el("button", {
+        className: "collection__subtitle-link",
+        text: resolvedArtistName,
+        attrs: {
+          type: "button",
+          title: `Open artist: ${resolvedArtistName}`,
+          "aria-label": `Open artist ${resolvedArtistName}`,
+        },
+        onClick: () => openArtist({ id: resolvedArtistId, name: resolvedArtistName }),
+      });
+      subtitleNode.replaceChildren(
+        artistBtn,
+        ...(countText ? [document.createTextNode(` · ${countText}`)] : []),
+      );
+      return;
+    }
+    const base = target.subtitle;
+    subtitleNode.textContent = countText ? (base ? `${base} · ${countText}` : countText) : base;
+  };
+  renderSubtitle();
 
   const updateSubtitle = (count: number) => {
-    const countText = `${count} song${count === 1 ? "" : "s"}`;
-    subtitleNode.textContent = target.subtitle ? `${target.subtitle} · ${countText}` : countText;
+    renderSubtitle(`${count} song${count === 1 ? "" : "s"}`);
   };
 
-  const load = () => {
-    tracks = [];
-    playBtn.setAttribute("disabled", "");
-    shuffleBtn.setAttribute("disabled", "");
-    listHost.setAttribute("aria-busy", "true");
-    listHost.replaceChildren(el("p", { className: "home__hint", text: "Loading songs…" }));
-
+  const renderTracks = (playlistId: string) => {
     let trackListEl: HTMLElement | null = null;
     catalog
-      .getPlaylistTracks(target.id, (more) => {
+      .getPlaylistTracks(playlistId, (more) => {
         if (!listHost.isConnected || !trackListEl) return;
         const offset = tracks.length;
         tracks = [...tracks, ...more];
@@ -360,8 +355,18 @@ function renderYtmCollectionView(
         listHost.removeAttribute("aria-busy");
         tracks = [...initial];
 
+        if (initial[0]?.artistId && !resolvedArtistId) {
+          resolvedArtistId = initial[0].artistId;
+        }
+        if (target.kind === "album" && !resolvedArtistName && initial[0]?.artist) {
+          resolvedArtistName = initial[0].artist.trim();
+        }
+        if (artworkImg && !target.artworkUrl && initial[0]?.artworkUrl) {
+          artworkImg.src = initial[0].artworkUrl;
+        }
+
         if (tracks.length === 0) {
-          subtitleNode.textContent = target.subtitle || "0 songs";
+          renderSubtitle(resolvedArtistName ? undefined : "0 songs");
           listHost.replaceChildren(
             el("div", {
               className: "empty-state",
@@ -387,6 +392,84 @@ function renderYtmCollectionView(
         });
         listHost.replaceChildren(trackListEl);
         markPlaying(playerEngine.currentTrack);
+      })
+      .catch((err) => {
+        if (!listHost.isConnected) return;
+        listHost.removeAttribute("aria-busy");
+        const message = err instanceof CatalogError ? err.message : `Couldn't load this ${target.kind}.`;
+        listHost.replaceChildren(
+          el("div", {
+            className: "home__notice",
+            children: [
+              el("p", { className: "home__hint", text: message }),
+              el("button", {
+                className: "btn btn--secondary",
+                text: "Try again",
+                attrs: { type: "button" },
+                onClick: load,
+              }),
+            ],
+          }),
+        );
+      });
+  };
+
+  const load = () => {
+    tracks = [];
+    playBtn.setAttribute("disabled", "");
+    shuffleBtn.setAttribute("disabled", "");
+    listHost.setAttribute("aria-busy", "true");
+    listHost.replaceChildren(el("p", { className: "home__hint", text: "Loading songs…" }));
+
+    if (resolvedId) {
+      renderTracks(resolvedId);
+      return;
+    }
+
+    const query = target.query?.trim() || target.title;
+    catalog
+      .search(query, "albums")
+      .then((res) => {
+        if (!listHost.isConnected) return;
+        const normalizedTitle = target.title.toLowerCase();
+        const match =
+          res.collections?.find(
+            (c) => c.playlistId && c.kind === "album" && c.title.toLowerCase() === normalizedTitle,
+          ) ?? res.collections?.find((c) => c.playlistId && (c.kind === "album" || c.kind === "playlist"));
+
+        if (!match?.playlistId) {
+          listHost.removeAttribute("aria-busy");
+          renderSubtitle();
+          listHost.replaceChildren(
+            el("div", {
+              className: "empty-state",
+              children: [
+                el("div", { className: "empty-state__icon", html: icon("album") }),
+                el("h3", { className: "empty-state__title", text: "Album not found" }),
+                el("p", {
+                  className: "empty-state__description",
+                  text: "Couldn't match this track's album on YouTube Music.",
+                }),
+                el("button", {
+                  className: "btn btn--secondary",
+                  text: "Search albums",
+                  attrs: { type: "button" },
+                  onClick: () => {
+                    searchQuery.searchFor(query, "albums");
+                    router.navigate("/search");
+                  },
+                }),
+              ],
+            }),
+          );
+          return;
+        }
+
+        resolvedId = match.playlistId;
+        if (titleEl && match.title) titleEl.textContent = match.title;
+        if (match.artistId && !resolvedArtistId) resolvedArtistId = match.artistId;
+        if (artworkImg && !target.artworkUrl && match.artworkUrl) artworkImg.src = match.artworkUrl;
+        renderTracks(resolvedId);
       })
       .catch((err) => {
         if (!listHost.isConnected) return;
@@ -452,10 +535,10 @@ function createCollectionTrackRow(
         className: "track-row__info",
         children: [
           el("span", { className: "track-row__title truncate", text: track.title }),
-          el("span", { className: "track-row__artist truncate", text: track.artist }),
+          createTrackArtistControl(track),
         ],
       }),
-      el("span", { className: "track-row__album truncate", text: track.album ?? "" }),
+      createTrackAlbumControl(track),
       createSongRadioButton(track),
       el("button", {
         className: `track-row__like-btn${liked ? " track-row__like-btn--active" : ""}`,

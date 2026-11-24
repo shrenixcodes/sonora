@@ -21,6 +21,7 @@ export type CatalogRequest =
   | { kind: "accountInfo" }
   | { kind: "explore" }
   | { kind: "playlist"; id: string }
+  | { kind: "artist"; id: string }
   | { kind: "watchPlaylist"; id: string }
   | { kind: "continuation"; token: string };
 

@@ -8,6 +8,7 @@
 
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
+import { openAlbum, openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { LyricsController } from "@/lib/lyrics/synced-lyrics";
 import { AmbientVisualRenderer } from "@/lib/visuals/ambient-renderer";
@@ -197,14 +198,48 @@ export function renderNowPlaying(container: HTMLElement): void {
     text: currentTrack?.title || "No track playing",
   });
 
-  const artistEl = el("p", {
+  const openCurrentArtist = () => {
+    const activeTrack = playerEngine.currentTrack;
+    if (!activeTrack?.artist.trim()) return;
+    if (immersive) void setImmersive(false);
+    openArtist({ id: activeTrack.artistId, name: activeTrack.artist });
+  };
+
+  const openCurrentAlbum = () => {
+    const activeTrack = playerEngine.currentTrack;
+    const albumTitle = activeTrack?.album?.trim();
+    if (!activeTrack || !albumTitle) return;
+    if (immersive) void setImmersive(false);
+    openAlbum({
+      id: activeTrack.albumId,
+      title: albumTitle,
+      artist: activeTrack.artist,
+      artworkUrl: activeTrack.artworkUrl,
+    });
+  };
+
+  const artistEl = el("button", {
     className: "now-playing__artist truncate",
     text: currentTrack?.artist || "Select a song from the library",
+    attrs: {
+      type: "button",
+      ...(currentTrack?.artist.trim()
+        ? { title: `Open artist: ${currentTrack.artist}`, "aria-label": `Open artist ${currentTrack.artist}` }
+        : { disabled: "" }),
+    },
+    onClick: openCurrentArtist,
   });
 
-  const albumEl = el("p", {
+  const albumEl = el("button", {
     className: "now-playing__album truncate",
     text: currentTrack?.album || "",
+    attrs: {
+      type: "button",
+      ...(currentTrack?.album?.trim()
+        ? { title: `Open album: ${currentTrack.album}`, "aria-label": `Open album ${currentTrack.album}` }
+        : { disabled: "" }),
+    },
+    onClick: openCurrentAlbum,
   });
 
   const infoCol = el("div", {
@@ -252,13 +287,37 @@ export function renderNowPlaying(container: HTMLElement): void {
         artImg.alt = track.title || "Track artwork";
         titleEl.textContent = track.title;
         artistEl.textContent = track.artist;
-        albumEl.textContent = track.album || "";
+        const hasArtist = Boolean(track.artist.trim());
+        artistEl.toggleAttribute("disabled", !hasArtist);
+        if (hasArtist) {
+          artistEl.setAttribute("title", `Open artist: ${track.artist}`);
+          artistEl.setAttribute("aria-label", `Open artist ${track.artist}`);
+        } else {
+          artistEl.removeAttribute("title");
+          artistEl.removeAttribute("aria-label");
+        }
+        const albumTitle = track.album?.trim() ?? "";
+        albumEl.textContent = albumTitle;
+        albumEl.toggleAttribute("disabled", !albumTitle);
+        if (albumTitle) {
+          albumEl.setAttribute("title", `Open album: ${albumTitle}`);
+          albumEl.setAttribute("aria-label", `Open album ${albumTitle}`);
+        } else {
+          albumEl.removeAttribute("title");
+          albumEl.removeAttribute("aria-label");
+        }
       } else {
         artImg.src = "/artwork-placeholder.svg";
         artImg.alt = "Track artwork";
         titleEl.textContent = "No track playing";
         artistEl.textContent = "Select a song from the library";
+        artistEl.setAttribute("disabled", "");
+        artistEl.removeAttribute("title");
+        artistEl.removeAttribute("aria-label");
         albumEl.textContent = "";
+        albumEl.setAttribute("disabled", "");
+        albumEl.removeAttribute("title");
+        albumEl.removeAttribute("aria-label");
       }
     }),
   );

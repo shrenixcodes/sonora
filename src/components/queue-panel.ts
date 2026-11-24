@@ -10,6 +10,7 @@ import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
 import { icon } from "@/icons";
 import { EventEmitter } from "@/lib/events";
+import { openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import type { Track } from "@/types/music";
 
@@ -233,7 +234,22 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
       className: "queue-row__meta",
       children: [
         el("span", { className: "queue-row__title truncate", text: track.title }),
-        el("span", { className: "queue-row__artist truncate", text: track.artist }),
+        track.artist?.trim()
+          ? el("button", {
+              className: "queue-row__artist queue-row__artist-btn truncate",
+              text: track.artist,
+              attrs: {
+                type: "button",
+                title: `Open artist: ${track.artist}`,
+                "aria-label": `Open artist ${track.artist}`,
+              },
+              onClick: (e) => {
+                e.stopPropagation();
+                openArtist({ id: track.artistId, name: track.artist });
+              },
+              onKeyDown: (e) => e.stopPropagation(),
+            })
+          : el("span", { className: "queue-row__artist truncate", text: track.artist }),
       ],
     }),
     el("span", { className: "queue-row__duration", text: track.duration ? formatTime(track.duration) : "" }),

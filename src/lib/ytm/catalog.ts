@@ -9,6 +9,7 @@
 import { CatalogError, requestCatalog, type CatalogRequest } from "@/lib/ytm/client";
 import {
   parseAccountProfile,
+  parseArtistPage,
   parseContinuation,
   parseHomeChips,
   parseHomeShelves,
@@ -20,6 +21,7 @@ import {
   parseSearchSongs,
   parseWatchPlaylist,
   type AccountProfile,
+  type ArtistPage,
   type HomeChip,
   type HomeCollection,
   type HomeItem,
@@ -31,7 +33,17 @@ import {
 import { dedupeById } from "@/lib/tracks";
 import type { Track } from "@/types/music";
 
-export type { AccountProfile, HomeChip, HomeCollection, HomeItem, HomePage, HomeShelf, LibraryArtist, LibraryPlaylist };
+export type {
+  AccountProfile,
+  ArtistPage,
+  HomeChip,
+  HomeCollection,
+  HomeItem,
+  HomePage,
+  HomeShelf,
+  LibraryArtist,
+  LibraryPlaylist,
+};
 export { CatalogError };
 
 export type SearchFilter = "songs" | "albums" | "artists" | "playlists" | "videos";
@@ -76,6 +88,7 @@ export class Catalog {
   private explore: { shelves: HomeShelf[]; at: number } | null = null;
   private inFlight = new Map<string, Promise<unknown>>();
   private playlists = new Map<string, { tracks: Track[]; at: number }>();
+  private artists = new Map<string, { page: ArtistPage; at: number }>();
   /** How many pages each Home page has loaded, to cap how far it goes. */
   private homePages = new WeakMap<HomePage, number>();
 
@@ -151,6 +164,18 @@ export class Catalog {
     this.home = null;
     this.explore = null;
     this.playlists.clear();
+    this.artists.clear();
+  }
+
+  /** Fetches an artist page (top songs, albums, singles, related artists). */
+  async getArtist(id: string, fallbackName = ""): Promise<ArtistPage> {
+    const cached = this.artists.get(id);
+    if (cached && this.now() - cached.at < PLAYLIST_TTL_MS) return cached.page;
+
+    const response = await this.fetch({ kind: "artist", id });
+    const page = parseArtistPage(response, id, fallbackName);
+    this.artists.set(id, { page, at: this.now() });
+    return page;
   }
 
   /** YouTube Music's Explore page: new releases, charts and trending. */
