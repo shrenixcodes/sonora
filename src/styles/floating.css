@@ -134,6 +134,26 @@ html[data-window="floating"] .titlebar {
   gap: var(--space-3);
 }
 
+.window-resize-handle {
+  display: none;
+  position: fixed;
+  z-index: 10001;
+}
+
+html[data-window="floating"] .window-resize-handle { display: block; }
+.window-resize-handle--north, .window-resize-handle--south { left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.window-resize-handle--north { top: 0; }
+.window-resize-handle--south { bottom: 0; }
+.window-resize-handle--west, .window-resize-handle--east { top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.window-resize-handle--west { left: 0; }
+.window-resize-handle--east { right: 0; }
+.window-resize-handle--northwest, .window-resize-handle--northeast,
+.window-resize-handle--southwest, .window-resize-handle--southeast { width: 14px; height: 14px; }
+.window-resize-handle--northwest { top: 0; left: 0; cursor: nwse-resize; }
+.window-resize-handle--northeast { top: 0; right: 0; cursor: nesw-resize; }
+.window-resize-handle--southwest { bottom: 0; left: 0; cursor: nesw-resize; }
+.window-resize-handle--southeast { bottom: 0; right: 0; cursor: nwse-resize; }
+
 html[data-window="floating"] .titlebar__left,
 html[data-window="floating"] .titlebar__right,
 html[data-window="floating"] .titlebar__search,

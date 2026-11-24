@@ -34,7 +34,7 @@ pub fn run() {
             ytm::create_window(app.handle())?;
             window_mode::start_click_through_sampler(app.handle());
             if let Some(window) = app.get_webview_window("main") {
-                window_mode::install_centre_snap(&window);
+                window_mode::install_window_state_handler(&window);
                 if let Some(icon) = app.default_window_icon() {
                     let _ = window.set_icon(icon.clone());
                 }

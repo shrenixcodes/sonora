@@ -42,4 +42,16 @@ describe("collectRegions", () => {
 
     expect(collectRegions(root)).toEqual([{ x: 300, y: 200, width: 380, height: 300 }]);
   });
+
+  it("keeps the titlebar and resize handles interactive in the floating layout", () => {
+    const root = document.createElement("div");
+    root.append(
+      part("titlebar", { left: 70, top: 10, right: 900, bottom: 54, width: 830, height: 44 }),
+      part("window-resize-handle", { left: 0, top: 14, right: 8, bottom: 700, width: 8, height: 686 }),
+    );
+    expect(collectRegions(root)).toEqual([
+      { x: 70, y: 10, width: 830, height: 44 },
+      { x: 0, y: 14, width: 8, height: 686 },
+    ]);
+  });
 });

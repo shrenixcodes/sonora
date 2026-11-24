@@ -23,6 +23,7 @@ export interface HitRect {
 
 /** Everything that should take clicks in floating mode. */
 const INTERACTIVE_PARTS = [
+  ".titlebar",
   ".titlebar__left",
   ".titlebar__search",
   ".titlebar__right",
@@ -32,6 +33,7 @@ const INTERACTIVE_PARTS = [
   ".queue-panel",
   ".player",
   "dialog[open]",
+  ".window-resize-handle",
 ];
 
 export function modeFor(state: { maximized: boolean; fullscreen: boolean }): WindowMode {
@@ -94,6 +96,19 @@ export async function initWindowMode(): Promise<void> {
   }
 
   const appWindow = getCurrentWindow();
+  const directions = ["North", "South", "East", "West", "NorthEast", "NorthWest", "SouthEast", "SouthWest"] as const;
+  for (const direction of directions) {
+    const handle = document.createElement("div");
+    handle.className = `window-resize-handle window-resize-handle--${direction.toLowerCase()}`;
+    handle.setAttribute("aria-hidden", "true");
+    handle.addEventListener("mousedown", (event) => {
+      if (event.button === 0 && currentMode === "floating") {
+        event.preventDefault();
+        void appWindow.startResizeDragging(direction).catch((err) => console.error("[window-mode] resize failed:", err));
+      }
+    });
+    document.body.appendChild(handle);
+  }
   const refresh = async () => {
     const [maximized, fullscreen] = await Promise.all([appWindow.isMaximized(), appWindow.isFullscreen()]);
     applyMode(modeFor({ maximized, fullscreen }));
