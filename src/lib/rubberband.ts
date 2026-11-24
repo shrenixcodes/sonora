@@ -7,6 +7,9 @@ export interface RubberbandOptions {
   maxOffset?: number;
   damping?: number;
   target?: HTMLElement;
+  listenOn?: HTMLElement;
+  shouldHandle?: (event: WheelEvent) => boolean;
+  onStateChange?: (state: { x: number; y: number; stretching: boolean; rebounding: boolean }) => void;
 }
 
 export interface RubberbandInstance {
@@ -40,6 +43,7 @@ export function attachRubberband(
   const maxOffset = options.maxOffset ?? 44;
   const damping = options.damping ?? 0.35;
   const target = options.target ?? element;
+  const listenOn = options.listenOn ?? element;
 
   target.classList.add("rubberband-target");
 
@@ -47,28 +51,49 @@ export function attachRubberband(
   let offsetY = 0;
   let reboundTimer: ReturnType<typeof setTimeout> | null = null;
 
+  const notify = (x: number, y: number, stretching: boolean, rebounding: boolean) => {
+    options.onStateChange?.({ x, y, stretching, rebounding });
+  };
+
   const applyOffset = (x: number, y: number) => {
     offsetX = x;
     offsetY = y;
+    const stretching = x !== 0 || y !== 0;
+    if (stretching) {
+      if (reboundTimer !== null) {
+        clearTimeout(reboundTimer);
+        reboundTimer = null;
+      }
+      target.classList.remove("is-rebounding");
+    }
+    target.classList.toggle("is-stretching", stretching);
     target.style.setProperty("--rubberband-x", `${x.toFixed(1)}px`);
     target.style.setProperty("--rubberband-y", `${y.toFixed(1)}px`);
+    notify(x, y, stretching, target.classList.contains("is-rebounding"));
   };
 
   const rebound = () => {
     if (offsetX === 0 && offsetY === 0) return;
+    target.classList.remove("is-stretching");
     target.classList.add("is-rebounding");
-    applyOffset(0, 0);
+    offsetX = 0;
+    offsetY = 0;
+    target.style.setProperty("--rubberband-x", "0.0px");
+    target.style.setProperty("--rubberband-y", "0.0px");
+    notify(0, 0, false, true);
 
     if (reboundTimer !== null) clearTimeout(reboundTimer);
     reboundTimer = setTimeout(() => {
       target.classList.remove("is-rebounding");
       reboundTimer = null;
+      notify(0, 0, false, false);
     }, 360);
   };
 
   let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
   const handleWheel = (e: WheelEvent) => {
+    if (e.defaultPrevented) return;
     // Respect user reduced-motion preference
     if (
       typeof window !== "undefined" &&
@@ -77,39 +102,40 @@ export function attachRubberband(
     ) {
       return;
     }
+    if (options.shouldHandle && !options.shouldHandle(e)) {
+      if (offsetX !== 0 || offsetY !== 0) rebound();
+      return;
+    }
 
     let handled = false;
+    let nextX = offsetX;
+    let nextY = offsetY;
 
-    // Vertical boundary checks
-    if (axis === "vertical" || axis === "both") {
+    // Vertical elastic follow (both during normal scrolling and at boundaries)
+    if ((axis === "vertical" || axis === "both") && e.deltaY !== 0) {
       const atTop = element.scrollTop <= 0 && e.deltaY < 0;
       const atBottom =
         element.scrollTop + element.clientHeight >= element.scrollHeight - 1 && e.deltaY > 0;
-
-      if (atTop || atBottom || offsetY !== 0) {
-        // e.deltaY < 0 means scrolling up, pulling down (+y)
-        const delta = -e.deltaY;
-        const nextY = calculateRubberbandOffset(delta, offsetY, maxOffset, damping);
-        applyOffset(offsetX, nextY);
-        handled = true;
-      }
+      const effectiveDamping = atTop || atBottom ? damping : damping * 0.6;
+      // e.deltaY < 0 means scrolling up, pulling down (+y)
+      const delta = -e.deltaY;
+      nextY = calculateRubberbandOffset(delta, offsetY, maxOffset, effectiveDamping);
+      handled = true;
     }
 
-    // Horizontal boundary checks
-    if (axis === "horizontal" || axis === "both") {
+    // Horizontal elastic follow (both during normal scrolling and at boundaries)
+    if ((axis === "horizontal" || axis === "both") && e.deltaX !== 0) {
       const atLeft = element.scrollLeft <= 0 && e.deltaX < 0;
       const atRight =
         element.scrollLeft + element.clientWidth >= element.scrollWidth - 1 && e.deltaX > 0;
-
-      if (atLeft || atRight || offsetX !== 0) {
-        const delta = -e.deltaX;
-        const nextX = calculateRubberbandOffset(delta, offsetX, maxOffset, damping);
-        applyOffset(nextX, offsetY);
-        handled = true;
-      }
+      const effectiveDamping = atLeft || atRight ? damping : damping * 0.6;
+      const delta = -e.deltaX;
+      nextX = calculateRubberbandOffset(delta, offsetX, maxOffset, effectiveDamping);
+      handled = true;
     }
 
     if (handled) {
+      applyOffset(nextX, nextY);
       if (wheelIdleTimer !== null) clearTimeout(wheelIdleTimer);
       wheelIdleTimer = setTimeout(() => {
         rebound();
@@ -118,16 +144,17 @@ export function attachRubberband(
     }
   };
 
-  element.addEventListener("wheel", handleWheel, { passive: true });
+  listenOn.addEventListener("wheel", handleWheel, { passive: true });
 
   return {
     destroy() {
-      element.removeEventListener("wheel", handleWheel);
+      listenOn.removeEventListener("wheel", handleWheel);
       if (reboundTimer !== null) clearTimeout(reboundTimer);
       if (wheelIdleTimer !== null) clearTimeout(wheelIdleTimer);
-      target.classList.remove("rubberband-target", "is-rebounding");
+      target.classList.remove("rubberband-target", "is-stretching", "is-rebounding");
       target.style.removeProperty("--rubberband-x");
       target.style.removeProperty("--rubberband-y");
+      notify(0, 0, false, false);
     },
     reset() {
       rebound();
@@ -144,22 +171,61 @@ const ATTACHED_ELEMENTS = new WeakSet<HTMLElement>();
  * Initializes rubberband UX across all major scroll areas in the app.
  */
 export function initRubberbandUX(root: ParentNode = document): void {
-  const selectors: Array<{ sel: string; axis: "vertical" | "horizontal" | "both"; target?: string; maxOffset?: number }> = [
+  const selectors: Array<{
+    sel: string;
+    axis: "vertical" | "horizontal" | "both";
+    target?: string;
+    listenOnTarget?: boolean;
+    maxOffset?: number;
+  }> = [
     { sel: "main.main", axis: "vertical", maxOffset: 12 },
-    { sel: ".queue-panel__list", axis: "vertical", target: ".queue-panel", maxOffset: 12 },
-    { sel: ".now-playing__lyrics-scroll", axis: "vertical" },
+    // Transform and listen on the single .queue-panel shell, reading scroll bounds from .queue-panel__list,
+    // so header and list move as one capsule without double-transform jitter.
+    { sel: ".queue-panel__list", axis: "vertical", target: ".queue-panel", listenOnTarget: true, maxOffset: 12 },
     { sel: ".shelf__scroll", axis: "horizontal" },
   ];
 
   const attachMatches = (node: ParentNode) => {
-    for (const { sel, axis, target, maxOffset } of selectors) {
+    for (const { sel, axis, target, listenOnTarget, maxOffset } of selectors) {
       const elements = node.querySelectorAll<HTMLElement>(sel);
       elements.forEach((el) => {
         if (!ATTACHED_ELEMENTS.has(el)) {
           const targetElement = target ? el.closest<HTMLElement>(target) : el;
           if (!targetElement) return;
           ATTACHED_ELEMENTS.add(el);
-          attachRubberband(el, { axis, target: targetElement, maxOffset });
+
+          const isMain = el.matches("main.main");
+          const appShell = isMain ? el.closest<HTMLElement>("#app") : null;
+
+          attachRubberband(el, {
+            axis,
+            target: targetElement,
+            listenOn: listenOnTarget ? targetElement : el,
+            maxOffset,
+            shouldHandle: isMain
+              ? (event) => {
+                  if (document.documentElement.hasAttribute("data-immersive")) return false;
+                  if (el.querySelector(".now-playing")) return false;
+                  if (event.target instanceof Element && event.target.closest("dialog, .song-context-menu")) {
+                    return false;
+                  }
+                  return true;
+                }
+              : undefined,
+            onStateChange: appShell
+              ? ({ x, y, stretching, rebounding }) => {
+                  appShell.classList.toggle("is-stage-stretching", stretching);
+                  appShell.classList.toggle("is-stage-rebounding", rebounding);
+                  if (stretching || rebounding) {
+                    appShell.style.setProperty("--stage-rubberband-x", `${x.toFixed(1)}px`);
+                    appShell.style.setProperty("--stage-rubberband-y", `${y.toFixed(1)}px`);
+                  } else {
+                    appShell.style.removeProperty("--stage-rubberband-x");
+                    appShell.style.removeProperty("--stage-rubberband-y");
+                  }
+                }
+              : undefined,
+          });
         }
       });
     }

@@ -105,6 +105,29 @@ html[data-window="floating"] .main {
   overflow-x: hidden;
 }
 
+/* Keep the floating central stage frame and ambient backdrop locked to .main during rubberband pull. */
+html[data-window="floating"] #app.is-stage-stretching::before,
+html[data-window="floating"] #app.is-stage-rebounding::before,
+html[data-window="floating"] #app.is-stage-stretching .ambient-art,
+html[data-window="floating"] #app.is-stage-rebounding .ambient-art {
+  transform: translate3d(var(--stage-rubberband-x, 0px), var(--stage-rubberband-y, 0px), 0);
+}
+
+html[data-window="floating"] #app.is-stage-rebounding::before,
+html[data-window="floating"] #app.is-stage-rebounding .ambient-art {
+  transition: transform 0.36s cubic-bezier(0.175, 0.885, 0.32, 1.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-window="floating"] #app.is-stage-stretching::before,
+  html[data-window="floating"] #app.is-stage-rebounding::before,
+  html[data-window="floating"] #app.is-stage-stretching .ambient-art,
+  html[data-window="floating"] #app.is-stage-rebounding .ambient-art {
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
 /* The queue panel is a separate levitating curved pane */
 html[data-window="floating"] .queue-panel {
   grid-row: 2 / 3;

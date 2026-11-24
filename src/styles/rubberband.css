@@ -5,8 +5,13 @@
 .rubberband-target {
   --rubberband-x: 0px;
   --rubberband-y: 0px;
-  transform: translate3d(var(--rubberband-x, 0px), var(--rubberband-y, 0px), 0);
   overscroll-behavior: contain;
+}
+
+/* Only create a transform layer while actively pulling or rebounding so resting fixed overlays stay viewport-bound. */
+.rubberband-target.is-stretching,
+.rubberband-target.is-rebounding {
+  transform: translate3d(var(--rubberband-x, 0px), var(--rubberband-y, 0px), 0);
 }
 
 .rubberband-target.is-rebounding {
