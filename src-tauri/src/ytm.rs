@@ -20,6 +20,12 @@ const MAX_CONTINUATION_CHARS: usize = 4096;
 /// Catalog replies are JSON from YouTube Music's own API; a home feed is well under this.
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const BRIDGE_SCRIPT: &str = include_str!("ytm_bridge.js");
+#[cfg(windows)]
+const AD_FILTER_SCRIPT: &str = include_str!("ytm_ad_filter.js");
+
+#[cfg(windows)]
+#[path = "adblock.rs"]
+mod adblock;
 
 /// wry passes these by default; setting our own arguments replaces them, so they are repeated here.
 const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
@@ -74,7 +80,10 @@ pub fn create_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let profile_dir = app.path().app_data_dir()?.join("ytm-profile");
     let home: Url = YTM_HOME.parse().expect("YTM_HOME is a valid URL");
 
-    WebviewWindowBuilder::new(app, YTM_LABEL, WebviewUrl::External(home))
+    let builder = WebviewWindowBuilder::new(app, YTM_LABEL, WebviewUrl::External(home));
+    #[cfg(windows)]
+    let builder = builder.initialization_script(AD_FILTER_SCRIPT);
+    let window = builder
         .title("Sign in to YouTube Music")
         .inner_size(1000.0, 720.0)
         .center()
@@ -91,6 +100,11 @@ pub fn create_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             allowed
         })
         .build()?;
+
+    #[cfg(windows)]
+    adblock::attach(&window)?;
+    #[cfg(not(windows))]
+    let _ = window;
 
     Ok(())
 }
