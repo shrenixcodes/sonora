@@ -2,6 +2,19 @@
  * Rubberband UX — tactile elastic overscroll and slider overdrag resistance.
  */
 
+/* Keep stretch variables non-inherited so wheel updates never invalidate descendant styles. */
+@property --rubberband-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --rubberband-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 .rubberband-target {
   --rubberband-x: 0px;
   --rubberband-y: 0px;
@@ -12,10 +25,15 @@
 .rubberband-target.is-stretching,
 .rubberband-target.is-rebounding {
   transform: translate3d(var(--rubberband-x, 0px), var(--rubberband-y, 0px), 0);
+  will-change: transform;
+}
+
+.rubberband-target.is-stretching {
+  transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .rubberband-target.is-rebounding {
-  transition: transform 0.36s cubic-bezier(0.175, 0.885, 0.32, 1.25) !important;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
 /* Horizontal shelf rubberband */

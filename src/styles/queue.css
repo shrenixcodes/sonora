@@ -129,6 +129,7 @@
 .queue-item {
   position: relative;
   list-style: none;
+  contain: layout style;
   transition: transform var(--duration-fast) var(--ease-out);
 }
 

@@ -675,22 +675,24 @@ function placeFlyer(f: Flyer, t: number): void {
   size *= 1 + bounce + breathe;
   const scale = size / f.base;
 
-  let radius: number;
+  let radius = leg.radius1;
   if (f.settle) {
     const m = easeInOutCubic(clamp01((t - f.settle[0]) / (f.settle[1] - f.settle[0])));
     radius = lerp(size / 2, leg.radius1, m);
-    f.el.style.setProperty("--disc", String(1 - m));
-  } else {
+    f.el.style.setProperty("--disc", (1 - m).toFixed(3));
+  } else if (leg.radius0 !== leg.radius1) {
     radius = lerp(leg.radius0, leg.radius1, easeInOutCubic(clamp01((p - 0.35) / 0.65)));
   }
 
   const angle = leg.spin * (1 - easeOutCubic(p));
   f.el.style.transform =
-    `translate(${head.x - f.base / 2}px, ${head.y - f.base / 2}px) scale(${scale})` +
-    (f.spinner ? "" : ` rotate(${angle}deg)`);
-  if (f.spinner) f.spinner.style.transform = `rotate(${angle}deg)`;
-  f.el.style.borderRadius = `${radius / Math.max(0.01, scale)}px`;
-  f.el.style.opacity = String(1 - clamp01((t - f.fadeStart) / f.fadeDur));
+    `translate3d(${(head.x - f.base / 2).toFixed(1)}px, ${(head.y - f.base / 2).toFixed(1)}px, 0) scale(${scale.toFixed(4)})` +
+    (f.spinner ? "" : ` rotate(${angle.toFixed(2)}deg)`);
+  if (f.spinner) f.spinner.style.transform = `rotate(${angle.toFixed(2)}deg)`;
+  if (f.settle || leg.radius0 !== leg.radius1) {
+    f.el.style.borderRadius = `${(radius / Math.max(0.01, scale)).toFixed(1)}px`;
+  }
+  f.el.style.opacity = (1 - clamp01((t - f.fadeStart) / f.fadeDur)).toFixed(3);
 }
 
 // ── Window position tracking ──────────────────────────────────
@@ -776,11 +778,11 @@ async function refreshNativeGeometry(): Promise<void> {
 let nativeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 function scheduleNativeRefresh(): void {
   rememberWindowPosition();
-  if (!isTauri() || nativeRefreshTimer) return;
+  if (!isTauri() || nativeRefreshTimer || active) return;
   nativeRefreshTimer = setTimeout(() => {
     nativeRefreshTimer = null;
-    refreshNativeGeometry().catch(() => {});
-  }, 120);
+    if (!active) refreshNativeGeometry().catch(() => {});
+  }, 260);
 }
 
 /** The window's last known real position: live if valid, else where it was before minimizing. */
@@ -910,7 +912,7 @@ function addTendrils(
       melt: t0 + travel + 60,
       meltDur: 360 + Math.random() * 120,
       baseR: baseR * (i === 0 ? 1 : 0.7 + Math.random() * 0.25),
-      segments: clamp(Math.round(len / (baseR * 0.4)), 12, 200),
+      segments: clamp(Math.round(len / (baseR * 0.72)), 10, 64),
       phase: Math.random() * 6.28,
       wobble: 8 + Math.random() * 14,
       color: i === 0 ? color : (color + i) % 3,
@@ -926,7 +928,7 @@ function addTendrils(
 
 /** Liquid blooms out from the impact point to cover a piece, then melts away. */
 function addFlood(scene: Scene, rect: Rect, arrival: number, entry: Point, color: number): void {
-  const spacing = Math.max(44, Math.sqrt((rect.width * rect.height) / 30));
+  const spacing = Math.max(56, Math.sqrt((rect.width * rect.height) / 12));
   const cols = Math.max(1, Math.round(rect.width / spacing));
   const rows = Math.max(1, Math.round(rect.height / spacing));
   const cellW = rect.width / cols;
@@ -1006,32 +1008,23 @@ function revealBackdrop(scene: Scene, at: number, entry: Point | null, distance 
   animate(scene, art, keyframes, timing);
 }
 
-/** The player bar spreads out from its album art, liquid racing along it. */
-function revealPlayer(scene: Scene, player: HTMLElement, playerRect: Rect, art: Point, artSize: Rect, at: number, color: number): void {
-  const corners: Point[] = [
-    { x: playerRect.x, y: playerRect.y },
-    { x: playerRect.x + playerRect.width, y: playerRect.y },
-    { x: playerRect.x, y: playerRect.y + playerRect.height },
-    { x: playerRect.x + playerRect.width, y: playerRect.y + playerRect.height },
-  ];
-  const maxR = Math.max(...corners.map((c) => Math.hypot(c.x - art.x, c.y - art.y))) + 60;
-  const cx = art.x - playerRect.x;
-  const cy = art.y - playerRect.y;
-  const artR = Math.hypot(artSize.width, artSize.height) / 2 + 2;
+/** The player bar spreads out from its album art on the GPU compositor. */
+function revealPlayer(scene: Scene, player: HTMLElement, playerRect: Rect, art: Point, _artSize: Rect, at: number, color: number): void {
+  const cx = Math.max(0, Math.min(playerRect.width, art.x - playerRect.x));
   animate(
     scene,
     player,
     [
-      { clipPath: `circle(0px at ${cx}px ${cy}px)`, opacity: 1 },
-      { clipPath: `circle(${artR}px at ${cx}px ${cy}px)`, opacity: 1, offset: 0.06 },
-      { clipPath: `circle(${maxR}px at ${cx}px ${cy}px)`, opacity: 1 },
+      { opacity: 0, transform: "scaleX(0.32) scaleY(0.86)", transformOrigin: `${cx}px 50%` },
+      { opacity: 1, transform: "scaleX(1.01) scaleY(1)", transformOrigin: `${cx}px 50%`, offset: 0.72 },
+      { opacity: 1, transform: "none", transformOrigin: `${cx}px 50%` },
     ],
-    { duration: 620, delay: at, easing: "cubic-bezier(0.55, 0, 0.25, 1)" },
+    { duration: 520, delay: at, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
   );
 
   const barY = playerRect.y + playerRect.height / 2;
   const r = playerRect.height * 0.5;
-  const step = Math.max(28, r * 1.1);
+  const step = Math.max(40, r * 1.45);
   for (let x = playerRect.x + r * 0.6; x <= playerRect.x + playerRect.width - r * 0.6; x += step) {
     const start = at + 10 + Math.abs(x - art.x) * 0.42;
     scene.membranes.push({
@@ -1145,7 +1138,7 @@ function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
     melt: landsAt + 40,
     meltDur: 420,
     baseR: clamp(base * 0.7, 22, 40),
-    segments: clamp(Math.round(pathLength(path) / 8), 14, 200),
+    segments: clamp(Math.round(pathLength(path) / 14), 12, 64),
     phase: Math.random() * 6.28,
     wobble: 10,
     color: 0,
@@ -1155,6 +1148,8 @@ function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
 
   const artRadius = artEl ? parseFloat(getComputedStyle(artEl).borderRadius) : NaN;
   const finalRadius = Number.isFinite(artRadius) ? Math.min(base / 2, artRadius) : base / 2;
+  // Measure all panel rects before queueing WAAPI animations to avoid interleaved layout reads.
+  const pieces = collectPieces();
   const disc = makeFlyer("disc", base, artEl?.querySelector("img")?.getAttribute("src"));
   scene.flyers.push({
     ...disc,
@@ -1170,7 +1165,6 @@ function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
   if (!isFloating()) revealBackdrop(scene, landsAt - 60, null);
 
   // 3. Then the panels: tendrils from the screen edges, in the screen's frame of reference
-  const pieces = collectPieces();
   const screenArea = { width: screen.right - screen.left, height: screen.bottom - screen.top };
   const plans = planReveal(
     pieces.map(({ rect }) => ({ ...rect, x: rect.x - screen.left, y: rect.y - screen.top })),
@@ -1182,7 +1176,7 @@ function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
 
   plans.forEach((plan, order) => {
     const { node, rect } = pieces[plan.index];
-    const perEdge = plan.from.length > 1 ? 1 : rect.width * rect.height > 120000 ? 3 : 2;
+    const perEdge = plan.from.length > 1 ? 1 : rect.width * rect.height > 120000 ? 2 : 1;
     const spawns: Point[] = [];
     for (const direction of plan.from) {
       for (let n = 0; n < perEdge; n++) {
@@ -1221,7 +1215,7 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
     melt: flight + 20,
     meltDur: 520,
     baseR: logoSize * 0.42,
-    segments: clamp(Math.round(pathLength(path) / 8), 16, 200),
+    segments: clamp(Math.round(pathLength(path) / 14), 12, 64),
     phase: Math.random() * 6.28,
     wobble: 14,
     color: 0,
@@ -1229,10 +1223,19 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   };
   scene.tendrils.push(carrier);
 
+  // Measure layout rects ahead of WAAPI animations to avoid interleaved style/layout reads.
+  const pieces = shuffle(collectPieces(), Math.random);
+  const player = document.querySelector<HTMLElement>(".player");
+  const playerRect = player ? visibleRect(player) : null;
+  const artEl = document.querySelector<HTMLElement>(".player__artwork");
+  const artRect = (artEl && visibleRect(artEl)) || null;
+  const slot = document.querySelector<HTMLElement>(".sidebar__brand-icon");
+  const slotRect = slot ? visibleRect(slot) : null;
+
   // 2. It pools into a droplet; a crown of drops splashes off on impact
   const poolR = logoSize * 0.78;
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2 + Math.random() * 0.4;
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.random() * 0.4;
     const d = i === 0 ? 0 : poolR * 0.42;
     scene.membranes.push({
       fromX: center.x,
@@ -1240,7 +1243,7 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
       toX: center.x + Math.cos(a) * d,
       toY: center.y + Math.sin(a) * d,
       r: poolR * (i === 0 ? 0.85 : 0.5 + Math.random() * 0.12),
-      start: flight - 90 + i * 12,
+      start: flight - 90 + i * 16,
       grow: 300,
       melt: burst + 80 + Math.random() * 220,
       meltDur: 340 + Math.random() * 160,
@@ -1250,8 +1253,8 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
       color: i % 3,
     });
   }
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
     const d = poolR * (1.25 + Math.random() * 0.55);
     scene.membranes.push({
       fromX: center.x + Math.cos(a) * poolR * 0.5,
@@ -1271,11 +1274,10 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   }
 
   // 3. The pool bursts: tendrils shoot out to build every piece
-  const pieces = shuffle(collectPieces(), Math.random);
   pieces.forEach(({ node, rect }, i) => {
     const target = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     const away = Math.atan2(target.y - center.y, target.x - center.x);
-    const spawnCount = rect.width * rect.height > 120000 ? 3 : 2;
+    const spawnCount = rect.width * rect.height > 120000 ? 2 : 1;
     const spawns = Array.from({ length: spawnCount }, () => {
       const a = away + (Math.random() - 0.5) * 1.2;
       return { x: center.x + Math.cos(a) * poolR * 0.35, y: center.y + Math.sin(a) * poolR * 0.35 };
@@ -1287,10 +1289,6 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   });
 
   // 4. The player bar is struck from the pool at its album art
-  const player = document.querySelector<HTMLElement>(".player");
-  const playerRect = player ? visibleRect(player) : null;
-  const artEl = document.querySelector<HTMLElement>(".player__artwork");
-  const artRect = (artEl && visibleRect(artEl)) || null;
   if (player && playerRect) {
     const landing = artRect ?? { x: playerRect.x + 12, y: playerRect.y + playerRect.height / 2 - 24, width: 48, height: 48 };
     const { arrival } = addTendrils(scene, landing, [center], burst + 20, 300, 0);
@@ -1302,8 +1300,6 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   // 5. The logo: in with the carrier, breathes in the pool, then flies to the sidebar brand
   const logo = makeFlyer("logo", logoSize);
   const legs: FlightLeg[] = [{ path: carrier, size0: 28, size1: logoSize, radius0: 0, radius1: 0, spin: -20 }];
-  const slot = document.querySelector<HTMLElement>(".sidebar__brand-icon");
-  const slotRect = slot ? visibleRect(slot) : null;
   let fadeStart = burst + 60;
   if (slot && slotRect) {
     const home = { x: slotRect.x + slotRect.width / 2, y: slotRect.y + slotRect.height / 2 };
@@ -1371,18 +1367,20 @@ function liquidRenderer(): GooRenderer | null {
   return renderer;
 }
 
-/** Compiles the liquid shaders while idle, so the first animation starts without a hitch. */
+/** Compiles the liquid shaders while idle after launch finishes so startup never stutters. */
 export function warmUpSymbiote(): void {
   const warm = () => {
-    if (shouldReduceMotion()) return;
+    if (shouldReduceMotion() || active || launched) return;
     const goo = liquidRenderer();
     goo?.resize(window.innerWidth || 1024, window.innerHeight || 768);
     goo?.render([]);
   };
-  const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
-    .requestIdleCallback;
-  if (idle) idle(warm, { timeout: 2000 });
-  else setTimeout(warm, 600);
+  setTimeout(() => {
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+      .requestIdleCallback;
+    if (idle) idle(warm, { timeout: 2000 });
+    else warm();
+  }, 2600);
 }
 
 export function isSymbioteAnimating(): boolean {

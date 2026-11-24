@@ -49,6 +49,9 @@ export function attachRubberband(
 
   let offsetX = 0;
   let offsetY = 0;
+  let stretchingState = false;
+  let lastX = "0.0px";
+  let lastY = "0.0px";
   let reboundTimer: ReturnType<typeof setTimeout> | null = null;
 
   const notify = (x: number, y: number, stretching: boolean, rebounding: boolean) => {
@@ -59,27 +62,52 @@ export function attachRubberband(
     offsetX = x;
     offsetY = y;
     const stretching = x !== 0 || y !== 0;
+    const xVal = `${x.toFixed(1)}px`;
+    const yVal = `${y.toFixed(1)}px`;
+    let rebounding = target.classList.contains("is-rebounding");
+
     if (stretching) {
       if (reboundTimer !== null) {
         clearTimeout(reboundTimer);
         reboundTimer = null;
       }
-      target.classList.remove("is-rebounding");
+      if (rebounding) {
+        target.classList.remove("is-rebounding");
+        rebounding = false;
+      }
     }
-    target.classList.toggle("is-stretching", stretching);
-    target.style.setProperty("--rubberband-x", `${x.toFixed(1)}px`);
-    target.style.setProperty("--rubberband-y", `${y.toFixed(1)}px`);
-    notify(x, y, stretching, target.classList.contains("is-rebounding"));
+    if (stretching !== stretchingState) {
+      stretchingState = stretching;
+      target.classList.toggle("is-stretching", stretching);
+    }
+    if (xVal !== lastX) {
+      lastX = xVal;
+      target.style.setProperty("--rubberband-x", xVal);
+    }
+    if (yVal !== lastY) {
+      lastY = yVal;
+      target.style.setProperty("--rubberband-y", yVal);
+    }
+    notify(x, y, stretching, rebounding);
   };
 
   const rebound = () => {
     if (offsetX === 0 && offsetY === 0) return;
-    target.classList.remove("is-stretching");
+    if (stretchingState) {
+      stretchingState = false;
+      target.classList.remove("is-stretching");
+    }
     target.classList.add("is-rebounding");
     offsetX = 0;
     offsetY = 0;
-    target.style.setProperty("--rubberband-x", "0.0px");
-    target.style.setProperty("--rubberband-y", "0.0px");
+    if (lastX !== "0.0px") {
+      lastX = "0.0px";
+      target.style.setProperty("--rubberband-x", "0.0px");
+    }
+    if (lastY !== "0.0px") {
+      lastY = "0.0px";
+      target.style.setProperty("--rubberband-y", "0.0px");
+    }
     notify(0, 0, false, true);
 
     if (reboundTimer !== null) clearTimeout(reboundTimer);
@@ -87,7 +115,7 @@ export function attachRubberband(
       target.classList.remove("is-rebounding");
       reboundTimer = null;
       notify(0, 0, false, false);
-    }, 360);
+    }, 320);
   };
 
   let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -111,26 +139,25 @@ export function attachRubberband(
     let nextX = offsetX;
     let nextY = offsetY;
 
-    // Vertical elastic follow (both during normal scrolling and at boundaries)
+    // Vertical elastic follow (gentle progressive pull during scroll, firmer at boundaries)
     if ((axis === "vertical" || axis === "both") && e.deltaY !== 0) {
       const atTop = element.scrollTop <= 0 && e.deltaY < 0;
       const atBottom =
         element.scrollTop + element.clientHeight >= element.scrollHeight - 1 && e.deltaY > 0;
-      const effectiveDamping = atTop || atBottom ? damping : damping * 0.6;
-      // e.deltaY < 0 means scrolling up, pulling down (+y)
-      const delta = -e.deltaY;
-      nextY = calculateRubberbandOffset(delta, offsetY, maxOffset, effectiveDamping);
+      const clampedDelta = Math.sign(-e.deltaY) * Math.min(Math.abs(e.deltaY), atTop || atBottom ? 80 : 48);
+      const effectiveDamping = atTop || atBottom ? damping * 0.75 : damping * 0.28;
+      nextY = calculateRubberbandOffset(clampedDelta, offsetY, maxOffset, effectiveDamping);
       handled = true;
     }
 
-    // Horizontal elastic follow (both during normal scrolling and at boundaries)
+    // Horizontal elastic follow (gentle progressive pull during scroll, firmer at boundaries)
     if ((axis === "horizontal" || axis === "both") && e.deltaX !== 0) {
       const atLeft = element.scrollLeft <= 0 && e.deltaX < 0;
       const atRight =
         element.scrollLeft + element.clientWidth >= element.scrollWidth - 1 && e.deltaX > 0;
-      const effectiveDamping = atLeft || atRight ? damping : damping * 0.6;
-      const delta = -e.deltaX;
-      nextX = calculateRubberbandOffset(delta, offsetX, maxOffset, effectiveDamping);
+      const clampedDelta = Math.sign(-e.deltaX) * Math.min(Math.abs(e.deltaX), atLeft || atRight ? 80 : 48);
+      const effectiveDamping = atLeft || atRight ? damping * 0.75 : damping * 0.28;
+      nextX = calculateRubberbandOffset(clampedDelta, offsetX, maxOffset, effectiveDamping);
       handled = true;
     }
 

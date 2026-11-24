@@ -367,10 +367,11 @@ export class AmbientVisualRenderer {
   }
 
   handleResize(): void {
-    // Render at lower internal resolution for massive performance savings
-    const scale = 0.5;
+    // Render at lower internal resolution for massive performance savings on low-end GPUs.
     const cssWidth = this.canvas.clientWidth || window.innerWidth;
     const cssHeight = this.canvas.clientHeight || window.innerHeight;
+    const longest = Math.max(1, cssWidth, cssHeight);
+    const scale = Math.min(0.4, 640 / longest);
     const width = Math.max(1, Math.floor(cssWidth * scale));
     const height = Math.max(1, Math.floor(cssHeight * scale));
 
