@@ -9,6 +9,7 @@ import { el } from "@/lib/dom";
 import { icon, type IconName } from "@/icons";
 import { router } from "@/lib/router";
 import { showAboutPopup } from "@/components/about-popup";
+import { shouldReduceMotion } from "@/lib/visuals/motion";
 
 interface NavItem {
   label: string;
@@ -91,6 +92,26 @@ export function createSidebar(): HTMLElement {
       el("div", { className: "sidebar__playlists" }), // future: playlist list
       createNavSection(null, bottomNav),
     ],
+  });
+
+  // Single-tap rubberband jiggle when pressing any sidebar control (never on scroll).
+  const triggerJiggle = (): void => {
+    if (shouldReduceMotion()) return;
+    sidebar.classList.remove("sidebar--jiggle");
+    void sidebar.offsetWidth;
+    sidebar.classList.add("sidebar--jiggle");
+  };
+
+  sidebar.addEventListener("click", (e) => {
+    const target = e.target;
+    if (target instanceof Element && target.closest(".sidebar__brand, .sidebar__link, button")) {
+      triggerJiggle();
+    }
+  });
+  sidebar.addEventListener("animationend", (e) => {
+    if (e.target === sidebar && e.animationName === "sidebarTapJiggle") {
+      sidebar.classList.remove("sidebar--jiggle");
+    }
   });
 
   // Track active route
