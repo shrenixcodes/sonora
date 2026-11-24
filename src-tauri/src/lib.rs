@@ -35,6 +35,9 @@ pub fn run() {
             window_mode::start_click_through_sampler(app.handle());
             if let Some(window) = app.get_webview_window("main") {
                 window_mode::install_centre_snap(&window);
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = window.set_icon(icon.clone());
+                }
             }
             window_mode::show_main_window_if_frontend_stalls(app.handle());
 
