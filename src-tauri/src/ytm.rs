@@ -264,17 +264,25 @@ pub enum YtmRequest {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         params: Option<String>,
     },
-    Search { query: String },
+    Search {
+        query: String,
+    },
     LikedSongs,
     LibraryPlaylists,
     LibraryAlbums,
     LibraryArtists,
     AccountInfo,
     Explore,
-    Playlist { id: String },
-    WatchPlaylist { id: String },
+    Playlist {
+        id: String,
+    },
+    WatchPlaylist {
+        id: String,
+    },
     /// Next page of a list the page already returned.
-    Continuation { token: String },
+    Continuation {
+        token: String,
+    },
 }
 
 /// Playlist ids and continuation tokens are URL-safe text; anything else is rejected.
@@ -295,10 +303,10 @@ impl YtmRequest {
             | YtmRequest::LibraryAlbums
             | YtmRequest::LibraryArtists
             | YtmRequest::AccountInfo
-            | YtmRequest::Explore => {
-                Ok(())
-            }
-            YtmRequest::Home { params: Some(params) } => {
+            | YtmRequest::Explore => Ok(()),
+            YtmRequest::Home {
+                params: Some(params),
+            } => {
                 if is_token_text(params, MAX_CONTINUATION_CHARS, &['%', '=']) {
                     Ok(())
                 } else {
@@ -490,9 +498,13 @@ mod tests {
     #[test]
     fn treats_google_and_youtube_pages_as_sign_in() {
         let url = |s: &str| Url::parse(s).unwrap();
-        assert!(is_sign_in_page(&url("https://accounts.google.com/v3/signin")));
+        assert!(is_sign_in_page(&url(
+            "https://accounts.google.com/v3/signin"
+        )));
         assert!(is_sign_in_page(&url("https://www.youtube.com/signin")));
-        assert!(!is_sign_in_page(&url("https://music.youtube.com/watch?v=abc")));
+        assert!(!is_sign_in_page(&url(
+            "https://music.youtube.com/watch?v=abc"
+        )));
     }
 
     #[test]
@@ -532,9 +544,27 @@ mod tests {
     #[test]
     fn validates_catalog_requests() {
         assert!(YtmRequest::Home { params: None }.validate().is_ok());
-        assert!(YtmRequest::Home { params: Some("ggMPOg1uX1%3D".into()) }.validate().is_ok());
-        assert!(YtmRequest::Home { params: Some("<x>".into()) }.validate().is_err());
-        assert!(YtmRequest::WatchPlaylist { id: "RDTMAK5uy_abc".into() }.validate().is_ok());
+        assert!(
+            YtmRequest::Home {
+                params: Some("ggMPOg1uX1%3D".into())
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            YtmRequest::Home {
+                params: Some("<x>".into())
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            YtmRequest::WatchPlaylist {
+                id: "RDTMAK5uy_abc".into()
+            }
+            .validate()
+            .is_ok()
+        );
         assert!(
             YtmRequest::Search {
                 query: "lofi".into()
@@ -557,11 +587,39 @@ mod tests {
             .is_err()
         );
         assert!(YtmRequest::LikedSongs.validate().is_ok());
-        assert!(YtmRequest::Playlist { id: "PLabc_-1".into() }.validate().is_ok());
-        assert!(YtmRequest::Playlist { id: "PL\"; x".into() }.validate().is_err());
-        assert!(YtmRequest::Playlist { id: String::new() }.validate().is_err());
-        assert!(YtmRequest::Continuation { token: "4qmFsgK%3D".into() }.validate().is_ok());
-        assert!(YtmRequest::Continuation { token: "a b".into() }.validate().is_err());
+        assert!(
+            YtmRequest::Playlist {
+                id: "PLabc_-1".into()
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            YtmRequest::Playlist {
+                id: "PL\"; x".into()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            YtmRequest::Playlist { id: String::new() }
+                .validate()
+                .is_err()
+        );
+        assert!(
+            YtmRequest::Continuation {
+                token: "4qmFsgK%3D".into()
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            YtmRequest::Continuation {
+                token: "a b".into()
+            }
+            .validate()
+            .is_err()
+        );
         let parsed: YtmRequest = serde_json::from_str(r#"{"kind":"likedSongs"}"#).unwrap();
         assert_eq!(parsed, YtmRequest::LikedSongs);
     }
