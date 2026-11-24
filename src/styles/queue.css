@@ -161,11 +161,6 @@
 
 .queue-row--upcoming {
   grid-template-columns: 18px 40px 1fr auto 24px;
-  cursor: grab;
-}
-
-.queue-row--upcoming:active {
-  cursor: grabbing;
 }
 
 .queue-row__grip {

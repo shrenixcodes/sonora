@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { PlayQueue } from "../src/lib/playback/queue";
 import { createQueuePanel, queuePanel } from "../src/components/queue-panel";
 import type { Track } from "../src/types/music";
+import { playerEngine } from "../src/lib/playback/engine";
 
 const track = (id: string): Track => ({ id, title: id, artist: "A", duration: 100, artworkUrl: "" });
 const tracks = ["a", "b", "c", "d", "e"].map(track);
@@ -170,6 +171,36 @@ describe("createQueuePanel", () => {
     const initialState = queuePanel.isOpen;
     closeBtn?.click();
     expect(queuePanel.isOpen).toBe(!initialState);
+  });
+
+  it("plays a row after slight pointer movement and reorders only from its grip", () => {
+    vi.useFakeTimers();
+    const current = vi.spyOn(playerEngine, "currentTrack", "get").mockReturnValue(tracks[0]);
+    const upcoming = vi.spyOn(playerEngine, "upcoming", "get").mockReturnValue(tracks.slice(1, 3));
+    const play = vi.spyOn(playerEngine, "playTrack").mockResolvedValue();
+    const move = vi.spyOn(playerEngine, "moveUpcoming").mockImplementation(() => {});
+    try {
+      const panel = createQueuePanel();
+      const rows = panel.querySelectorAll<HTMLElement>(".queue-row--upcoming");
+      const item = rows[0].closest(".queue-item")!;
+      const grip = rows[0].querySelector<HTMLElement>(".queue-row__grip")!;
+      expect(item.getAttribute("draggable")).not.toBe("true");
+      expect(grip.getAttribute("draggable")).toBe("true");
+      rows[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 10 }));
+      rows[0].dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 12 }));
+      rows[0].click();
+      expect(play).toHaveBeenCalledWith(tracks[1]);
+      const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn(), getData: () => "0" };
+      const drag = (type: string) => Object.assign(new Event(type, { bubbles: true, cancelable: true }), { dataTransfer });
+      grip.dispatchEvent(drag("dragstart"));
+      rows[1].closest(".queue-item")!.dispatchEvent(drag("drop"));
+      grip.dispatchEvent(drag("dragend"));
+      expect(move).toHaveBeenCalledWith(0, 1);
+      vi.runAllTimers();
+    } finally {
+      current.mockRestore(); upcoming.mockRestore(); play.mockRestore(); move.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("renders rows as accessible buttons with drag support", () => {

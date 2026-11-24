@@ -154,9 +154,11 @@ function createGroup(label: string, tracks: Track[], isCurrent: boolean): HTMLEl
 }
 
 function setupDragHandlers(item: HTMLElement, index: number): void {
-  item.setAttribute("draggable", "true");
-
   item.addEventListener("dragstart", (e) => {
+    if (!(e.target instanceof Element) || !e.target.closest(".queue-row__grip")) {
+      e.preventDefault();
+      return;
+    }
     isDraggingActive = true;
     dragSourceIndex = index;
     if (e.dataTransfer) {
@@ -214,7 +216,8 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
       el("span", {
         className: "queue-row__grip",
         html: icon("grip"),
-        attrs: { "aria-hidden": "true", title: "Drag to reorder" },
+        attrs: { "aria-hidden": "true", title: "Drag to reorder", draggable: "true" },
+        onClick: (e) => e.stopPropagation(),
       }),
     );
   }
@@ -267,7 +270,7 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
       if (!isCurrent) playerEngine.playTrack(track);
     },
     onKeyDown: (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
+      if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault();
         if (!isCurrent) playerEngine.playTrack(track);
       }
