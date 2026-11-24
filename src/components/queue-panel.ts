@@ -6,6 +6,7 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { attachSongContextMenu } from "@/components/song-context-menu";
 import { icon } from "@/icons";
 import { EventEmitter } from "@/lib/events";
 import { playerEngine } from "@/lib/playback/engine";
@@ -255,7 +256,7 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
     );
   }
 
-  return el("div", {
+  const row = el("div", {
     className: `queue-row${isCurrent ? " is-playing" : " queue-row--upcoming"}`,
     attrs: {
       role: "button",
@@ -276,4 +277,6 @@ function createRow(track: Track, isCurrent: boolean, upcomingIndex?: number): HT
       }
     },
   });
+  attachSongContextMenu(row, track);
+  return row;
 }

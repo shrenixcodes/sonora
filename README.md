@@ -25,6 +25,7 @@ Sonora is designed to make desktop music listening visual, atmospheric, and resp
 - Integrated YouTube playback engine with official stream synchronization.
 - Persistent player dock with scrubbable progress bar, volume slider, shuffle, and repeat modes.
 - Full queue management with automatic playlist continuation.
+- Right-click songs to queue them, copy links, or find their artist and album in search.
 - System Media Transport Controls (SMTC) integration for Windows 10 and 11 hardware media keys and lockscreen overlay.
 
 ### Immersive Now Playing

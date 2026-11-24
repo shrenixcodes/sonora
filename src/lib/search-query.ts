@@ -14,6 +14,7 @@ interface SearchQueryEvents {
 
 class SearchQuery extends EventEmitter<SearchQueryEvents> {
   private current = "";
+  private targetFilter: "artists" | "albums" | null = null;
 
   get value(): string {
     return this.current;
@@ -23,6 +24,19 @@ class SearchQuery extends EventEmitter<SearchQueryEvents> {
     if (query === this.current) return;
     this.current = query;
     this.emit("change", query);
+  }
+
+  /** Opens a specific search category, including when the query is unchanged. */
+  searchFor(query: string, filter: "artists" | "albums"): void {
+    this.targetFilter = filter;
+    this.current = query;
+    this.emit("change", query);
+  }
+
+  takeTargetFilter(): "artists" | "albums" | null {
+    const filter = this.targetFilter;
+    this.targetFilter = null;
+    return filter;
   }
 
   /** Asks the search field to take keyboard focus. */

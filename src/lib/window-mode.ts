@@ -33,6 +33,7 @@ const INTERACTIVE_PARTS = [
   ".queue-panel",
   ".player",
   "dialog[open]",
+  ".song-context-menu",
   ".window-resize-handle",
 ];
 

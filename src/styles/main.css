@@ -790,3 +790,45 @@
   gap: var(--space-4);
   margin-bottom: var(--space-10);
 }
+
+/* Song actions float above every player and library panel. */
+.song-context-menu {
+  position: fixed;
+  z-index: var(--z-toast);
+  width: 208px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xl);
+}
+
+.song-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-align: left;
+  font-size: var(--text-md);
+}
+
+.song-context-menu__item:hover,
+.song-context-menu__item:focus-visible {
+  background: var(--color-surface-secondary);
+  outline: none;
+}
+
+.song-context-menu__item:disabled {
+  color: var(--color-text-tertiary);
+  cursor: default;
+}
+
+.song-context-menu__icon, .song-context-menu__icon svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}

@@ -7,6 +7,7 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { attachSongContextMenu } from "@/components/song-context-menu";
 import { icon } from "@/icons";
 import { catalog, CatalogError, type HomeCollection, type HomeItem, type HomeShelf } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
@@ -95,7 +96,7 @@ export function section(title: string, body: HTMLElement, strapline?: string): H
 }
 
 function createQuickTile(track: Track, queue: Track[]): HTMLElement {
-  return el("button", {
+  const tile = el("button", {
     className: "quick-tile",
     attrs: {
       type: "button",
@@ -118,6 +119,8 @@ function createQuickTile(track: Track, queue: Track[]): HTMLElement {
     ],
     onClick: () => playerEngine.playTrack(track, queue),
   });
+  attachSongContextMenu(tile, track);
+  return tile;
 }
 
 function createCard(item: HomeItem, queue: Track[]): HTMLElement {
@@ -164,6 +167,7 @@ export function createSongCard(track: Track, queue: Track[]): HTMLElement {
     onClick: () => playerEngine.playTrack(track, queue),
   });
   card.dataset.trackId = track.id;
+  attachSongContextMenu(card, track);
   return card;
 }
 

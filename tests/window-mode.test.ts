@@ -43,6 +43,12 @@ describe("collectRegions", () => {
     expect(collectRegions(root)).toEqual([{ x: 300, y: 200, width: 380, height: 300 }]);
   });
 
+  it("keeps an open song menu clickable in floating mode", () => {
+    const root = document.createElement("div");
+    root.append(part("song-context-menu", { left: 420, top: 500, right: 628, bottom: 700, width: 208, height: 200 }));
+    expect(collectRegions(root)).toEqual([{ x: 420, y: 500, width: 208, height: 200 }]);
+  });
+
   it("keeps the titlebar and resize handles interactive in the floating layout", () => {
     const root = document.createElement("div");
     root.append(

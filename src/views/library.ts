@@ -7,6 +7,7 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { attachSongContextMenu } from "@/components/song-context-menu";
 import { icon } from "@/icons";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
@@ -617,5 +618,6 @@ function createTrackRow(
     ],
   });
 
+  attachSongContextMenu(row, track);
   return row;
 }

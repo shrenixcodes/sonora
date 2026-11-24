@@ -6,6 +6,7 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { attachSongContextMenu } from "@/components/song-context-menu";
 import { icon } from "@/icons";
 import { catalog, CatalogError, type SearchFilter } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
@@ -32,7 +33,7 @@ const SEARCH_FILTERS: FilterOption[] = [
 
 export function renderSearch(container: HTMLElement): void {
   let debounceTimer: number | null = null;
-  let activeFilter: SearchFilter = "songs";
+  let activeFilter: SearchFilter = searchQuery.takeTargetFilter() ?? "songs";
   const results = el("div", { className: "search__results", attrs: { "aria-live": "polite" } });
 
   const filterButtons: Map<SearchFilter, HTMLElement> = new Map();
@@ -166,6 +167,15 @@ export function renderSearch(container: HTMLElement): void {
   }
 
   function runQuery(query: string): void {
+    const targetFilter = searchQuery.takeTargetFilter();
+    if (targetFilter) {
+      activeFilter = targetFilter;
+      for (const [id, chip] of filterButtons) {
+        const selected = id === activeFilter;
+        chip.classList.toggle("search__filter-chip--active", selected);
+        chip.setAttribute("aria-checked", String(selected));
+      }
+    }
     if (debounceTimer !== null) window.clearTimeout(debounceTimer);
     if (!query) {
       showState("Find your music", "Type in the search bar above to find songs on YouTube Music.");
@@ -268,5 +278,6 @@ function createTrackRow(track: Track, index: number): HTMLElement {
     ],
   });
 
+  attachSongContextMenu(row, track);
   return row;
 }
