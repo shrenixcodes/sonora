@@ -18,6 +18,7 @@ import { searchQuery } from "@/lib/search-query";
 import { catalogAvailable } from "@/lib/ytm/client";
 import { account } from "@/lib/ytm/account";
 import { dedupeById } from "@/lib/tracks";
+import { openCollection, playYtmCollection } from "@/views/collection";
 import type { Track, Playlist } from "@/types/music";
 
 export function renderLibrary(container: HTMLElement): void {
@@ -373,21 +374,32 @@ function renderPlaylists(container: HTMLElement): void {
 
   const grid = el("div", {
     className: "card-grid",
-    children: playlists.map((pl) =>
-      el("button", {
+    children: playlists.map((pl) => {
+      const openPlaylist = () => openCollection({ source: "local", id: pl.id });
+      const card = el("div", {
         className: "card",
-        attrs: { type: "button", title: `Play ${pl.title}` },
+        attrs: { role: "button", tabindex: "0", "aria-label": `Open ${pl.title}`, title: `Open ${pl.title}` },
         children: [
           el("div", {
             className: "card__artwork",
             children: [
               el("img", {
                 attrs: {
-                  src:
-                    pl.artworkUrl ||
-                    "/artwork-placeholder.svg",
+                  src: pl.tracks[0]?.artworkUrl || pl.artworkUrl || "/artwork-placeholder.svg",
                   alt: pl.title,
                 },
+              }),
+              el("button", {
+                className: "card__play-corner",
+                html: icon("play"),
+                attrs: { type: "button", "aria-label": `Play ${pl.title}`, title: `Play ${pl.title}` },
+                onClick: (e) => {
+                  e.stopPropagation();
+                  if (pl.tracks.length > 0) {
+                    void playerEngine.playTrack(pl.tracks[0], pl.tracks);
+                  }
+                },
+                onKeyDown: (e) => e.stopPropagation(),
               }),
             ],
           }),
@@ -402,20 +414,25 @@ function renderPlaylists(container: HTMLElement): void {
             ],
           }),
         ],
-        onClick: () => {
-          if (pl.tracks.length > 0) {
-            playerEngine.playTrack(pl.tracks[0], pl.tracks);
+        onClick: openPlaylist,
+        onKeyDown: (e) => {
+          if (e.target === card && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            openPlaylist();
           }
         },
-      }),
-    ),
+      });
+      return card;
+    }),
   });
 
   container.appendChild(grid);
 }
 
 function loadYtmPlaylists(host: HTMLElement): void {
-  loadYtmCards(host, "playlists", "From YouTube Music", () => catalog.getLibraryPlaylists(), createYtmPlaylistCard);
+  loadYtmCards(host, "playlists", "From YouTube Music", () => catalog.getLibraryPlaylists(), (item) =>
+    createYtmPlaylistCard(item, "playlist"),
+  );
 }
 
 /** Loads one kind of library item from YouTube Music into `host` as a card grid. */
@@ -474,7 +491,7 @@ function libraryPage(container: HTMLElement, title: string, subtitle: string): H
 
 function renderAlbums(container: HTMLElement): void {
   const body = libraryPage(container, "Albums", "Albums saved in your YouTube Music library");
-  loadYtmCards(body, "albums", null, () => catalog.getLibraryAlbums(), createYtmPlaylistCard);
+  loadYtmCards(body, "albums", null, () => catalog.getLibraryAlbums(), (item) => createYtmPlaylistCard(item, "album"));
 }
 
 function renderArtists(container: HTMLElement): void {
@@ -507,20 +524,54 @@ function createArtistCard(artist: LibraryArtist): HTMLElement {
   });
 }
 
-/** Plays the playlist from the top; its songs are fetched when clicked. */
-function createYtmPlaylistCard(playlist: LibraryPlaylist): HTMLElement {
+/** Opens the playlist/album track list when clicked, or plays straight away via the play button. */
+function createYtmPlaylistCard(playlist: LibraryPlaylist, kind: "playlist" | "album"): HTMLElement {
   const subtitle = el("span", { className: "card__subtitle truncate", text: playlist.subtitle });
   let loading = false;
 
-  return el("button", {
+  const play = async () => {
+    if (loading) return;
+    loading = true;
+    subtitle.textContent = "Loading…";
+    try {
+      const tracks = await playYtmCollection(playlist.id);
+      subtitle.textContent = tracks.length > 0 ? playlist.subtitle : "No playable songs";
+    } catch (err) {
+      subtitle.textContent = err instanceof CatalogError ? err.message : "Couldn't load this playlist.";
+    } finally {
+      loading = false;
+    }
+  };
+
+  const open = () =>
+    openCollection({
+      source: "ytm",
+      id: playlist.id,
+      kind,
+      title: playlist.title,
+      subtitle: playlist.subtitle,
+      artworkUrl: playlist.artworkUrl,
+    });
+
+  const card = el("div", {
     className: "card",
-    attrs: { type: "button", title: `Play ${playlist.title}` },
+    attrs: { role: "button", tabindex: "0", "aria-label": `Open ${playlist.title}`, title: `Open ${playlist.title}` },
     children: [
       el("div", {
         className: "card__artwork",
         children: [
           el("img", {
             attrs: { src: playlist.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" },
+          }),
+          el("button", {
+            className: "card__play-corner",
+            html: icon("play"),
+            attrs: { type: "button", "aria-label": `Play ${playlist.title}`, title: `Play ${playlist.title}` },
+            onClick: (e) => {
+              e.stopPropagation();
+              void play();
+            },
+            onKeyDown: (e) => e.stopPropagation(),
           }),
         ],
       }),
@@ -529,25 +580,15 @@ function createYtmPlaylistCard(playlist: LibraryPlaylist): HTMLElement {
         children: [el("span", { className: "card__title truncate", text: playlist.title }), subtitle],
       }),
     ],
-    onClick: async () => {
-      if (loading) return;
-      loading = true;
-      subtitle.textContent = "Loading…";
-      try {
-        let first: Track | undefined;
-        const tracks = await catalog.getPlaylistTracks(playlist.id, (more) => {
-          if (first) playerEngine.extendQueue(first, more);
-        });
-        first = tracks[0];
-        subtitle.textContent = tracks.length > 0 ? playlist.subtitle : "No playable songs";
-        if (tracks.length > 0) playerEngine.playTrack(tracks[0], tracks);
-      } catch (err) {
-        subtitle.textContent = err instanceof CatalogError ? err.message : "Couldn't load this playlist.";
-      } finally {
-        loading = false;
+    onClick: open,
+    onKeyDown: (e) => {
+      if (e.target === card && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        open();
       }
     },
   });
+  return card;
 }
 
 function createTrackRow(

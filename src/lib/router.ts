@@ -59,8 +59,9 @@ class Router {
     const handleRoute = () => {
       const hash = window.location.hash.slice(1) || "/";
       this.currentPath = hash;
+      const pathname = hash.split("?")[0] || "/";
 
-      const route = this.routes.find((r) => r.path === hash);
+      const route = this.routes.find((r) => r.path === hash || r.path === pathname);
       if (route) {
         container.innerHTML = "";
         route.handler(container);

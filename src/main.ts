@@ -26,6 +26,7 @@ import { renderHome } from "@/views/home";
 import { renderExplore } from "@/views/explore";
 import { renderSearch } from "@/views/search";
 import { renderLibrary } from "@/views/library";
+import { renderCollection } from "@/views/collection";
 import { renderSettings } from "@/views/settings";
 import { renderNowPlaying } from "@/views/now-playing";
 
@@ -107,6 +108,7 @@ function init(): void {
     .route("/albums", renderLibrary)
     .route("/artists", renderLibrary)
     .route("/history", renderLibrary)
+    .route("/playlist", renderCollection)
     .route("/settings", renderSettings)
     .route("/now-playing", renderNowPlaying);
 
