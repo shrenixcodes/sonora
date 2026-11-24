@@ -116,11 +116,12 @@ describe("Now Playing fullscreen presentation", () => {
     expect(offBtn?.classList.contains("settings__seg-btn--active")).toBe(true);
   });
 
-  it("hides lyrics, moves artwork to bottom, and enlarges artwork when lyrics are Off", () => {
+  it("hides lyrics, centers artwork, and enlarges artwork when lyrics are Off", () => {
     const css = readFileSync(path.resolve(import.meta.dirname, "../src/styles/now-playing.css"), "utf8");
     expect(css).toContain('.now-playing[data-lyrics-size="off"] .now-playing__lyrics');
     expect(css).toContain('.now-playing[data-lyrics-size="off"] .now-playing__body');
-    expect(css).toContain("align-items: end;");
+    expect(css).toContain("align-items: center;");
+    expect(css).toContain("justify-items: center;");
     expect(css).toContain('.now-playing[data-lyrics-size="off"] .now-playing__art-wrapper');
     expect(css).toContain('html[data-immersive] .now-playing[data-lyrics-size="off"] .now-playing__art-wrapper');
   });

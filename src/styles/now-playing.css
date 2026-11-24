@@ -268,7 +268,7 @@
   color: var(--color-text-tertiary);
 }
 
-/* ── Lyrics Off: bottom-anchored enlarged artwork stage ──── */
+/* ── Lyrics Off: centered enlarged artwork stage ─────────── */
 
 .now-playing[data-lyrics-size="off"] .now-playing__lyrics {
   display: none;
@@ -276,14 +276,13 @@
 
 .now-playing[data-lyrics-size="off"] .now-playing__body {
   grid-template-columns: 1fr;
-  align-items: end;
+  align-items: center;
   justify-items: center;
 }
 
 .now-playing[data-lyrics-size="off"] .now-playing__left {
   max-width: 560px;
   margin: 0 auto;
-  padding-bottom: var(--space-4);
 }
 
 .now-playing[data-lyrics-size="off"] .now-playing__art-wrapper {
@@ -399,7 +398,6 @@ html[data-immersive] .now-playing[data-lyrics-size="lg"] {
 
 html[data-immersive] .now-playing[data-lyrics-size="off"] .now-playing__left {
   max-width: 600px;
-  padding-bottom: var(--space-6);
 }
 
 html[data-immersive] .now-playing[data-lyrics-size="off"] .now-playing__art-wrapper {

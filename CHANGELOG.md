@@ -13,7 +13,7 @@ All notable changes to Sonora are documented in this file.
 - **Direct corner play buttons**: Clicking the hover/focus play button on a collection card starts playback immediately without opening the detail view.
 
 #### Lyrics: Off Mode
-- **Fourth lyrics display mode**: Added `"off"` alongside `"sm"`, `"md"`, and `"lg"` in Settings and the Now Playing `Aa` cycler, hiding the lyrics pane while lowering and enlarging the album artwork stage.
+- **Fourth lyrics display mode**: Added `"off"` alongside `"sm"`, `"md"`, and `"lg"` in Settings and the Now Playing `Aa` cycler, hiding the lyrics pane while centering and enlarging the album artwork stage.
 
 ### 🛠 Fixes & Improvements
 - **Fullscreen Now Playing layout**: Fixed immersive bounds clipping, active lyric right-edge scrollbar collision, glass backdrop token styling, and dynamic ambient shader canvas resizing on fullscreen transitions.
