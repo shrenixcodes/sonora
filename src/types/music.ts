@@ -66,6 +66,7 @@ export interface PlaybackState {
   playbackRate: number;
   /** True while YouTube Music plays an ad; seeking and skipping are unavailable. */
   isAd: boolean;
+  canSkipAd: boolean;
   error?: string;
 }
 

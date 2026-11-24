@@ -104,6 +104,31 @@ describe("YouTube Music bridge script", () => {
     expect(reports().every((s) => s.ad)).toBe(true);
   });
 
+  it("reports and clicks only a visible, enabled ad skip button during an ad", () => {
+    const { player } = setupPage({ ad: true });
+    const bridge = loadBridge();
+    const button = document.createElement("button");
+    button.className = "ytp-ad-skip-button-modern";
+    button.hidden = true;
+    player.appendChild(button);
+    const click = vi.fn();
+    button.addEventListener("click", click);
+    bridge.exec("skipAd");
+    expect(click).not.toHaveBeenCalled();
+    button.hidden = false;
+    vi.advanceTimersByTime(500);
+    expect(reports().at(-1)).toMatchObject({ reason: "ad-skip", canSkipAd: true });
+    bridge.exec("skipAd");
+    expect(click).toHaveBeenCalledTimes(1);
+    button.disabled = true;
+    bridge.exec("skipAd");
+    expect(click).toHaveBeenCalledTimes(1);
+    player.classList.remove("ad-showing");
+    button.disabled = false;
+    bridge.exec("skipAd");
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
   it("still allows pausing during an ad", () => {
     const { video } = setupPage({ ad: true });
     const bridge = loadBridge();

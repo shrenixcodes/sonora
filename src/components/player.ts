@@ -26,6 +26,7 @@ class PlayerBar {
     repeatBtn: HTMLElement;
     skipBackBtn: HTMLElement;
     skipFwdBtn: HTMLElement;
+    skipAdBtn: HTMLElement;
     title: HTMLElement;
     artist: HTMLElement;
     artwork: HTMLElement;
@@ -82,6 +83,13 @@ class PlayerBar {
     });
 
     // ── Progress Bar ──────────────────────────────────────
+    const skipAdBtn = el("button", {
+      className: "player__skip-ad",
+      text: "Skip ad",
+      attrs: { hidden: "" },
+      onClick: () => playerEngine.skipAd(),
+    });
+
     const progressFill = el("div", { className: "player__progress-fill" });
 
     const progressBar = el("div", {
@@ -204,6 +212,7 @@ class PlayerBar {
             artwork,
             el("div", { className: "player__meta", children: [title, artist] }),
             likeBtn,
+            skipAdBtn,
           ],
         }),
 
@@ -245,6 +254,7 @@ class PlayerBar {
       repeatBtn,
       skipBackBtn,
       skipFwdBtn,
+      skipAdBtn,
       title,
       artist,
       artwork,
@@ -331,6 +341,7 @@ class PlayerBar {
             ? "Loading…"
             : (track?.artist ?? "Select a song to start listening");
       this.elements.artist.textContent = status;
+      this.elements.skipAdBtn.hidden = !state.canSkipAd;
       this.elements.root.classList.toggle("player--ad", state.isAd);
       this.elements.root.classList.toggle("player--error", Boolean(state.error));
       // Ads must play out: no seeking or skipping until they end

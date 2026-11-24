@@ -37,6 +37,7 @@ function report(overrides: Partial<YtmState>): YtmState {
     volume: 1,
     muted: false,
     ad: false,
+    canSkipAd: false,
     signedIn: false,
     ...overrides,
   };
@@ -81,6 +82,19 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
 
     engine.seekTo(60);
     expect(sent.some((c) => c.action === "seek")).toBe(false);
+  });
+
+  it("only sends the ad skip command while a skippable ad is reported", () => {
+    const { engine, sent } = setup();
+    engine.skipAd();
+    engine.handleBridgeState(report({ ad: true, canSkipAd: false }));
+    engine.skipAd();
+    expect(sent.some((command) => command.action === "skipAd")).toBe(false);
+    engine.handleBridgeState(report({ ad: true, canSkipAd: true }));
+    engine.skipAd();
+    expect(sent.at(-1)).toEqual({ action: "skipAd" });
+    engine.handleBridgeState(report({ ad: false, canSkipAd: true }));
+    expect(engine.currentState.canSkipAd).toBe(false);
   });
 
   it("plays the next track in Sonora's queue when one ends", () => {

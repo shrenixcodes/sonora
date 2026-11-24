@@ -351,3 +351,17 @@
 .player--error .player__artist {
   color: var(--color-danger);
 }
+
+.player__skip-ad:not([hidden]) {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--color-text-secondary);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.player__skip-ad:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}

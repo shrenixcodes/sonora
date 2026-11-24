@@ -52,6 +52,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     repeat: "off",
     playbackRate: 1.0,
     isAd: false,
+    canSkipAd: false,
   };
 
   private readonly queue = new PlayQueue();
@@ -180,6 +181,10 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.send({ action: "seek", value: clamped });
   }
 
+  skipAd(): void {
+    if (this.state.isAd && this.state.canSkipAd) this.send({ action: "skipAd" });
+  }
+
   setVolume(volume: number): void {
     const clamped = Math.max(0, Math.min(1, volume));
     this.state.volume = clamped;
@@ -257,6 +262,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       return;
     }
     this.state.isAd = report.ad;
+    this.state.canSkipAd = report.ad && report.canSkipAd;
 
     if (report.reason === "ended" && !report.ad) {
       if (this.state.repeat === "one") {
