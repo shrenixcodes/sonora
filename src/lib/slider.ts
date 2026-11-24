@@ -16,6 +16,8 @@ export interface SliderOptions {
   step: () => number;
   /** Spoken value, e.g. "1:23 of 3:45" or "40%". */
   valueText?: (ratio: number) => string;
+  /** Allow the handle to stretch beyond the ends while dragging. */
+  elastic?: boolean;
 }
 
 export interface Slider {
@@ -83,14 +85,14 @@ export function attachSlider(bar: HTMLElement, options: SliderOptions): Slider {
     bar.setPointerCapture(e.pointerId);
     dragging = true;
     bar.classList.add("is-dragging");
-    updateRubberbandPull(e.clientX);
+    if (options.elastic !== false) updateRubberbandPull(e.clientX);
     show(ratioAt(e.clientX));
     options.onInput(value);
   });
 
   bar.addEventListener("pointermove", (e) => {
     if (!dragging) return;
-    updateRubberbandPull(e.clientX);
+    if (options.elastic !== false) updateRubberbandPull(e.clientX);
     show(ratioAt(e.clientX));
     options.onInput(value);
   });
@@ -99,7 +101,7 @@ export function attachSlider(bar: HTMLElement, options: SliderOptions): Slider {
     if (!dragging) return;
     dragging = false;
     bar.classList.remove("is-dragging");
-    clearRubberbandPull();
+    if (options.elastic !== false) clearRubberbandPull();
     if (bar.hasPointerCapture(e.pointerId)) bar.releasePointerCapture(e.pointerId);
     options.onCommit(value);
   };

@@ -286,6 +286,7 @@ class PlayerBar {
 
     this.volumeSlider = attachSlider(volumeBar, {
       label: "Volume",
+      elastic: false,
       onInput: (ratio) => playerEngine.setVolume(ratio),
       onCommit: (ratio) => playerEngine.setVolume(ratio),
       step: () => VOLUME_STEP,

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { attachSlider } from "../src/lib/slider";
 
-function setup(step = 0.1) {
+function setup(step = 0.1, elastic = true) {
   const bar = document.createElement("div");
   document.body.appendChild(bar);
   bar.getBoundingClientRect = () => ({ left: 100, width: 200, right: 300, top: 0, bottom: 10, height: 10, x: 100, y: 0, toJSON() {} });
@@ -11,7 +11,7 @@ function setup(step = 0.1) {
   bar.hasPointerCapture = vi.fn(() => true);
   const onInput = vi.fn();
   const onCommit = vi.fn();
-  const slider = attachSlider(bar, { label: "Volume", onInput, onCommit, step: () => step });
+  const slider = attachSlider(bar, { label: "Volume", onInput, onCommit, step: () => step, elastic });
   return { bar, slider, onInput, onCommit };
 }
 
@@ -32,6 +32,17 @@ describe("attachSlider", () => {
     expect(onCommit.mock.calls).toEqual([[1]]);
     expect(slider.dragging).toBe(false);
     expect(bar.style.getPropertyValue("--value")).toBe("1");
+  });
+
+  it("keeps a non-elastic volume handle within its bounds and does not rebound", () => {
+    const { bar, onCommit } = setup(0.1, false);
+    bar.dispatchEvent(pointer("pointerdown", 150));
+    bar.dispatchEvent(pointer("pointermove", 900));
+    bar.dispatchEvent(pointer("pointerup", 900));
+    expect(bar.style.getPropertyValue("--value")).toBe("1");
+    expect(bar.style.getPropertyValue("--rubberband-pull")).toBe("");
+    expect(bar.classList.contains("is-rebounding")).toBe(false);
+    expect(onCommit).toHaveBeenCalledWith(1);
   });
 
   it("ignores outside updates while dragging", () => {
