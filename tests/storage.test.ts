@@ -79,6 +79,15 @@ describe("StorageService", () => {
     expect(history[1].id).toBe("track_2");
   });
 
+  it("adds tracks to a local playlist once and updates its count", () => {
+    const track1: Track = { id: "track_1", title: "Song", artist: "Artist", duration: 200, artworkUrl: "" };
+    storage.savePlaylist({ id: "pl", title: "Mix", trackCount: 0, tracks: [] });
+    expect(storage.addTrackToPlaylist("pl", track1)).toBe("added");
+    expect(storage.addTrackToPlaylist("pl", track1)).toBe("duplicate");
+    expect(storage.addTrackToPlaylist("missing", track1)).toBe("missing");
+    expect(storage.getPlaylists()[0]).toMatchObject({ trackCount: 1, tracks: [track1] });
+  });
+
   it("saves and deletes custom playlists", () => {
     const pl: Playlist = {
       id: "pl_sample",

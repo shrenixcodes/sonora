@@ -26,7 +26,7 @@ Sonora is designed to make desktop music listening visual, atmospheric, and resp
 - Windows ad filtering powered by Brave's adblock engine and EasyList/Brave rules. Lists are checked for updates at startup, at most once a day; a bundled copy is used offline. Some ads can still play, and Brave browser cosmetic filters and its full scriptlet set are not included.
 - Persistent player dock with scrubbable progress bar, volume slider, shuffle, and repeat modes.
 - Full queue management with automatic playlist continuation.
-- Right-click songs to queue them, copy links, or find their artist and album in search.
+- Right-click songs to queue them, add them to Sonora playlists, copy links, or find their artist and album in search.
 - System Media Transport Controls (SMTC) integration for Windows 10 and 11 hardware media keys and lockscreen overlay.
 
 ### Immersive Now Playing

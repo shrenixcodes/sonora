@@ -48,9 +48,15 @@ export function renderLibrary(container: HTMLElement): void {
   markPlaying(playerEngine.currentTrack);
   const stopTrack = playerEngine.on("trackChange", markPlaying);
   const currentHash = hash;
+  const stopPlaylist = storage.on("playlistChange", () => {
+    if (currentHash !== "/playlists") return;
+    content.replaceChildren();
+    renderPlaylists(content);
+  });
   const stopNav = router.onNavigate((path) => {
     if (path === currentHash) return;
     stopTrack();
+    stopPlaylist();
     stopNav();
   });
 }
@@ -311,8 +317,6 @@ function renderPlaylists(container: HTMLElement): void {
             "/artwork-placeholder.svg",
         };
         storage.savePlaylist(newPl);
-        container.innerHTML = "";
-        renderPlaylists(container);
       }
     },
   });

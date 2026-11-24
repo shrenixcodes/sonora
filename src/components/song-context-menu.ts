@@ -1,4 +1,5 @@
 import { el } from "@/lib/dom";
+import { showPlaylistPicker } from "@/components/playlist-picker";
 import { icon } from "@/icons";
 import { playerEngine } from "@/lib/playback/engine";
 import { router } from "@/lib/router";
@@ -55,6 +56,7 @@ export function attachSongContextMenu(element: HTMLElement, track: Track): void 
     };
     action("Play Next", "skipForward", () => queue(true));
     action("Add to Queue", "queue", () => queue(false));
+    action("Add to Playlist", "playlist", () => showPlaylistPicker(track));
     action("Go to Artist", "artist", () => {
       searchQuery.searchFor(track.artist.trim(), "artists");
       router.navigate("/search");

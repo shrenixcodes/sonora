@@ -36,7 +36,7 @@ describe("song context menu", () => {
     const card = createSongCard(song, [song]);
     const menu = open(card);
     expect(Array.from(menu.querySelectorAll("button")).map((item) => item.textContent)).toEqual([
-      "Play Next", "Add to Queue", "Go to Artist", "Go to Album", "Copy Link",
+      "Play Next", "Add to Queue", "Add to Playlist", "Go to Artist", "Go to Album", "Copy Link",
     ]);
     expect(play).not.toHaveBeenCalled();
     button(menu, "Play Next").click();

@@ -8,6 +8,7 @@ import { EventEmitter } from "@/lib/events";
 export interface StorageEvents {
   likeChange: { trackId: string; isLiked: boolean; track: Track };
   settingsChange: UserSettings;
+  playlistChange: void;
 }
 
 const STORAGE_KEYS = {
@@ -153,8 +154,28 @@ class StorageService extends EventEmitter<StorageEvents> {
     }
     try {
       localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+      this.emit("playlistChange", undefined);
     } catch (err) {
       console.error("[Storage] Failed to save playlists:", err);
+    }
+  }
+
+  /** Adds a song to a local playlist without duplicating an existing track. */
+  addTrackToPlaylist(playlistId: string, track: Track): "added" | "duplicate" | "missing" | "error" {
+    const playlists = this.getPlaylists();
+    const playlist = playlists.find((item) => item.id === playlistId);
+    if (!playlist) return "missing";
+    if (playlist.tracks.some((item) => item.id === track.id)) return "duplicate";
+    playlist.tracks = [...playlist.tracks, track];
+    playlist.trackCount = playlist.tracks.length;
+    playlist.updatedAt = Date.now();
+    try {
+      localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+      this.emit("playlistChange", undefined);
+      return "added";
+    } catch (err) {
+      console.error("[Storage] Failed to save playlists:", err);
+      return "error";
     }
   }
 
@@ -162,6 +183,7 @@ class StorageService extends EventEmitter<StorageEvents> {
     const playlists = this.getPlaylists().filter((p) => p.id !== playlistId);
     try {
       localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+      this.emit("playlistChange", undefined);
     } catch (err) {
       console.error("[Storage] Failed to delete playlist:", err);
     }
