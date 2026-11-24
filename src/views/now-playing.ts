@@ -15,7 +15,7 @@ import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { Track } from "@/types/music";
+import type { Track, UserSettings } from "@/types/music";
 
 export function renderNowPlaying(container: HTMLElement): void {
   // Ensure scrolled views don't offset the absolute-positioned Now Playing stage.
@@ -129,29 +129,41 @@ export function renderNowPlaying(container: HTMLElement): void {
   window.addEventListener("keydown", onKeyDown);
 
   // ── Lyrics typography scaling ─────────────
-  let lyricsSize: "sm" | "md" | "lg" = settings.lyricsFontSize ?? "md";
-  const sizeLabels: Record<"sm" | "md" | "lg", string> = {
+  type LyricsSizeOption = NonNullable<UserSettings["lyricsFontSize"]>;
+  const sizeLabels: Record<LyricsSizeOption, string> = {
     sm: "Small",
     md: "Medium",
     lg: "Large",
+    off: "Off",
   };
-  const sizeCycle: Array<"sm" | "md" | "lg"> = ["sm", "md", "lg"];
+  const sizeCycle: LyricsSizeOption[] = ["sm", "md", "lg", "off"];
+  let lyricsSize: LyricsSizeOption =
+    settings.lyricsFontSize && sizeCycle.includes(settings.lyricsFontSize)
+      ? settings.lyricsFontSize
+      : "md";
+
+  const formatLyricsLabel = (size: LyricsSizeOption): string =>
+    size === "off" ? "Lyrics: Off" : `Lyrics text size: ${sizeLabels[size]}`;
 
   const fontBtn = el("button", {
-    className: "now-playing__mode-btn",
+    className: `now-playing__mode-btn${lyricsSize === "off" ? " now-playing__mode-btn--off" : ""}`,
     text: "Aa",
     attrs: {
-      "aria-label": `Lyrics text size: ${sizeLabels[lyricsSize]}`,
-      title: `Lyrics text size: ${sizeLabels[lyricsSize]}`,
+      type: "button",
+      "aria-label": formatLyricsLabel(lyricsSize),
+      title: formatLyricsLabel(lyricsSize),
+      "aria-pressed": String(lyricsSize === "off"),
     },
     onClick: () => {
       const nextIdx = (sizeCycle.indexOf(lyricsSize) + 1) % sizeCycle.length;
       lyricsSize = sizeCycle[nextIdx];
       storage.saveSettings({ lyricsFontSize: lyricsSize });
       nowPlayingRoot.dataset.lyricsSize = lyricsSize;
-      const label = `Lyrics text size: ${sizeLabels[lyricsSize]}`;
+      const label = formatLyricsLabel(lyricsSize);
       fontBtn.setAttribute("aria-label", label);
       fontBtn.setAttribute("title", label);
+      fontBtn.setAttribute("aria-pressed", String(lyricsSize === "off"));
+      fontBtn.classList.toggle("now-playing__mode-btn--off", lyricsSize === "off");
     },
   });
 

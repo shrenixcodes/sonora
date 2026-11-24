@@ -73,7 +73,7 @@ export function renderSettings(container: HTMLElement): void {
         // Lyrics Text Size
         createSettingRow(
           "Lyrics Text Size",
-          "Scale synchronized lyrics font size in Now Playing",
+          "Scale synchronized lyrics font size or hide them in Now Playing",
           createLyricsSizeSelector(currentSettings.lyricsFontSize),
         ),
 
@@ -383,21 +383,29 @@ function createDensitySelector(currentDensity: UserSettings["density"]): HTMLEle
 
 function createLyricsSizeSelector(currentSize: UserSettings["lyricsFontSize"] = "md"): HTMLElement {
   const container = el("div", { className: "settings__segmented" });
-  const sizes: Array<{ val: "sm" | "md" | "lg"; label: string }> = [
+  const sizes: Array<{ val: NonNullable<UserSettings["lyricsFontSize"]>; label: string }> = [
     { val: "sm", label: "Small" },
     { val: "md", label: "Medium" },
     { val: "lg", label: "Large" },
+    { val: "off", label: "Off" },
   ];
 
+  const activeSize = sizes.some((s) => s.val === currentSize) ? currentSize! : "md";
   const buttons: HTMLElement[] = [];
   sizes.forEach(({ val, label }) => {
+    const isActive = activeSize === val;
     const btn = el("button", {
-      className: `settings__seg-btn${(currentSize || "md") === val ? " settings__seg-btn--active" : ""}`,
+      className: `settings__seg-btn${isActive ? " settings__seg-btn--active" : ""}`,
       text: label,
+      attrs: { type: "button", "aria-pressed": String(isActive) },
       onClick: () => {
         storage.saveSettings({ lyricsFontSize: val });
-        buttons.forEach((b) => b.classList.remove("settings__seg-btn--active"));
+        buttons.forEach((b) => {
+          b.classList.remove("settings__seg-btn--active");
+          b.setAttribute("aria-pressed", "false");
+        });
         btn.classList.add("settings__seg-btn--active");
+        btn.setAttribute("aria-pressed", "true");
       },
     });
     buttons.push(btn);

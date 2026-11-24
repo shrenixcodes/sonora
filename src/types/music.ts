@@ -99,7 +99,7 @@ export interface UserSettings {
   ambientFpsLimit: 15 | 30 | 60;
   ambientIntensity: number; // 0.1 to 1.0
   density: "comfortable" | "compact";
-  lyricsFontSize?: "sm" | "md" | "lg";
+  lyricsFontSize?: "sm" | "md" | "lg" | "off";
   volume: number;
   normalizeVolume: boolean;
   autoPlayNext: boolean;
