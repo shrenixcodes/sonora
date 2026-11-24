@@ -62,7 +62,7 @@ html[data-window="floating"] #app::before {
   border-radius: var(--stage-radius);
   border: 1px solid var(--color-panel-border);
   box-shadow: var(--glass-edge), var(--float-stage-shadow);
-  /* Liquid glass layering with subtle backdrop translucency and specular sheen. */
+  /* .ambient-art is already pre-blurred, so skip redundant backdrop-filter readback here. */
   background:
     var(--glass-sheen),
     linear-gradient(var(--color-panel), var(--color-panel)),
@@ -73,8 +73,8 @@ html[data-window="floating"] #app::before {
     radial-gradient(70% 60% at 55% 105%,
       color-mix(in oklab, var(--ambience-3) var(--ambience-strength), transparent), transparent 70%),
     color-mix(in oklab, var(--color-bg) 85%, transparent);
-  -webkit-backdrop-filter: var(--glass-backdrop-deep);
-  backdrop-filter: var(--glass-backdrop-deep);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* In the floating layout the artwork fills only the central stage. */
@@ -111,11 +111,17 @@ html[data-window="floating"] #app.is-stage-rebounding::before,
 html[data-window="floating"] #app.is-stage-stretching .ambient-art,
 html[data-window="floating"] #app.is-stage-rebounding .ambient-art {
   transform: translate3d(var(--stage-rubberband-x, 0px), var(--stage-rubberband-y, 0px), 0);
+  will-change: transform;
+}
+
+html[data-window="floating"] #app.is-stage-stretching::before,
+html[data-window="floating"] #app.is-stage-stretching .ambient-art {
+  transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html[data-window="floating"] #app.is-stage-rebounding::before,
 html[data-window="floating"] #app.is-stage-rebounding .ambient-art {
-  transition: transform 0.36s cubic-bezier(0.175, 0.885, 0.32, 1.25);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -144,8 +150,8 @@ html[data-window="floating"] .queue-panel {
     radial-gradient(65% 65% at 20% 90%,
       color-mix(in oklab, var(--ambience-1) var(--ambience-strength), transparent), transparent 70%),
     color-mix(in oklab, var(--color-bg) 85%, transparent);
-  -webkit-backdrop-filter: var(--glass-backdrop-deep);
-  backdrop-filter: var(--glass-backdrop-deep);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   overflow: hidden;
 }
 
@@ -185,9 +191,9 @@ html[data-window="floating"] .player {
   background: var(--glass-sheen), var(--float-fill);
   border: 1px solid var(--color-panel-border);
   box-shadow: var(--glass-edge), var(--float-shadow);
-  /* Liquid glass refraction */
-  -webkit-backdrop-filter: var(--glass-backdrop-strong);
-  backdrop-filter: var(--glass-backdrop-strong);
+  /* Floating pills sit over transparent desktop space, so backdrop-filter only costs GPU readbacks. */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 html[data-window="floating"] .titlebar__left,

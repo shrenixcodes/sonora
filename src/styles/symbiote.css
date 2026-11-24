@@ -78,21 +78,18 @@
   background: conic-gradient(
     from 20deg,
     transparent 0deg,
-    rgb(255 255 255 / 0.26) 35deg,
+    rgb(255 255 255 / 0.2) 35deg,
     transparent 80deg,
     transparent 180deg,
-    rgb(255 255 255 / 0.18) 215deg,
+    rgb(255 255 255 / 0.14) 215deg,
     transparent 260deg
   );
-  mix-blend-mode: screen;
 }
 
 /* ── The launch logo ── */
 .symbiote-flyer--logo {
   color: color-mix(in oklab, var(--color-accent, #a78bfa) 55%, white);
-  filter:
-    drop-shadow(0 0 10px color-mix(in oklab, var(--color-accent, #a78bfa) 70%, transparent))
-    drop-shadow(0 6px 18px rgb(0 0 0 / 0.5));
+  contain: layout style;
 }
 
 .symbiote-flyer--logo svg {

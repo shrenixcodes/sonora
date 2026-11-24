@@ -262,9 +262,7 @@
 }
 
 .signin-confirm::backdrop {
-  background: rgba(0, 0, 0, 0.45);
-  -webkit-backdrop-filter: var(--glass-backdrop-thin);
-  backdrop-filter: var(--glass-backdrop-thin);
+  background: rgba(0, 0, 0, 0.52);
 }
 
 .signin-confirm__avatar {

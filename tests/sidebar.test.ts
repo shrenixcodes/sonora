@@ -29,6 +29,13 @@ describe("Sidebar tap jiggle", () => {
     const brand = sidebar.querySelector<HTMLElement>(".sidebar__brand")!;
     brand.click();
     expect(sidebar.classList.contains("sidebar--jiggle")).toBe(true);
+
+    // Repeated tap restarts via Web Animations API without forcing a layout reflow.
+    const play = vi.fn();
+    sidebar.getAnimations = () => [{ currentTime: 100, play } as unknown as Animation];
+    navLink.click();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(sidebar.classList.contains("sidebar--jiggle")).toBe(true);
   });
 
   it("does not jiggle on wheel events or when reduced motion is preferred", () => {

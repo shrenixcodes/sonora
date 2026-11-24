@@ -97,8 +97,19 @@ export function createSidebar(): HTMLElement {
   // Single-tap rubberband jiggle when pressing any sidebar control (never on scroll).
   const triggerJiggle = (): void => {
     if (shouldReduceMotion()) return;
-    sidebar.classList.remove("sidebar--jiggle");
-    void sidebar.offsetWidth;
+    if (sidebar.classList.contains("sidebar--jiggle")) {
+      const anims = typeof sidebar.getAnimations === "function" ? sidebar.getAnimations() : [];
+      if (anims.length > 0) {
+        for (const anim of anims) {
+          anim.currentTime = 0;
+          anim.play();
+        }
+        return;
+      }
+      sidebar.classList.remove("sidebar--jiggle");
+      requestAnimationFrame(() => sidebar.classList.add("sidebar--jiggle"));
+      return;
+    }
     sidebar.classList.add("sidebar--jiggle");
   };
 

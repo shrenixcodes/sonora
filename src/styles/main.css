@@ -12,17 +12,17 @@
 .main__content {
   padding: var(--space-6);
   max-width: 1400px;
-  animation: fadeIn var(--duration-normal) var(--ease-out);
+  animation: fadeIn var(--duration-fast) var(--ease-out);
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translate3d(0, 4px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -118,6 +118,7 @@
   padding: var(--space-3);
   border-radius: var(--radius-lg);
   cursor: pointer;
+  contain: layout style;
   transition: background var(--duration-fast) var(--ease-out);
 }
 
@@ -298,6 +299,7 @@
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   cursor: pointer;
+  contain: layout style;
   transition: background var(--duration-fast) var(--ease-out);
 }
 
@@ -444,8 +446,8 @@
   box-shadow: var(--shadow-md);
   text-align: left;
   cursor: pointer;
-  transition: transform var(--duration-fast) var(--ease-spring),
-              box-shadow var(--duration-fast) var(--ease-out);
+  contain: layout style;
+  transition: transform var(--duration-fast) var(--ease-spring);
 }
 
 .mood-card::after {
@@ -515,6 +517,7 @@
   gap: var(--space-3);
   height: 56px;
   cursor: pointer;
+  contain: layout style;
   padding-right: var(--space-3);
   border-radius: var(--radius-lg);
   background: color-mix(in oklab, var(--color-text) 6%, transparent);
@@ -682,6 +685,7 @@
   border-radius: var(--radius-lg);
   text-align: left;
   cursor: pointer;
+  contain: layout style;
   scroll-snap-align: start;
   transition: background var(--duration-fast) var(--ease-out);
 }
