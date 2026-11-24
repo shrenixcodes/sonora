@@ -1,6 +1,9 @@
-# Sonora
-
-An immersive, lightweight, and atmospheric YouTube Music desktop client for Windows built with Tauri 2, Rust, WebGL, and TypeScript.
+<div align="center">
+  <img src="public/sonora-logo.svg" alt="Sonora Logo" width="120" height="120" />
+  <h1>Sonora</h1>
+  <p><strong>An immersive, lightweight, and atmospheric YouTube Music desktop client for Windows</strong></p>
+  <p>Built with Tauri 2, Rust, WebGL, and TypeScript</p>
+</div>
 
 ---
 
