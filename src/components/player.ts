@@ -7,6 +7,7 @@
 import { el, formatTime } from "@/lib/dom";
 import { attachSlider, type Slider } from "@/lib/slider";
 import { icon } from "@/icons";
+import { openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
@@ -113,9 +114,16 @@ class PlayerBar {
       onClick: () => router.navigate("/now-playing"),
     });
 
-    const artist = el("span", {
+    const artist = el("button", {
       className: "player__artist truncate",
       text: "Select a song to start listening",
+      attrs: { type: "button", disabled: "" },
+      onClick: () => {
+        const track = playerEngine.currentTrack;
+        const state = playerEngine.currentState;
+        if (!track || state.isAd || state.error || state.status === "loading" || !track.artist.trim()) return;
+        openArtist({ id: track.artistId, name: track.artist });
+      },
     });
 
     const likeBtn = el("button", {
@@ -263,6 +271,11 @@ class PlayerBar {
     this.setupInteractivity();
     this.subscribeToEngine();
     this.subscribeToRouter();
+    this.updateArtistControl(
+      playerEngine.currentTrack,
+      playerEngine.currentState,
+      playerEngine.currentTrack?.artist ?? "Select a song to start listening",
+    );
 
     return root;
   }
@@ -312,6 +325,23 @@ class PlayerBar {
     this.elements.likeBtn.setAttribute("title", label);
   }
 
+  private updateArtistControl(track: Track | null, state: PlaybackState, text: string): void {
+    if (!this.elements) return;
+    const artistEl = this.elements.artist;
+    artistEl.textContent = text;
+    const canOpen = Boolean(
+      track && !state.error && !state.isAd && state.status !== "loading" && track.artist.trim(),
+    );
+    artistEl.toggleAttribute("disabled", !canOpen);
+    if (canOpen && track) {
+      artistEl.setAttribute("title", `Open artist: ${track.artist}`);
+      artistEl.setAttribute("aria-label", `Open artist ${track.artist}`);
+    } else {
+      artistEl.removeAttribute("title");
+      artistEl.removeAttribute("aria-label");
+    }
+  }
+
   private subscribeToEngine(): void {
     playerEngine.on("stateChange", (state: PlaybackState) => {
       if (!this.elements) return;
@@ -330,7 +360,7 @@ class PlayerBar {
           : state.status === "loading"
             ? "Loading…"
             : (track?.artist ?? "Select a song to start listening");
-      this.elements.artist.textContent = status;
+      this.updateArtistControl(track, state, status);
       this.elements.root.classList.toggle("player--ad", state.isAd);
       this.elements.root.classList.toggle("player--error", Boolean(state.error));
       // Ads must play out: no seeking or skipping until they end
@@ -378,7 +408,7 @@ class PlayerBar {
 
       if (track) {
         this.elements.title.textContent = track.title;
-        this.elements.artist.textContent = track.artist;
+        this.updateArtistControl(track, playerEngine.currentState, track.artist);
         this.elements.duration.textContent = formatTime(track.duration || 0);
 
         // Update artwork
@@ -393,7 +423,7 @@ class PlayerBar {
         this.updateLikeButton(storage.isLiked(track.id));
       } else {
         this.elements.title.textContent = "Nothing playing";
-        this.elements.artist.textContent = "Select a song to start listening";
+        this.updateArtistControl(null, playerEngine.currentState, "Select a song to start listening");
         this.elements.duration.textContent = formatTime(0);
         this.elements.artwork.innerHTML = "";
         this.updateLikeButton(false);

@@ -235,7 +235,9 @@
         body = {};
       } else if (request.kind === "playlist") {
         const id = String(request.id);
-        body = { browseId: id.startsWith("VL") ? id : "VL" + id };
+        body = { browseId: id.startsWith("VL") || id.startsWith("MPRE") ? id : "VL" + id };
+      } else if (request.kind === "artist") {
+        body = { browseId: String(request.id) };
       } else if (request.kind === "watchPlaylist") {
         // Mixes made for the user have no playlist page; their songs come from a watch queue.
         endpoint = "next";

@@ -58,9 +58,28 @@
 }
 
 .player__artist {
+  align-self: flex-start;
+  max-width: 100%;
+  text-align: left;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
   line-height: var(--leading-tight);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.player__artist:not(:disabled) {
+  cursor: pointer;
+}
+
+.player__artist:not(:disabled):hover,
+.player__artist:not(:disabled):focus-visible {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.player__artist:disabled {
+  cursor: default;
 }
 
 .player__like-btn {

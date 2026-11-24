@@ -2,18 +2,19 @@
  * Shelves of YouTube Music items, shared by Home and Explore.
  *
  * Song rows become compact tiles; albums, playlists, mixes, videos and
- * artists become cards. Albums, playlists and mixes play from the top when
- * clicked; artists open a search for their songs.
+ * artists become cards. Clicking a song artist opens its Artist page, clicking
+ * an album/playlist card opens its track list (or plays via the hover play button),
+ * and clicking an artist card opens the Artist page.
  */
 
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
+import { createInlineArtistLink } from "@/components/track-links";
 import { icon } from "@/icons";
 import { CatalogError, type HomeCollection, type HomeItem, type HomeShelf } from "@/lib/ytm/catalog";
+import { openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
-import { router } from "@/lib/router";
-import { searchQuery } from "@/lib/search-query";
 import { openCollection, playYtmCollection } from "@/views/collection";
 import type { Track } from "@/types/music";
 
@@ -107,7 +108,7 @@ function createQuickTile(track: Track, queue: Track[]): HTMLElement {
         className: "quick-tile__meta",
         children: [
           el("span", { className: "quick-tile__title truncate", text: track.title }),
-          el("span", { className: "quick-tile__subtitle truncate", text: track.artist }),
+          createInlineArtistLink(track.artist, track.artistId, "quick-tile__subtitle truncate"),
         ],
       }),
       el("span", { className: "quick-tile__play", html: icon("play"), attrs: { "aria-hidden": "true" } }),
@@ -131,6 +132,7 @@ function cardShell(options: {
   artworkUrl: string;
   title: string;
   subtitle: string;
+  subtitleNode?: HTMLElement;
   label: string;
   round?: boolean;
   playable?: boolean;
@@ -138,7 +140,7 @@ function cardShell(options: {
   onPlay?: () => void;
   playLabel?: string;
 }): { card: HTMLElement; subtitle: HTMLElement } {
-  const subtitle = el("span", { className: "shelf-card__subtitle truncate", text: options.subtitle });
+  const subtitle = options.subtitleNode ?? el("span", { className: "shelf-card__subtitle truncate", text: options.subtitle });
   const hasSeparatePlay = options.playable !== false && Boolean(options.onPlay);
   const playControl =
     options.playable === false
@@ -208,10 +210,22 @@ function cardShell(options: {
 }
 
 export function createSongCard(track: Track, queue: Track[]): HTMLElement {
+  const artistLink = createInlineArtistLink(track.artist, track.artistId, "shelf-card__subtitle truncate");
+  const subtitleNode = track.duration
+    ? el("span", {
+        className: "shelf-card__subtitle truncate",
+        children: [
+          createInlineArtistLink(track.artist, track.artistId, "shelf-card__artist-link"),
+          ` · ${formatTime(track.duration)}`,
+        ],
+      })
+    : artistLink;
+
   const { card } = cardShell({
     artworkUrl: track.artworkUrl,
     title: track.title,
     subtitle: track.duration ? `${track.artist} · ${formatTime(track.duration)}` : track.artist,
+    subtitleNode,
     label: `Play ${track.title} by ${track.artist}`,
     onClick: () => playerEngine.playTrack(track, queue),
   });
@@ -222,7 +236,7 @@ export function createSongCard(track: Track, queue: Track[]): HTMLElement {
 
 /**
  * Albums, playlists and mixes open their track list when the card is clicked,
- * and play straight away when the hover play button is clicked; artists open a search.
+ * and play straight away when the hover play button is clicked; artists open the Artist page.
  */
 export function createCollectionCard(item: HomeCollection): HTMLElement {
   if (item.kind === "artist") {
@@ -230,13 +244,10 @@ export function createCollectionCard(item: HomeCollection): HTMLElement {
       artworkUrl: item.artworkUrl,
       title: item.title,
       subtitle: item.subtitle,
-      label: `Find songs by ${item.title}`,
+      label: `Open artist ${item.title}`,
       round: true,
       playable: false,
-      onClick: () => {
-        searchQuery.set(item.title);
-        router.navigate("/search");
-      },
+      onClick: () => openArtist({ id: item.artistId, name: item.title, artworkUrl: item.artworkUrl }),
     }).card;
   }
 

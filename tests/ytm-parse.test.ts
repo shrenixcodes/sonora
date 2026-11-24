@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   artworkUrl,
   parseAccountProfile,
+  parseArtistPage,
   parseDuration,
   parseContinuation,
   parseHomeChips,
@@ -312,7 +313,7 @@ describe("parseHomeShelves", () => {
     expect(shelves[1].items).toEqual([
       { kind: "playlist", title: "Bhajan Clubbing", subtitle: "Playlist", artworkUrl: "", playlistId: "xyz" },
       { kind: "album", title: "Thriller", subtitle: "", artworkUrl: "", playlistId: "OLAK5uy_1" },
-      { kind: "artist", title: "Arijit Singh", subtitle: "", artworkUrl: "" },
+      { kind: "artist", title: "Arijit Singh", subtitle: "", artworkUrl: "", artistId: "UC1" },
     ]);
     expect(shelves[1].tracks).toEqual([]);
     shelves.splice(1, 1);
@@ -489,5 +490,183 @@ describe("library albums and artists", () => {
     expect(artists).toHaveLength(1);
     expect(artists[0]).toMatchObject({ title: "Talwiinder", subtitle: "12 songs" });
     expect(artists[0].artworkUrl).toContain("=w544-h544");
+  });
+});
+
+describe("artist & album ids + parseArtistPage", () => {
+  it("extracts artistId and albumId on song rows when browseIds are present", () => {
+    const response = {
+      contents: {
+        musicShelfRenderer: {
+          contents: [
+            songRow("trk1", "Yellow", [
+              {
+                text: "Coldplay",
+                navigationEndpoint: browse("UC_COLDPLAY", "MUSIC_PAGE_TYPE_ARTIST"),
+              },
+              SEP,
+              {
+                text: "Parachutes",
+                navigationEndpoint: browse("MPREb_PARA", "MUSIC_PAGE_TYPE_ALBUM"),
+              },
+              SEP,
+              { text: "4:27" },
+            ]),
+          ],
+        },
+      },
+    };
+    const [song] = parseSearchSongs(response);
+    expect(song).toMatchObject({
+      id: "trk1",
+      title: "Yellow",
+      artist: "Coldplay",
+      artistId: "UC_COLDPLAY",
+      album: "Parachutes",
+      albumId: "MPREb_PARA",
+      duration: 267,
+    });
+  });
+
+  it("fills missing artist, album and artwork on album tracklists from the responsive header", () => {
+    const response = {
+      contents: {
+        twoColumnBrowseResultsRenderer: {
+          tabs: [
+            {
+              tabRenderer: {
+                content: {
+                  sectionListRenderer: {
+                    contents: [
+                      {
+                        musicResponsiveHeaderRenderer: {
+                          title: { runs: [{ text: "Parachutes" }] },
+                          straplineTextOne: {
+                            runs: [{ text: "Coldplay", navigationEndpoint: browse("UC_COLDPLAY", "MUSIC_PAGE_TYPE_ARTIST") }],
+                          },
+                          thumbnail: thumbs("https://lh3.googleusercontent.com/parachutes"),
+                        },
+                      },
+                      {
+                        musicShelfRenderer: {
+                          contents: [
+                            {
+                              musicResponsiveListItemRenderer: {
+                                flexColumns: [
+                                  column({ text: "Sparks", navigationEndpoint: { watchEndpoint: { videoId: "trk2" } } }),
+                                ],
+                                playlistItemData: { videoId: "trk2" },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+    const tracks = parsePlaylistTracks(response);
+    expect(tracks).toEqual([
+      {
+        id: "trk2",
+        title: "Sparks",
+        artist: "Coldplay",
+        artistId: "UC_COLDPLAY",
+        album: "Parachutes",
+        duration: 0,
+        artworkUrl: "https://lh3.googleusercontent.com/parachutes=w544-h544-l90-rj",
+      },
+    ]);
+  });
+
+  it("parses artist header metadata, top songs, show-all id, and release shelves", () => {
+    const response = {
+      header: {
+        musicImmersiveHeaderRenderer: {
+          title: { runs: [{ text: "Coldplay" }] },
+          description: { runs: [{ text: "British rock band." }] },
+          subscriptionButton: {
+            subscribeButtonRenderer: { subscriberCountText: { runs: [{ text: "27M subscribers" }] } },
+          },
+          thumbnail: thumbs("https://lh3.googleusercontent.com/coldplay"),
+        },
+      },
+      contents: {
+        singleColumnBrowseResultsRenderer: {
+          tabs: [
+            {
+              tabRenderer: {
+                content: {
+                  sectionListRenderer: {
+                    contents: [
+                      {
+                        musicShelfRenderer: {
+                          bottomEndpoint: { browseEndpoint: { browseId: "VLPL_TOP" } },
+                          contents: [
+                            songRow("trk1", "Yellow", [
+                              {
+                                text: "Coldplay",
+                                navigationEndpoint: browse("UC_COLDPLAY", "MUSIC_PAGE_TYPE_ARTIST"),
+                              },
+                              SEP,
+                              { text: "4:27" },
+                            ]),
+                          ],
+                        },
+                      },
+                      {
+                        musicCarouselShelfRenderer: {
+                          header: { musicCarouselShelfBasicHeaderRenderer: { title: { runs: [{ text: "Albums" }] } } },
+                          contents: [
+                            {
+                              musicTwoRowItemRenderer: {
+                                title: { runs: [{ text: "Parachutes" }] },
+                                subtitle: { runs: [{ text: "2000" }] },
+                                navigationEndpoint: browse("MPREb_PARA", "MUSIC_PAGE_TYPE_ALBUM"),
+                                thumbnailOverlay: {
+                                  musicItemThumbnailOverlayRenderer: {
+                                    content: {
+                                      musicPlayButtonRenderer: {
+                                        playNavigationEndpoint: { watchPlaylistEndpoint: { playlistId: "OLAK_PARA" } },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+    const page = parseArtistPage(response, "UC_COLDPLAY");
+    expect(page).toMatchObject({
+      id: "UC_COLDPLAY",
+      name: "Coldplay",
+      description: "British rock band.",
+      subscribers: "27M subscribers",
+      topSongsPlaylistId: "PL_TOP",
+    });
+    expect(page.artworkUrl).toContain("=w544-h544");
+    expect(page.topSongs).toHaveLength(1);
+    expect(page.topSongs[0]).toMatchObject({ id: "trk1", title: "Yellow", artistId: "UC_COLDPLAY" });
+    expect(page.shelves).toHaveLength(1);
+    expect(page.shelves[0].items[0]).toMatchObject({
+      kind: "album",
+      title: "Parachutes",
+      playlistId: "OLAK_PARA",
+    });
   });
 });

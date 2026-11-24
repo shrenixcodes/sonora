@@ -44,6 +44,7 @@ function get(node: unknown, ...path: Array<string | number>): unknown {
 interface Run {
   text: string;
   pageType?: string;
+  browseId?: string;
   videoId?: string;
 }
 
@@ -54,6 +55,7 @@ function runsOf(text: unknown): Run[] {
     text: typeof run.text === "string" ? run.text : "",
     pageType: get(run, "navigationEndpoint", "browseEndpoint", "browseEndpointContextSupportedConfigs",
       "browseEndpointContextMusicConfig", "pageType") as string | undefined,
+    browseId: get(run, "navigationEndpoint", "browseEndpoint", "browseId") as string | undefined,
     videoId: get(run, "navigationEndpoint", "watchEndpoint", "videoId") as string | undefined,
   }));
 }
@@ -102,14 +104,21 @@ export function parseListItem(item: Json): Track | null {
   const details = columns.slice(1).flatMap((runs) => segments(runs));
   const artistSegment =
     details.find((segment) => segment.some((r) => r.pageType === "MUSIC_PAGE_TYPE_ARTIST")) ?? details[0] ?? [];
-  const album = columns.flat().find((r) => r.pageType === "MUSIC_PAGE_TYPE_ALBUM")?.text;
+  const artistId = artistSegment.find(
+    (r) => (r.pageType === "MUSIC_PAGE_TYPE_ARTIST" || r.pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") && r.browseId,
+  )?.browseId;
+  const albumRun = columns.flat().find((r) => r.pageType === "MUSIC_PAGE_TYPE_ALBUM");
+  const album = albumRun?.text;
+  const albumId = albumRun?.browseId;
   const duration = details.map(joined).find((text) => DURATION.test(text));
 
   return {
     id: videoId,
     title,
     artist: joined(artistSegment),
+    ...(artistId ? { artistId } : {}),
     album,
+    ...(albumId ? { albumId } : {}),
     duration: duration ? parseDuration(duration) : 0,
     artworkUrl: artworkUrl(get(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
   };
@@ -124,10 +133,14 @@ export function parseCardItem(item: Json): Track | null {
   const subtitle = segments(runsOf(item.subtitle));
   const artistSegment =
     subtitle.find((segment) => segment.some((r) => r.pageType === "MUSIC_PAGE_TYPE_ARTIST")) ?? subtitle[0] ?? [];
+  const artistId = artistSegment.find(
+    (r) => (r.pageType === "MUSIC_PAGE_TYPE_ARTIST" || r.pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") && r.browseId,
+  )?.browseId;
   return {
     id: videoId,
     title,
     artist: joined(artistSegment),
+    ...(artistId ? { artistId } : {}),
     duration: 0,
     artworkUrl: artworkUrl(get(item, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
   };
@@ -201,14 +214,15 @@ export function parseSearchCollections(response: unknown): HomeCollection[] {
       subtitle,
       artworkUrl: artwork,
       ...(playlistId ? { playlistId } : {}),
+      ...(kind === "artist" && browseId ? { artistId: browseId } : {}),
     });
   }
 
   const twoRows = findAll(response, "musicTwoRowItemRenderer");
   for (const item of twoRows) {
     const col = parseCollectionItem(item);
-    if (col && !seen.has(col.playlistId || col.title)) {
-      seen.add(col.playlistId || col.title);
+    if (col && !seen.has(col.playlistId || col.artistId || col.title)) {
+      seen.add(col.playlistId || col.artistId || col.title);
       results.push(col);
     }
   }
@@ -224,6 +238,8 @@ export interface HomeCollection {
   artworkUrl: string;
   /** Playlist that plays this album, playlist or mix; absent for artists. */
   playlistId?: string;
+  /** Browse id for an artist page (`UC...`). */
+  artistId?: string;
 }
 
 export type HomeItem = { kind: "song"; track: Track } | HomeCollection;
@@ -283,6 +299,8 @@ export function parseCollectionItem(item: Json): HomeCollection | null {
   if (!kind) return null;
 
   const playlistId = kind === "artist" ? undefined : playlistIdOf(item);
+  const artistBrowseId =
+    kind === "artist" ? (get(item, "navigationEndpoint", "browseEndpoint", "browseId") as string | undefined) : undefined;
   if (kind !== "artist" && !playlistId) return null;
   return {
     kind,
@@ -290,6 +308,7 @@ export function parseCollectionItem(item: Json): HomeCollection | null {
     subtitle: joined(runsOf(item.subtitle)),
     artworkUrl: artworkUrl(get(item, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
     ...(playlistId ? { playlistId } : {}),
+    ...(artistBrowseId ? { artistId: artistBrowseId } : {}),
   };
 }
 
@@ -347,13 +366,20 @@ export function parseWatchPlaylist(response: unknown): Track[] {
     const byline = segments(runsOf(item.longBylineText));
     const artistSegment =
       byline.find((segment) => segment.some((r) => r.pageType === "MUSIC_PAGE_TYPE_ARTIST")) ?? byline[0] ?? [];
-    const album = byline.flat().find((r) => r.pageType === "MUSIC_PAGE_TYPE_ALBUM")?.text;
+    const artistId = artistSegment.find(
+      (r) => (r.pageType === "MUSIC_PAGE_TYPE_ARTIST" || r.pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") && r.browseId,
+    )?.browseId;
+    const albumRun = byline.flat().find((r) => r.pageType === "MUSIC_PAGE_TYPE_ALBUM");
+    const album = albumRun?.text;
+    const albumId = albumRun?.browseId;
     return [
       {
         id: videoId,
         title,
         artist: joined(artistSegment),
+        ...(artistId ? { artistId } : {}),
         album,
+        ...(albumId ? { albumId } : {}),
         duration: parseDuration(joined(runsOf(item.lengthText))),
         artworkUrl: artworkUrl(get(item, "thumbnail", "thumbnails")),
       },
@@ -370,10 +396,29 @@ export interface LibraryPlaylist {
   artworkUrl: string;
 }
 
-/** Songs on a playlist page, the Liked Music page, or one of their continuation pages. */
+/** Songs on a playlist page, the Liked Music page, an album page, or one of their continuation pages. */
 export function parsePlaylistTracks(response: unknown): Track[] {
   const items = findAll(response, "musicResponsiveListItemRenderer");
-  return uniqueById(items.map(parseListItem).filter((t): t is Track => t !== null));
+  const tracks = uniqueById(items.map(parseListItem).filter((t): t is Track => t !== null));
+  const header =
+    findAll(response, "musicResponsiveHeaderRenderer")[0] ?? findAll(response, "musicDetailHeaderRenderer")[0];
+  if (!header) return tracks;
+
+  const headerTitle = joined(runsOf(header.title));
+  const headerArt = artworkUrl(get(header, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"));
+  const straplineRuns = runsOf(header.straplineTextOne);
+  const artistRun =
+    straplineRuns.find((r) => r.pageType === "MUSIC_PAGE_TYPE_ARTIST" || r.pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") ??
+    straplineRuns[0];
+  const headerArtist = joined(straplineRuns);
+
+  return tracks.map((track) => ({
+    ...track,
+    artist: track.artist || headerArtist,
+    ...(!track.artistId && artistRun?.browseId ? { artistId: artistRun.browseId } : {}),
+    album: track.album ?? (headerTitle || undefined),
+    artworkUrl: track.artworkUrl || headerArt,
+  }));
 }
 
 /** Playlist cards from the library's Playlists page; the "New playlist" card is skipped. */
@@ -410,6 +455,7 @@ export function parseLibraryAlbums(response: unknown): LibraryPlaylist[] {
 
 /** An artist the user listens to or follows. */
 export interface LibraryArtist {
+  id?: string;
   title: string;
   subtitle: string;
   artworkUrl: string;
@@ -426,14 +472,76 @@ export function parseLibraryArtists(response: unknown): LibraryArtist[] {
     const title = columns[0];
     if (!title || seen.has(title)) return [];
     seen.add(title);
+    const id = get(item, "navigationEndpoint", "browseEndpoint", "browseId") as string | undefined;
     return [
       {
+        ...(id ? { id } : {}),
         title,
         subtitle: columns.slice(1).filter(Boolean).join(SEPARATOR),
         artworkUrl: artworkUrl(get(item, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
       },
     ];
   });
+}
+
+/** Parsed artist detail page returned by YouTube Music `browse`. */
+export interface ArtistPage {
+  id: string;
+  name: string;
+  description?: string;
+  subscribers?: string;
+  artworkUrl: string;
+  topSongs: Track[];
+  topSongsPlaylistId?: string;
+  shelves: HomeShelf[];
+}
+
+export function parseArtistPage(response: unknown, fallbackId = "", fallbackName = ""): ArtistPage {
+  const header =
+    findAll(response, "musicImmersiveHeaderRenderer")[0] ?? findAll(response, "musicVisualHeaderRenderer")[0];
+  const name = (header ? joined(runsOf(header.title)) : "") || fallbackName || "Artist";
+  const description = (header ? joined(runsOf(header.description)) : "") || undefined;
+  const subRuns = header
+    ? runsOf(get(header, "subscriptionButton", "subscribeButtonRenderer", "subscriberCountText"))
+    : [];
+  const shortSubRuns = header
+    ? runsOf(get(header, "subscriptionButton", "subscribeButtonRenderer", "shortSubscriberCountText"))
+    : [];
+  const subscribers = joined(subRuns.length ? subRuns : shortSubRuns) || undefined;
+  const headerArt = header
+    ? artworkUrl(
+        get(header, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails") ??
+          get(header, "foregroundThumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"),
+      )
+    : "";
+
+  const songShelf = findAll(response, "musicShelfRenderer")[0];
+  const topSongs = songShelf
+    ? uniqueById(
+        findAll(songShelf.contents, "musicResponsiveListItemRenderer")
+          .map(parseListItem)
+          .filter((t): t is Track => t !== null),
+      )
+    : [];
+  const bottomBrowse = get(songShelf, "bottomEndpoint", "browseEndpoint", "browseId");
+  const topSongsPlaylistId =
+    typeof bottomBrowse === "string"
+      ? bottomBrowse.startsWith("VL")
+        ? bottomBrowse.slice(2)
+        : bottomBrowse
+      : undefined;
+  const shelves = parseHomeShelves(response);
+
+  return {
+    id: fallbackId,
+    name,
+    ...(description ? { description } : {}),
+    ...(subscribers ? { subscribers } : {}),
+    artworkUrl: headerArt,
+    topSongs,
+    ...(topSongsPlaylistId ? { topSongsPlaylistId } : {}),
+    shelves,
+  };
 }
 
 /** Token for the next page of a long list, if there is one. */

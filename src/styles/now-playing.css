@@ -149,6 +149,7 @@
 .now-playing__info {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-1);
   width: 100%;
   margin-bottom: var(--space-4);
@@ -159,16 +160,44 @@
   font-weight: var(--weight-bold);
   color: var(--color-text);
   line-height: var(--leading-tight);
+  max-width: 100%;
 }
 
 .now-playing__artist {
+  max-width: 100%;
   font-size: var(--text-lg);
   color: var(--color-text-secondary);
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
 .now-playing__album {
+  max-width: 100%;
   font-size: var(--text-sm);
   color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.now-playing__artist:not(:disabled),
+.now-playing__album:not(:disabled) {
+  cursor: pointer;
+}
+
+.now-playing__artist:not(:disabled):hover,
+.now-playing__artist:not(:disabled):focus-visible,
+.now-playing__album:not(:disabled):hover,
+.now-playing__album:not(:disabled):focus-visible {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.now-playing__artist:disabled,
+.now-playing__album:disabled {
+  cursor: default;
+}
+
+.now-playing__album:empty {
+  display: none;
 }
 
 /* ── Right Column: Synchronized Lyrics ───────────────────── */

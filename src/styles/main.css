@@ -941,6 +941,10 @@
   box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
+.collection__artwork--round {
+  border-radius: var(--radius-full);
+}
+
 .collection__artwork img {
   width: 100%;
   height: 100%;
@@ -974,6 +978,74 @@
   font-size: var(--text-md);
   color: var(--color-text-secondary);
   margin-top: var(--space-2);
+}
+
+.collection__subtitle-link {
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.collection__subtitle-link:hover,
+.collection__subtitle-link:focus-visible {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.artist-page__description {
+  margin-top: var(--space-2);
+  max-width: 68ch;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.artist-page__description:empty {
+  display: none;
+}
+
+.track-row__link {
+  align-self: flex-start;
+  justify-self: start;
+  max-width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.track-row__link:hover,
+.track-row__link:focus-visible {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.artist-inline-link,
+.shelf-card__artist-link {
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.artist-inline-link:hover,
+.artist-inline-link:focus-visible,
+.shelf-card__artist-link:hover,
+.shelf-card__artist-link:focus-visible {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.artist-inline-link:focus-visible,
+.shelf-card__artist-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: 3px;
 }
 
 @media (max-width: 720px) {

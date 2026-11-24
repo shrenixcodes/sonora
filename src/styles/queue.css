@@ -271,6 +271,22 @@
   user-select: none;
 }
 
+.queue-row__artist-btn {
+  align-self: flex-start;
+  max-width: 100%;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.queue-row__artist-btn:hover,
+.queue-row__artist-btn:focus-visible {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .queue-row__duration {
   font-variant-numeric: tabular-nums;
 }

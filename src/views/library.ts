@@ -9,12 +9,13 @@
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
+import { createTrackAlbumControl, createTrackArtistControl } from "@/components/track-links";
 import { icon } from "@/icons";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
 import { catalog, CatalogError, type LibraryArtist, type LibraryPlaylist } from "@/lib/ytm/catalog";
+import { openArtist } from "@/lib/navigation";
 import { router } from "@/lib/router";
-import { searchQuery } from "@/lib/search-query";
 import { catalogAvailable } from "@/lib/ytm/client";
 import { account } from "@/lib/ytm/account";
 import { dedupeById } from "@/lib/tracks";
@@ -499,11 +500,11 @@ function renderArtists(container: HTMLElement): void {
   loadYtmCards(body, "artists", null, () => catalog.getLibraryArtists(), createArtistCard);
 }
 
-/** Artists have no page in Sonora yet, so a click searches for their songs. */
+/** Opens the dedicated Artist page when a library artist card is clicked. */
 function createArtistCard(artist: LibraryArtist): HTMLElement {
   return el("button", {
     className: "card card--artist",
-    attrs: { type: "button", title: `Find songs by ${artist.title}` },
+    attrs: { type: "button", title: `Open artist ${artist.title}` },
     children: [
       el("div", {
         className: "card__artwork card__artwork--round",
@@ -517,10 +518,7 @@ function createArtistCard(artist: LibraryArtist): HTMLElement {
         ],
       }),
     ],
-    onClick: () => {
-      searchQuery.set(artist.title);
-      router.navigate("/search");
-    },
+    onClick: () => openArtist({ id: artist.id, name: artist.title, artworkUrl: artist.artworkUrl }),
   });
 }
 
@@ -633,13 +631,10 @@ function createTrackRow(
         className: "track-row__info",
         children: [
           el("span", { className: "track-row__title truncate", text: track.title }),
-          el("span", { className: "track-row__artist truncate", text: track.artist }),
+          createTrackArtistControl(track),
         ],
       }),
-      el("span", {
-        className: "track-row__album truncate",
-        text: track.album || "Single",
-      }),
+      createTrackAlbumControl(track, "Single"),
       createSongRadioButton(track),
       el("button", {
         className: `track-row__like-btn${isLiked ? " track-row__like-btn--active" : ""}`,
