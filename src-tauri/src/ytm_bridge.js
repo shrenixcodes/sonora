@@ -30,26 +30,6 @@
     return !!(p && p.classList.contains("ad-showing"));
   };
 
-  // Only expose the page's own active skip control for the current ad.
-  const adSkipButton = () => {
-    const p = player();
-    if (!isAdPlaying() || !p) return null;
-    const buttons = p.querySelectorAll("button.ytp-ad-skip-button, button.ytp-ad-skip-button-modern, .ytp-ad-skip-button-container button");
-    for (const button of buttons) {
-      if (button.disabled || button.getAttribute("aria-disabled") === "true") continue;
-      let visible = true;
-      for (let node = button; node && node !== p.parentElement; node = node.parentElement) {
-        const style = window.getComputedStyle(node);
-        if (node.hidden || style.display === "none" || style.visibility === "hidden") {
-          visible = false;
-          break;
-        }
-      }
-      if (visible) return button;
-    }
-    return null;
-  };
-
   // Nobody ever sees this page, but a music video still arrives as video and is
   // decoded frame by frame for a window that is never drawn. Hold the player at
   // its smallest picture: the audio stream is picked separately and keeps its
@@ -117,7 +97,6 @@
         volume: video ? video.volume : 1,
         muted: video ? video.muted : false,
         ad: isAdPlaying(),
-        canSkipAd: !!adSkipButton(),
         signedIn: !!(window.ytcfg && window.ytcfg.get && window.ytcfg.get("LOGGED_IN")),
       },
     }).catch(() => {});
@@ -170,16 +149,10 @@
   };
 
   // The app keeps looking for the <video> element to handle creation or replacement.
-  let lastCanSkipAd = false;
   const lookup = setInterval(() => {
     const element = document.querySelector("video");
     if (element && element !== video) {
       attach(element);
-    }
-    const canSkipAd = !!adSkipButton();
-    if (canSkipAd !== lastCanSkipAd) {
-      lastCanSkipAd = canSkipAd;
-      send("ad-skip");
     }
   }, VIDEO_LOOKUP_INTERVAL_MS);
 
@@ -328,12 +301,6 @@
             else location.assign("/watch?v=" + encodeURIComponent(value));
           }
           break;
-        case "skipAd": {
-          const button = adSkipButton();
-          if (button) button.click();
-          send("ad-skip");
-          break;
-        }
         case "next":
           if (p && typeof p.nextVideo === "function") p.nextVideo();
           else clickButton("ytmusic-player-bar .next-button");

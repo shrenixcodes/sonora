@@ -42,8 +42,6 @@ pub struct YtmState {
     pub muted: bool,
     /// True while YouTube plays an ad; metadata then describes the ad, not a track.
     pub ad: bool,
-    #[serde(default)]
-    pub can_skip_ad: bool,
     /// YouTube Music's own signed-in flag for this page.
     #[serde(default)]
     pub signed_in: bool,
@@ -65,7 +63,6 @@ pub enum YtmCommand {
     Play,
     Pause,
     Toggle,
-    SkipAd,
     Next,
     Previous,
     Seek(f64),
@@ -157,7 +154,6 @@ fn command_script(command: &YtmCommand) -> Option<String> {
         YtmCommand::Play => ("play", None),
         YtmCommand::Pause => ("pause", None),
         YtmCommand::Toggle => ("toggle", None),
-        YtmCommand::SkipAd => ("skipAd", None),
         YtmCommand::Next => ("next", None),
         YtmCommand::Previous => ("previous", None),
         YtmCommand::Seek(seconds) if seconds.is_finite() && *seconds >= 0.0 => {
@@ -526,7 +522,6 @@ mod tests {
             volume: 1.0,
             muted: false,
             ad: false,
-            can_skip_ad: false,
             signed_in,
         };
         assert!(sign_in_completed(false, &state(true)));

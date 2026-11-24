@@ -24,15 +24,13 @@ export interface YtmState {
   muted: boolean;
   /** True while YouTube plays an ad; metadata then describes the ad. */
   ad: boolean;
-  /** The page currently offers an active ad skip button. */
-  canSkipAd: boolean;
   /** YouTube Music's own signed-in flag. */
   signedIn: boolean;
 }
 
 /** Mirrors `YtmCommand` in ytm.rs. */
 export type YtmCommand =
-  | { action: "play" | "pause" | "toggle" | "skipAd" | "next" | "previous" }
+  | { action: "play" | "pause" | "toggle" | "next" | "previous" }
   | { action: "seek"; value: number }
   | { action: "volume"; value: number }
   | { action: "load"; value: string };

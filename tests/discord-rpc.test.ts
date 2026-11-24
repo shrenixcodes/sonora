@@ -58,7 +58,6 @@ describe("DiscordRpcService", () => {
       repeat: "off",
       playbackRate: 1.0,
       isAd: false,
-      canSkipAd: false,
     };
 
     service.handleStateChange(playingState);
@@ -86,7 +85,6 @@ describe("DiscordRpcService", () => {
       repeat: "off",
       playbackRate: 1.0,
       isAd: false,
-      canSkipAd: false,
     };
 
     service.handleStateChange(emptyState);
