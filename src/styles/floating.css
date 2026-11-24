@@ -224,8 +224,7 @@ html[data-window="floating"] .sidebar {
   max-height: 100%;
   padding: var(--space-2) 0;
   border-radius: calc(var(--rail-width) / 2);
-  overflow-y: auto;
-  scrollbar-width: none;
+  overflow: hidden;
 }
 
 html[data-window="floating"] .sidebar__section {
@@ -244,7 +243,7 @@ html[data-window="floating"] .sidebar__playlists:empty {
 html[data-window="floating"] .sidebar__link {
   justify-content: center;
   width: 38px;
-  height: 38px;
+  height: clamp(20px, calc((100vh - 230px) / 10), 38px);
   padding: 0;
   border-radius: var(--radius-full);
 }

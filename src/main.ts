@@ -54,6 +54,8 @@ function init(): void {
   const titlebar = createTitlebar();
   const sidebar = createSidebar();
   const main = el("main", { className: "main" });
+  const mainContent = el("div", { className: "main__scroll-content" });
+  main.appendChild(mainContent);
   const player = createPlayer();
 
   // Artwork of the playing track sits behind every panel
@@ -109,7 +111,7 @@ function init(): void {
     .route("/now-playing", renderNowPlaying);
 
   // Start the router
-  router.start(main);
+  router.start(mainContent);
 
   // Tint the shell with the current artwork
   // The shell, its buttons and floating pieces all adapt to the artwork's colors

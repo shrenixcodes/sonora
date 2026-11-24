@@ -47,7 +47,8 @@ class QueuePanelState extends EventEmitter<{ change: boolean }> {
 export const queuePanel = new QueuePanelState();
 
 export function createQueuePanel(): HTMLElement {
-  const list = el("div", { className: "queue-panel__list" });
+  const listContent = el("div", { className: "queue-panel__list-content" });
+  const list = el("div", { className: "queue-panel__list", children: [listContent] });
   const count = el("span", { className: "queue-panel__count" });
 
   const closeBtn = el("button", {
@@ -86,9 +87,9 @@ export function createQueuePanel(): HTMLElement {
     const upcoming = playerEngine.upcoming;
     count.textContent = upcoming.length > 0 ? `${upcoming.length} ${upcoming.length === 1 ? "song" : "songs"}` : "";
 
-    list.replaceChildren();
+    listContent.replaceChildren();
     if (!current && upcoming.length === 0) {
-      list.appendChild(
+      listContent.appendChild(
         el("p", {
           className: "queue-panel__empty",
           text: "Nothing queued yet. Play a song and the rest of its list lines up here.",
@@ -97,8 +98,8 @@ export function createQueuePanel(): HTMLElement {
       return;
     }
 
-    if (current) list.appendChild(createGroup("Now playing", [current], true));
-    if (upcoming.length > 0) list.appendChild(createGroup("Next", upcoming, false));
+    if (current) listContent.appendChild(createGroup("Now playing", [current], true));
+    if (upcoming.length > 0) listContent.appendChild(createGroup("Next", upcoming, false));
   };
 
   // The panel lives for the whole session, so these listeners never need removing.

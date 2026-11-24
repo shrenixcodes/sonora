@@ -144,22 +144,22 @@ const ATTACHED_ELEMENTS = new WeakSet<HTMLElement>();
  * Initializes rubberband UX across all major scroll areas in the app.
  */
 export function initRubberbandUX(root: ParentNode = document): void {
-  const selectors: Array<{ sel: string; axis: "vertical" | "horizontal" | "both" }> = [
-    { sel: "main.main", axis: "vertical" },
-    { sel: ".sidebar", axis: "vertical" },
-    { sel: ".queue-panel", axis: "vertical" },
-    { sel: ".queue-panel__list", axis: "vertical" },
+  const selectors: Array<{ sel: string; axis: "vertical" | "horizontal" | "both"; target?: string; maxOffset?: number }> = [
+    { sel: "main.main", axis: "vertical", maxOffset: 12 },
+    { sel: ".queue-panel__list", axis: "vertical", target: ".queue-panel", maxOffset: 12 },
     { sel: ".now-playing__lyrics-scroll", axis: "vertical" },
     { sel: ".shelf__scroll", axis: "horizontal" },
   ];
 
   const attachMatches = (node: ParentNode) => {
-    for (const { sel, axis } of selectors) {
+    for (const { sel, axis, target, maxOffset } of selectors) {
       const elements = node.querySelectorAll<HTMLElement>(sel);
       elements.forEach((el) => {
         if (!ATTACHED_ELEMENTS.has(el)) {
+          const targetElement = target ? el.closest<HTMLElement>(target) : el;
+          if (!targetElement) return;
           ATTACHED_ELEMENTS.add(el);
-          attachRubberband(el, { axis });
+          attachRubberband(el, { axis, target: targetElement, maxOffset });
         }
       });
     }

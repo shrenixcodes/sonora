@@ -56,8 +56,9 @@ describe("rubberband UX", () => {
 
   it("initializes across main scroll containers", () => {
     document.body.innerHTML = `
-      <main class="main"></main>
+      <main class="main"><div class="main__scroll-content"></div></main>
       <nav class="sidebar"></nav>
+      <div class="queue-panel"><div class="queue-panel__list"><div class="queue-panel__list-content"></div></div></div>
       <div class="shelf__scroll"></div>
     `;
 
@@ -68,7 +69,9 @@ describe("rubberband UX", () => {
     const shelf = document.querySelector(".shelf__scroll");
 
     expect(main?.classList.contains("rubberband-target")).toBe(true);
-    expect(sidebar?.classList.contains("rubberband-target")).toBe(true);
+    expect(sidebar?.classList.contains("rubberband-target")).toBe(false);
+    expect(document.querySelector(".queue-panel")?.classList.contains("rubberband-target")).toBe(true);
+    expect(document.querySelector(".queue-panel__list")?.classList.contains("rubberband-target")).toBe(false);
     expect(shelf?.classList.contains("rubberband-target")).toBe(true);
   });
 });
