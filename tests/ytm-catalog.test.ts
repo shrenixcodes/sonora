@@ -228,4 +228,127 @@ describe("Catalog", () => {
       expect.any(Number),
     );
   });
+
+  const searchRow = (videoId: string, title: string, artist: string, duration?: string) => ({
+    musicResponsiveListItemRenderer: {
+      flexColumns: [
+        {
+          musicResponsiveListItemFlexColumnRenderer: {
+            text: { runs: [{ text: title, navigationEndpoint: { watchEndpoint: { videoId } } }] },
+          },
+        },
+        {
+          musicResponsiveListItemFlexColumnRenderer: {
+            text: {
+              runs: [{ text: artist }, ...(duration ? [{ text: " • " }, { text: duration }] : [])],
+            },
+          },
+        },
+      ],
+      playlistItemData: { videoId },
+    },
+  });
+
+  it("includes matching YouTube music-video tracks in song search when Songs misses them", async () => {
+    const fetcher = vi.fn(async (r: CatalogRequest): Promise<unknown> => {
+      if (r.kind !== "search") return {};
+      if (r.params === "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D") {
+        // Songs filter only finds unrelated tracks matching one word ("Fitrat")
+        return { contents: { musicShelfRenderer: { contents: [searchRow("songOnly1", "Fitrat", "Entity Paradigm", "4:09")] } } };
+      }
+      if (!r.params) {
+        // Unfiltered search has the exact Top Result card without duration on a secondary video
+        return {
+          contents: {
+            musicCardShelfRenderer: {
+              title: { runs: [{ text: "Fitrat ke naray (Official Audio)", navigationEndpoint: { watchEndpoint: { videoId: "MkPSo2GJJDs" } } }] },
+              subtitle: { runs: [{ text: "Video" }, { text: " • " }, { text: "Rao Hamza Hayat" }, { text: " • " }, { text: "3:54" }] },
+              onTap: { watchEndpoint: { videoId: "MkPSo2GJJDs" } },
+            },
+            itemSectionRenderer: {
+              contents: [searchRow("Oa2sSE2dKT0", "Thora Dar (Official Music Video)", "Rao Hamza Hayat")],
+            },
+          },
+        };
+      }
+      // Videos filter adds duration metadata for video rows
+      return {
+        contents: {
+          musicShelfRenderer: {
+            contents: [
+              searchRow("MkPSo2GJJDs", "Fitrat ke naray (Official Audio)", "Rao Hamza Hayat", "3:54"),
+              searchRow("Oa2sSE2dKT0", "Thora Dar (Official Music Video)", "Rao Hamza Hayat", "3:54"),
+            ],
+          },
+        },
+      };
+    });
+
+    const catalog = new Catalog(fetcher);
+    const tracks = await catalog.searchSongs("fitrat ke naray rao hamza hayat");
+
+    expect(tracks.map((t) => t.id)).toEqual(["MkPSo2GJJDs", "Oa2sSE2dKT0", "songOnly1"]);
+    expect(tracks[0]).toMatchObject({ title: "Fitrat ke naray (Official Audio)", artist: "Rao Hamza Hayat", duration: 234 });
+    expect(tracks[1]).toMatchObject({ title: "Thora Dar (Official Music Video)", artist: "Rao Hamza Hayat", duration: 234 });
+  });
+
+  it("keeps strong official song matches first and skips extra search requests when Songs already matches", async () => {
+    const fetcher = vi.fn(async () => ({
+      contents: {
+        musicShelfRenderer: {
+          contents: [
+            searchRow("FXovf5dsRTw", "Despacito", "Luis Fonsi & Daddy Yankee"),
+            searchRow("FdMG84qN_98", "Despacito (Remix)", "Luis Fonsi"),
+          ],
+        },
+      },
+    }));
+
+    const catalog = new Catalog(fetcher);
+    const tracks = await catalog.searchSongs("despacito");
+
+    expect(tracks.map((t) => t.id)).toEqual(["FXovf5dsRTw", "FdMG84qN_98"]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates a video when an official song with the same title and artist is present", async () => {
+    const fetcher = vi.fn(async (r: CatalogRequest): Promise<unknown> => {
+      if (r.kind !== "search") return {};
+      if (r.params === "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D") {
+        return { contents: { musicShelfRenderer: { contents: [searchRow("9qnqYL0eNNI", "Yellow", "Coldplay")] } } };
+      }
+      if (!r.params) {
+        return {
+          contents: {
+            musicShelfRenderer: {
+              contents: [
+                searchRow("yKNxeF4KMsY", "Yellow", "Coldplay"),
+                searchRow("mRP72Ib2e9I", "Yellow (Live from UNSTAGED)", "Coldplay"),
+              ],
+            },
+          },
+        };
+      }
+      return { contents: {} };
+    });
+
+    const catalog = new Catalog(fetcher);
+    const tracks = await catalog.searchSongs("yellow coldplay");
+
+    expect(tracks.map((t) => t.id)).toEqual(["9qnqYL0eNNI", "mRP72Ib2e9I"]);
+  });
+
+  it("returns video results when Songs is empty and tolerates failed supplemental searches", async () => {
+    const fetcher = vi.fn(async (r: CatalogRequest): Promise<unknown> => {
+      if (r.kind !== "search") return {};
+      if (r.params === "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D") return { contents: {} };
+      if (!r.params) throw new CatalogError("slow", "timeout");
+      return { contents: { musicShelfRenderer: { contents: [searchRow("vid123", "Rare Live Track", "Artist")] } } };
+    });
+
+    const catalog = new Catalog(fetcher, Date.now, async () => {});
+    const tracks = await catalog.searchSongs("unmatched query");
+
+    expect(tracks.map((t) => t.id)).toEqual(["vid123"]);
+  });
 });
