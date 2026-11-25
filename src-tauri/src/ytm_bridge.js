@@ -179,8 +179,6 @@
   // ── Catalog requests ───────────────────────────────────────
   // Uses the same API and session the YouTube Music web app uses for its own
   // pages, so results match what the signed-in user sees on the site.
-  const SONGS_ONLY = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
-
   const readCookie = (name) => {
     const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
     return match ? match[1] : null;
@@ -214,7 +212,8 @@
         if (request.params) body.params = String(request.params);
       } else if (request.kind === "search") {
         endpoint = "search";
-        body = { query: String(request.query), params: request.params ? String(request.params) : SONGS_ONLY };
+        body = { query: String(request.query) };
+        if (request.params) body.params = String(request.params);
       } else if (request.kind === "likedSongs") {
         body = { browseId: "FEmusic_liked_videos" };
       } else if (request.kind === "history") {

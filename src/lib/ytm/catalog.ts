@@ -50,7 +50,7 @@ export type SearchFilter = "songs" | "albums" | "artists" | "playlists" | "video
 
 export const SEARCH_FILTER_PARAMS: Record<SearchFilter, string> = {
   songs: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
-  albums: "EgWKAQIBAWoKEAkQBRAKEAMQBA%3D%3D",
+  albums: "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D",
   artists: "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D",
   playlists: "EgWKAQIoAWoKEAkQBRAKEAMQBA%3D%3D",
   videos: "EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D",

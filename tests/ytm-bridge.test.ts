@@ -10,6 +10,7 @@ const BRIDGE_SOURCE = readFileSync(
 
 interface Bridge {
   exec(action: string, value?: number | null): void;
+  request(id: number, request: Record<string, unknown>): void;
 }
 
 type BridgeWindow = Window & {
@@ -153,6 +154,30 @@ describe("YouTube Music bridge script", () => {
       expect(reports().at(-1)?.reason).toBe("media-next");
       expect(handlers.get("play")).toBe(pagePlay);
     });
+  });
+
+  it("forwards search params when given and omits them for unfiltered search", async () => {
+    setupPage({ ad: false });
+    (window as unknown as { ytcfg: { get: (k: string) => unknown } }).ytcfg = {
+      get: (key) => (key === "INNERTUBE_CONTEXT" ? { client: { clientName: "WEB_REMIX" } } : undefined),
+    };
+    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => "{}" }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const bridge = loadBridge();
+      bridge.request(1, { kind: "search", query: "fitrat", params: "EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D" });
+      bridge.request(2, { kind: "search", query: "fitrat" });
+
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      const firstBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+      const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string);
+      expect(firstBody).toMatchObject({ query: "fitrat", params: "EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D" });
+      expect(secondBody).toMatchObject({ query: "fitrat" });
+      expect(secondBody).not.toHaveProperty("params");
+    } finally {
+      vi.unstubAllGlobals();
+      delete (window as unknown as { ytcfg?: unknown }).ytcfg;
+    }
   });
 
   it("does nothing outside music.youtube.com", () => {

@@ -280,6 +280,8 @@ pub enum YtmRequest {
     },
     Search {
         query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        params: Option<String>,
     },
     LikedSongs,
     LibraryPlaylists,
@@ -346,15 +348,19 @@ impl YtmRequest {
                     Err("invalid continuation token".into())
                 }
             }
-            YtmRequest::Search { query } => {
+            YtmRequest::Search { query, params } => {
                 let len = query.trim().chars().count();
                 if len == 0 || len > MAX_QUERY_CHARS {
-                    Err(format!(
+                    return Err(format!(
                         "search query must be 1 to {MAX_QUERY_CHARS} characters"
-                    ))
-                } else {
-                    Ok(())
+                    ));
                 }
+                if let Some(params) = params
+                    && !is_token_text(params, MAX_CONTINUATION_CHARS, &['%', '='])
+                {
+                    return Err("invalid search filter".into());
+                }
+                Ok(())
             }
         }
     }
@@ -586,21 +592,40 @@ mod tests {
         );
         assert!(
             YtmRequest::Search {
-                query: "lofi".into()
+                query: "lofi".into(),
+                params: None,
             }
             .validate()
             .is_ok()
         );
         assert!(
             YtmRequest::Search {
-                query: "   ".into()
+                query: "lofi".into(),
+                params: Some("EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D".into()),
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            YtmRequest::Search {
+                query: "lofi".into(),
+                params: Some("<bad>".into()),
             }
             .validate()
             .is_err()
         );
         assert!(
             YtmRequest::Search {
-                query: "x".repeat(201)
+                query: "   ".into(),
+                params: None,
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            YtmRequest::Search {
+                query: "x".repeat(201),
+                params: None,
             }
             .validate()
             .is_err()
@@ -657,11 +682,23 @@ mod tests {
             7,
             &YtmRequest::Search {
                 query: "a\"); alert(1); (\"".into(),
+                params: None,
             },
         )
         .unwrap();
         assert!(script.contains(
             r#"window.__sonoraBridge.request(7, {"kind":"search","query":"a\"); alert(1); (\""});"#
+        ));
+        let filtered = request_script(
+            8,
+            &YtmRequest::Search {
+                query: "fitrat".into(),
+                params: Some("EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D".into()),
+            },
+        )
+        .unwrap();
+        assert!(filtered.contains(
+            r#"window.__sonoraBridge.request(8, {"kind":"search","query":"fitrat","params":"EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D"});"#
         ));
         assert!(script.contains(r#"{ id: 7, ok: false, body: "not-ready" }"#));
         let parsed: YtmRequest = serde_json::from_str(r#"{"kind":"home"}"#).unwrap();

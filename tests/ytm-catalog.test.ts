@@ -218,7 +218,7 @@ describe("Catalog", () => {
 
     await catalog.search("Queen", "albums");
     expect(fetcher).toHaveBeenCalledWith(
-      { kind: "search", query: "Queen", params: "EgWKAQIBAWoKEAkQBRAKEAMQBA%3D%3D" },
+      { kind: "search", query: "Queen", params: "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D" },
       expect.any(Number),
     );
 
