@@ -80,6 +80,132 @@ const MAX_HOME_PAGES = 5;
 const HOME_SNAPSHOT_KEY = "sonora:home_snapshot";
 /** Sending fails outright while the page is still being created at startup. */
 const RETRYABLE = new Set(["not-ready", "timeout", "send-failed"]);
+/** Minimum strong full-query song matches before searching YouTube Music videos too. */
+const MIN_STRONG_SONG_MATCHES = 2;
+const STRONG_SONG_WINDOW = 5;
+
+function tokenizeQuery(text: string): string[] {
+  return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function trackMatchScore(queryTokens: string[], track: Track): number {
+  if (queryTokens.length === 0) return 0;
+  const trackTokens = tokenizeQuery(`${track.title} ${track.artist} ${track.album ?? ""}`);
+  let hits = 0;
+  for (const qt of queryTokens) {
+    if (trackTokens.some((tt) => tt === qt || (qt.length >= 3 && tt.startsWith(qt)))) hits++;
+  }
+  return hits;
+}
+
+function trackIdentityKey(track: Track): string {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  return `${norm(track.title)}::${norm(track.artist)}`;
+}
+
+function hasSearchContent(response: unknown): boolean {
+  return typeof response === "object" && response !== null && "contents" in response;
+}
+
+function needsVideoSupplement(queryTokens: string[], songs: Track[]): boolean {
+  if (songs.length === 0) return true;
+  if (queryTokens.length === 0) return false;
+  if (trackMatchScore(queryTokens, songs[0]) < queryTokens.length) return true;
+  const strongCount = songs
+    .slice(0, STRONG_SONG_WINDOW)
+    .filter((track) => trackMatchScore(queryTokens, track) === queryTokens.length).length;
+  return strongCount < MIN_STRONG_SONG_MATCHES;
+}
+
+function mergeTrackDetails(primary: Track, fallback?: Track): Track {
+  if (!fallback) return primary;
+  return {
+    ...primary,
+    artist: primary.artist || fallback.artist,
+    artistId: primary.artistId ?? fallback.artistId,
+    album: primary.album ?? fallback.album,
+    albumId: primary.albumId ?? fallback.albumId,
+    duration: primary.duration || fallback.duration,
+    artworkUrl: primary.artworkUrl || fallback.artworkUrl,
+  };
+}
+
+/**
+ * Merges YouTube Music's `Songs` results with playable tracks from unfiltered
+ * search (`Top result` + mixed rows) and `Videos` search so music uploaded as
+ * YouTube videos shows up alongside official songs without displacing strong
+ * official song matches.
+ */
+function mergeSongAndVideoResults(
+  query: string,
+  songs: Track[],
+  allTracks: Track[],
+  videoTracks: Track[],
+): Track[] {
+  const queryTokens = tokenizeQuery(query);
+  const fullScore = queryTokens.length;
+  const topResultId = allTracks[0]?.id;
+  const videoById = new Map(videoTracks.map((track) => [track.id, track]));
+  const songIds = new Set(songs.map((track) => track.id));
+  const songKeys = new Set(songs.map(trackIdentityKey));
+
+  const extraMap = new Map<string, Track>();
+  for (const candidate of [...allTracks, ...videoTracks]) {
+    const enriched = mergeTrackDetails(candidate, videoById.get(candidate.id));
+    if (songIds.has(enriched.id) || songKeys.has(trackIdentityKey(enriched))) continue;
+    const prev = extraMap.get(enriched.id);
+    extraMap.set(enriched.id, prev ? mergeTrackDetails(prev, enriched) : enriched);
+  }
+
+  const extras = Array.from(extraMap.values()).map((track, order) => ({
+    track,
+    score: trackMatchScore(queryTokens, track),
+    isTop: track.id === topResultId,
+    order,
+  }));
+
+  const songScores = songs.map((track) => trackMatchScore(queryTokens, track));
+  const maxSongScore = songScores.slice(0, STRONG_SONG_WINDOW).reduce((max, s) => Math.max(max, s), 0);
+
+  let leadSongs: Track[] = [];
+  if (fullScore > 0 && songScores[0] === fullScore) {
+    let end = 0;
+    while (end < songs.length && songScores[end] === fullScore) end++;
+    leadSongs = songs.slice(0, end);
+  } else if (fullScore > 0) {
+    leadSongs = songs.filter((_, i) => songScores[i] === fullScore);
+  }
+  const leadIds = new Set(leadSongs.map((track) => track.id));
+
+  const byScoreThenTop = (
+    a: { score: number; isTop: boolean; order: number },
+    b: { score: number; isTop: boolean; order: number },
+  ) => b.score - a.score || (a.isTop !== b.isTop ? (a.isTop ? -1 : 1) : a.order - b.order);
+
+  const fullExtras =
+    fullScore > 0 ? extras.filter((e) => e.score === fullScore).sort(byScoreThenTop).map((e) => e.track) : [];
+  const betterExtras = extras
+    .filter((e) => e.score < fullScore && e.score > maxSongScore)
+    .sort(byScoreThenTop)
+    .map((e) => e.track);
+  const peerThreshold = Math.max(2, Math.ceil(fullScore / 2));
+  const peerExtras =
+    maxSongScore < fullScore
+      ? extras
+          .filter((e) => e.score < fullScore && e.score > 0 && e.score >= peerThreshold && e.score <= maxSongScore)
+          .sort(byScoreThenTop)
+          .map((e) => e.track)
+      : [];
+
+  const restSongs = songs.filter((track) => !leadIds.has(track.id));
+  const usedIds = new Set([...leadSongs, ...fullExtras, ...betterExtras, ...peerExtras, ...restSongs].map((t) => t.id));
+  const tailExtras =
+    leadSongs.length === 0 && restSongs.length === 0
+      ? extras.filter((e) => !usedIds.has(e.track.id)).map((e) => e.track)
+      : [];
+
+  return [...leadSongs, ...fullExtras, ...betterExtras, ...peerExtras, ...restSongs, ...tailExtras];
+}
 
 type Fetcher = (request: CatalogRequest, timeoutMs: number) => Promise<unknown>;
 
@@ -191,7 +317,24 @@ export class Catalog {
     if (!trimmed) return { filter, tracks: [], collections: [] };
     const params = SEARCH_FILTER_PARAMS[filter];
     const response = await this.fetch({ kind: "search", query: trimmed, params });
-    if (filter === "songs" || filter === "videos") {
+    if (filter === "songs") {
+      const songs = parseSearchSongs(response);
+      const queryTokens = tokenizeQuery(trimmed);
+      if (!hasSearchContent(response) || !needsVideoSupplement(queryTokens, songs)) {
+        return { filter, tracks: songs };
+      }
+      const [allResponse, videoResponse] = await Promise.all([
+        this.fetch({ kind: "search", query: trimmed }).catch(() => null),
+        this.fetch({ kind: "search", query: trimmed, params: SEARCH_FILTER_PARAMS.videos }).catch(() => null),
+      ]);
+      const allTracks = allResponse ? parseSearchSongs(allResponse) : [];
+      const videoTracks = videoResponse ? parseSearchSongs(videoResponse) : [];
+      return {
+        filter,
+        tracks: mergeSongAndVideoResults(trimmed, songs, allTracks, videoTracks),
+      };
+    }
+    if (filter === "videos") {
       return { filter, tracks: parseSearchSongs(response) };
     }
     return { filter, collections: parseSearchCollections(response) };
