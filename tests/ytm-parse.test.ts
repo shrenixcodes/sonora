@@ -122,6 +122,125 @@ describe("parseSearchSongs", () => {
     expect(parseSearchSongs(withBroken).map((t) => t.id)).toEqual(["FXovf5dsRTw", "-yLiEXVZTHs"]);
   });
 
+  it("parses Top Result video cards, user channels, and unfiltered rows while skipping episodes", () => {
+    const channel = (text: string, browseId: string) => ({
+      text,
+      navigationEndpoint: browse(browseId, "MUSIC_PAGE_TYPE_USER_CHANNEL"),
+    });
+    const unfilteredResponse = {
+      contents: {
+        tabbedSearchResultsRenderer: {
+          tabs: [
+            {
+              tabRenderer: {
+                content: {
+                  sectionListRenderer: {
+                    contents: [
+                      {
+                        musicCardShelfRenderer: {
+                          thumbnail: {
+                            musicThumbnailRenderer: {
+                              thumbnail: {
+                                thumbnails: [{ url: "https://i.ytimg.com/vi/MkPSo2GJJDs/hqdefault.jpg", width: 400, height: 225 }],
+                              },
+                            },
+                          },
+                          title: {
+                            runs: [
+                              {
+                                text: "Fitrat ke naray (Official Audio)",
+                                navigationEndpoint: { watchEndpoint: { videoId: "MkPSo2GJJDs" } },
+                              },
+                            ],
+                          },
+                          subtitle: {
+                            runs: [
+                              { text: "Video" },
+                              SEP,
+                              channel("Rao Hamza Hayat", "UCd-W_kIGR-G6Yq0mlJDPEww"),
+                              SEP,
+                              { text: "6.6K views" },
+                              SEP,
+                              { text: "3:54" },
+                            ],
+                          },
+                          onTap: { watchEndpoint: { videoId: "MkPSo2GJJDs" } },
+                        },
+                      },
+                      {
+                        itemSectionRenderer: {
+                          contents: [
+                            songRow("19I5500B4sA", "Fitrat Ke Naray - Rao Hamza Hayat", [
+                              { text: "Video" },
+                              SEP,
+                              channel("XNOR", "UCYf05XPe3cfFp3tEocKLrlA"),
+                              SEP,
+                              { text: "597 views" },
+                            ]),
+                            // Unlinked video row without channel browseEndpoint should still pick uploader over "Video"
+                            songRow("unlinked111", "Live Acoustic", [
+                              { text: "Video" },
+                              SEP,
+                              { text: "Indie Uploader" },
+                              SEP,
+                              { text: "1.2K views" },
+                              SEP,
+                              { text: "2:45" },
+                            ]),
+                            // Podcast episode carrying a videoId should not appear as playable music
+                            {
+                              musicResponsiveListItemRenderer: {
+                                flexColumns: [
+                                  column({
+                                    text: "Podcast Episode",
+                                    navigationEndpoint: browse("MPEDep1", "MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE"),
+                                  }),
+                                  column({ text: "Episode" }, SEP, { text: "Nov 1" }),
+                                ],
+                                playlistItemData: { videoId: "epVideo1" },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const parsed = parseSearchSongs(unfilteredResponse);
+    expect(parsed).toEqual([
+      {
+        id: "MkPSo2GJJDs",
+        title: "Fitrat ke naray (Official Audio)",
+        artist: "Rao Hamza Hayat",
+        artistId: "UCd-W_kIGR-G6Yq0mlJDPEww",
+        duration: 234,
+        artworkUrl: "https://i.ytimg.com/vi/MkPSo2GJJDs/hqdefault.jpg",
+      },
+      {
+        id: "19I5500B4sA",
+        title: "Fitrat Ke Naray - Rao Hamza Hayat",
+        artist: "XNOR",
+        artistId: "UCYf05XPe3cfFp3tEocKLrlA",
+        duration: 0,
+        artworkUrl: "https://lh3.googleusercontent.com/19I5500B4sA=w544-h544-l90-rj",
+      },
+      {
+        id: "unlinked111",
+        title: "Live Acoustic",
+        artist: "Indie Uploader",
+        duration: 165,
+        artworkUrl: "https://lh3.googleusercontent.com/unlinked111=w544-h544-l90-rj",
+      },
+    ]);
+  });
+
   it("returns nothing for an unexpected shape instead of throwing", () => {
     expect(parseSearchSongs({})).toEqual([]);
     expect(parseSearchSongs(null)).toEqual([]);
@@ -668,5 +787,26 @@ describe("artist & album ids + parseArtistPage", () => {
       title: "Parachutes",
       playlistId: "OLAK_PARA",
     });
+  });
+
+  it("prefers longSubscriberCountText on channel pages whose subscriberCountText is bare digits", () => {
+    const response = {
+      header: {
+        musicVisualHeaderRenderer: {
+          title: { runs: [{ text: "Rao Hamza Hayat" }] },
+          subscriptionButton: {
+            subscribeButtonRenderer: {
+              subscriberCountText: { runs: [{ text: "484" }] },
+              longSubscriberCountText: { runs: [{ text: "484 subscribers" }] },
+            },
+          },
+          foregroundThumbnail: thumbs("https://yt3.googleusercontent.com/rao"),
+        },
+      },
+      contents: {},
+    };
+    const page = parseArtistPage(response, "UCd-W_kIGR-G6Yq0mlJDPEww");
+    expect(page.name).toBe("Rao Hamza Hayat");
+    expect(page.subscribers).toBe("484 subscribers");
   });
 });

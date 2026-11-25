@@ -90,23 +90,61 @@ export function artworkUrl(thumbnails: unknown): string {
   return url.replace(/=w\d+-h\d+/, `=w${ARTWORK_SIZE}-h${ARTWORK_SIZE}`);
 }
 
-/** A song row (search results, "Song mixes" and similar list shelves). */
+const isArtistOrChannel = (pageType?: string): boolean =>
+  pageType === "MUSIC_PAGE_TYPE_ARTIST" || pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL";
+
+const NON_ARTIST_LABELS = new Set([
+  "song",
+  "video",
+  "single",
+  "ep",
+  "album",
+  "playlist",
+  "artist",
+  "profile",
+  "episode",
+  "podcast",
+]);
+
+const METADATA_COUNT =
+  /^(?:\d[\d.,]*\s*[KMB]?\s+(?:views?|plays?|subscribers?|listeners?|songs?|episodes?)|[\d.,]+[KMB]?\s+(?:views?|plays?))$/i;
+
+/**
+ * Picks the artist or uploader segment from subtitle runs, skipping leading type
+ * badges ("Song", "Video") and trailing metrics ("6.6K views", "3:54").
+ */
+function pickArtistSegment(detailSegments: Run[][]): Run[] {
+  const linked = detailSegments.find((segment) => segment.some((r) => isArtistOrChannel(r.pageType)));
+  if (linked) return linked;
+  return (
+    detailSegments.find((segment) => {
+      const text = joined(segment);
+      if (!text) return false;
+      if (NON_ARTIST_LABELS.has(text.toLowerCase())) return false;
+      if (DURATION.test(text) || METADATA_COUNT.test(text)) return false;
+      return true;
+    }) ??
+    detailSegments[0] ??
+    []
+  );
+}
+
+/** A song or playable music video row (search results, "Song mixes" and similar list shelves). */
 export function parseListItem(item: Json): Track | null {
   const columns = (Array.isArray(item.flexColumns) ? item.flexColumns : []).map((column) =>
     runsOf(get(column, "musicResponsiveListItemFlexColumnRenderer", "text")),
   );
   const titleRuns = columns[0] ?? [];
+  if (titleRuns.some((r) => r.pageType === "MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE")) return null;
   const videoId =
     (get(item, "playlistItemData", "videoId") as string | undefined) ?? titleRuns.find((r) => r.videoId)?.videoId;
   const title = joined(titleRuns);
   if (!videoId || !title) return null;
 
   const details = columns.slice(1).flatMap((runs) => segments(runs));
-  const artistSegment =
-    details.find((segment) => segment.some((r) => r.pageType === "MUSIC_PAGE_TYPE_ARTIST")) ?? details[0] ?? [];
-  const artistId = artistSegment.find(
-    (r) => (r.pageType === "MUSIC_PAGE_TYPE_ARTIST" || r.pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") && r.browseId,
-  )?.browseId;
+  if (joined(details[0] ?? []).toLowerCase() === "episode") return null;
+  const artistSegment = pickArtistSegment(details);
+  const artistId = artistSegment.find((r) => isArtistOrChannel(r.pageType) && r.browseId)?.browseId;
   const albumRun = columns.flat().find((r) => r.pageType === "MUSIC_PAGE_TYPE_ALBUM");
   const album = albumRun?.text;
   const albumId = albumRun?.browseId;
@@ -131,11 +169,8 @@ export function parseCardItem(item: Json): Track | null {
   if (typeof videoId !== "string" || !title) return null;
 
   const subtitle = segments(runsOf(item.subtitle));
-  const artistSegment =
-    subtitle.find((segment) => segment.some((r) => r.pageType === "MUSIC_PAGE_TYPE_ARTIST")) ?? subtitle[0] ?? [];
-  const artistId = artistSegment.find(
-    (r) => (r.pageType === "MUSIC_PAGE_TYPE_ARTIST" || r.pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") && r.browseId,
-  )?.browseId;
+  const artistSegment = pickArtistSegment(subtitle);
+  const artistId = artistSegment.find((r) => isArtistOrChannel(r.pageType) && r.browseId)?.browseId;
   return {
     id: videoId,
     title,
@@ -146,17 +181,74 @@ export function parseCardItem(item: Json): Track | null {
   };
 }
 
+/** A "Top result" card on an unfiltered YouTube Music search when it plays a song or video. */
+export function parseCardShelfTrack(card: Json): Track | null {
+  const titleRuns = runsOf(card.title);
+  if (
+    titleRuns.some((r) => r.pageType === "MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE") ||
+    pageTypeOf(card.onTap) === "MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE"
+  ) {
+    return null;
+  }
+  const videoId =
+    (get(card, "onTap", "watchEndpoint", "videoId") as string | undefined) ??
+    titleRuns.find((r) => r.videoId)?.videoId;
+  const title = joined(titleRuns);
+  if (!videoId || !title) return null;
+
+  const subtitleRuns = runsOf(card.subtitle);
+  const details = segments(subtitleRuns);
+  if (joined(details[0] ?? []).toLowerCase() === "episode") return null;
+  const artistSegment = pickArtistSegment(details);
+  const artistId = artistSegment.find((r) => isArtistOrChannel(r.pageType) && r.browseId)?.browseId;
+  const albumRun = subtitleRuns.find((r) => r.pageType === "MUSIC_PAGE_TYPE_ALBUM");
+  const duration = details.map(joined).find((text) => DURATION.test(text));
+
+  return {
+    id: videoId,
+    title,
+    artist: joined(artistSegment),
+    ...(artistId ? { artistId } : {}),
+    ...(albumRun?.text ? { album: albumRun.text } : {}),
+    ...(albumRun?.browseId ? { albumId: albumRun.browseId } : {}),
+    duration: duration ? parseDuration(duration) : 0,
+    artworkUrl: artworkUrl(get(card, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")),
+  };
+}
+
 function uniqueById(tracks: Track[]): Track[] {
   const seen = new Set<string>();
   return tracks.filter((t) => !seen.has(t.id) && (seen.add(t.id), true));
 }
 
-/** Songs from a search response (Sonora searches with YouTube Music's "Songs" filter). */
+/**
+ * Playable tracks from a YouTube Music search response — handles filtered
+ * `Songs` / `Videos` shelves as well as unfiltered search (`Top result` card
+ * and `itemSectionRenderer` rows).
+ */
 export function parseSearchSongs(response: unknown): Track[] {
-  const items = findAll(response, "musicShelfRenderer").flatMap((shelf) =>
-    findAll(shelf.contents, "musicResponsiveListItemRenderer"),
-  );
-  return uniqueById(items.map(parseListItem).filter((t): t is Track => t !== null));
+  const tracks: Track[] = [];
+  for (const card of findAll(response, "musicCardShelfRenderer")) {
+    const topTrack = parseCardShelfTrack(card);
+    if (topTrack) tracks.push(topTrack);
+    for (const item of findAll(card.contents, "musicResponsiveListItemRenderer")) {
+      const subTrack = parseListItem(item);
+      if (subTrack) tracks.push(subTrack);
+    }
+  }
+  for (const shelf of findAll(response, "musicShelfRenderer")) {
+    for (const item of findAll(shelf.contents, "musicResponsiveListItemRenderer")) {
+      const track = parseListItem(item);
+      if (track) tracks.push(track);
+    }
+  }
+  for (const section of findAll(response, "itemSectionRenderer")) {
+    for (const item of findAll(section.contents, "musicResponsiveListItemRenderer")) {
+      const track = parseListItem(item);
+      if (track) tracks.push(track);
+    }
+  }
+  return uniqueById(tracks);
 }
 
 /** Collections (albums, playlists, artists) from a search response. */
@@ -364,11 +456,8 @@ export function parseWatchPlaylist(response: unknown): Track[] {
     const title = joined(runsOf(item.title));
     if (typeof videoId !== "string" || !title) return [];
     const byline = segments(runsOf(item.longBylineText));
-    const artistSegment =
-      byline.find((segment) => segment.some((r) => r.pageType === "MUSIC_PAGE_TYPE_ARTIST")) ?? byline[0] ?? [];
-    const artistId = artistSegment.find(
-      (r) => (r.pageType === "MUSIC_PAGE_TYPE_ARTIST" || r.pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL") && r.browseId,
-    )?.browseId;
+    const artistSegment = pickArtistSegment(byline);
+    const artistId = artistSegment.find((r) => isArtistOrChannel(r.pageType) && r.browseId)?.browseId;
     const albumRun = byline.flat().find((r) => r.pageType === "MUSIC_PAGE_TYPE_ALBUM");
     const album = albumRun?.text;
     const albumId = albumRun?.browseId;
@@ -501,13 +590,17 @@ export function parseArtistPage(response: unknown, fallbackId = "", fallbackName
     findAll(response, "musicImmersiveHeaderRenderer")[0] ?? findAll(response, "musicVisualHeaderRenderer")[0];
   const name = (header ? joined(runsOf(header.title)) : "") || fallbackName || "Artist";
   const description = (header ? joined(runsOf(header.description)) : "") || undefined;
+  const longSubRuns = header
+    ? runsOf(get(header, "subscriptionButton", "subscribeButtonRenderer", "longSubscriberCountText"))
+    : [];
   const subRuns = header
     ? runsOf(get(header, "subscriptionButton", "subscribeButtonRenderer", "subscriberCountText"))
     : [];
   const shortSubRuns = header
     ? runsOf(get(header, "subscriptionButton", "subscribeButtonRenderer", "shortSubscriberCountText"))
     : [];
-  const subscribers = joined(subRuns.length ? subRuns : shortSubRuns) || undefined;
+  const subscribers =
+    joined(longSubRuns.length ? longSubRuns : subRuns.length ? subRuns : shortSubRuns) || undefined;
   const headerArt = header
     ? artworkUrl(
         get(header, "thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails") ??
