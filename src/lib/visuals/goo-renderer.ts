@@ -45,7 +45,7 @@ void main() {
 }`;
 
 const SPLAT_FS = `#version 300 es
-precision highp float;
+precision mediump float;
 in vec2 v_uv;
 in float v_w;
 in vec3 v_col;
@@ -69,7 +69,7 @@ void main() {
 }`;
 
 const COMPOSITE_FS = `#version 300 es
-precision highp float;
+precision mediump float;
 uniform sampler2D u_field;
 uniform vec2 u_texel;
 uniform float u_unscale;
@@ -141,6 +141,14 @@ export class GooRenderer {
   private gl: WebGL2RenderingContext;
   private splat: WebGLProgram;
   private composite: WebGLProgram;
+  private splatViewLoc: WebGLUniformLocation | null;
+  private splatColorsLoc: WebGLUniformLocation | null;
+  private splatScaleLoc: WebGLUniformLocation | null;
+  private compFieldLoc: WebGLUniformLocation | null;
+  private compTexelLoc: WebGLUniformLocation | null;
+  private compUnscaleLoc: WebGLUniformLocation | null;
+  private compSheenLoc: WebGLUniformLocation | null;
+  private compRimLoc: WebGLUniformLocation | null;
   private vao: WebGLVertexArrayObject;
   private instances: WebGLBuffer;
   private fieldTex: WebGLTexture;
@@ -191,6 +199,14 @@ export class GooRenderer {
     }
     this.splat = splat;
     this.composite = composite;
+    this.splatViewLoc = gl.getUniformLocation(splat, "u_view");
+    this.splatColorsLoc = gl.getUniformLocation(splat, "u_colors");
+    this.splatScaleLoc = gl.getUniformLocation(splat, "u_scale");
+    this.compFieldLoc = gl.getUniformLocation(composite, "u_field");
+    this.compTexelLoc = gl.getUniformLocation(composite, "u_texel");
+    this.compUnscaleLoc = gl.getUniformLocation(composite, "u_unscale");
+    this.compSheenLoc = gl.getUniformLocation(composite, "u_sheen");
+    this.compRimLoc = gl.getUniformLocation(composite, "u_rim");
     this.vao = vao;
     this.instances = instances;
     this.fieldTex = fieldTex;
@@ -232,9 +248,9 @@ export class GooRenderer {
   /** Sizes the canvas to the window (CSS px). */
   resize(width: number, height: number): void {
     const gl = this.gl;
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    const cw = Math.max(1, Math.round(width * dpr));
-    const ch = Math.max(1, Math.round(height * dpr));
+    // Cap canvas backing store at 1x CSS px so Pass 2 shading stays fast on HiDPI / low-end GPUs.
+    const cw = Math.max(1, Math.round(width));
+    const ch = Math.max(1, Math.round(height));
     if (this.canvas.width !== cw || this.canvas.height !== ch) {
       this.canvas.width = cw;
       this.canvas.height = ch;
@@ -243,7 +259,7 @@ export class GooRenderer {
     this.viewH = height;
 
     // The field only needs to be smooth; the threshold keeps edges crisp
-    const scale = width * height > 2_400_000 ? 0.4 : 0.5;
+    const scale = width * height > 1_600_000 ? 0.28 : 0.35;
     const fw = Math.max(1, Math.round(width * scale));
     const fh = Math.max(1, Math.round(height * scale));
     if (fw === this.fieldW && fh === this.fieldH) return;
@@ -301,9 +317,9 @@ export class GooRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
     if (count > 0) {
       gl.useProgram(this.splat);
-      gl.uniform2f(gl.getUniformLocation(this.splat, "u_view"), this.viewW, this.viewH);
-      gl.uniform3fv(gl.getUniformLocation(this.splat, "u_colors"), this.colors);
-      gl.uniform1f(gl.getUniformLocation(this.splat, "u_scale"), fieldScale);
+      gl.uniform2f(this.splatViewLoc, this.viewW, this.viewH);
+      gl.uniform3fv(this.splatColorsLoc, this.colors);
+      gl.uniform1f(this.splatScaleLoc, fieldScale);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.bindVertexArray(this.vao);
@@ -322,11 +338,11 @@ export class GooRenderer {
     gl.useProgram(this.composite);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
-    gl.uniform1i(gl.getUniformLocation(this.composite, "u_field"), 0);
-    gl.uniform2f(gl.getUniformLocation(this.composite, "u_texel"), 1 / this.fieldW, 1 / this.fieldH);
-    gl.uniform1f(gl.getUniformLocation(this.composite, "u_unscale"), 1 / fieldScale);
-    gl.uniform3fv(gl.getUniformLocation(this.composite, "u_sheen"), this.sheen);
-    gl.uniform3fv(gl.getUniformLocation(this.composite, "u_rim"), this.rim);
+    gl.uniform1i(this.compFieldLoc, 0);
+    gl.uniform2f(this.compTexelLoc, 1 / this.fieldW, 1 / this.fieldH);
+    gl.uniform1f(this.compUnscaleLoc, 1 / fieldScale);
+    gl.uniform3fv(this.compSheenLoc, this.sheen);
+    gl.uniform3fv(this.compRimLoc, this.rim);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

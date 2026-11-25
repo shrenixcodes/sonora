@@ -290,6 +290,9 @@ pub enum YtmRequest {
     Playlist {
         id: String,
     },
+    Artist {
+        id: String,
+    },
     WatchPlaylist {
         id: String,
     },
@@ -327,11 +330,13 @@ impl YtmRequest {
                     Err("invalid home filter".into())
                 }
             }
-            YtmRequest::Playlist { id } | YtmRequest::WatchPlaylist { id } => {
+            YtmRequest::Playlist { id }
+            | YtmRequest::Artist { id }
+            | YtmRequest::WatchPlaylist { id } => {
                 if is_token_text(id, MAX_PLAYLIST_ID_CHARS, &[]) {
                     Ok(())
                 } else {
-                    Err("invalid playlist id".into())
+                    Err("invalid browse id".into())
                 }
             }
             YtmRequest::Continuation { token } => {
@@ -608,6 +613,14 @@ mod tests {
             .validate()
             .is_ok()
         );
+        assert!(
+            YtmRequest::Artist {
+                id: "UC_x5XG1OV2P6uZZ5FSM9Ttw".into()
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(YtmRequest::Artist { id: String::new() }.validate().is_err());
         assert!(
             YtmRequest::Playlist {
                 id: "PL\"; x".into()

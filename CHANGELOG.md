@@ -4,6 +4,73 @@ All notable changes to Sonora are documented in this file.
 
 ---
 
+## [0.6.1] – 2026-11-24
+
+### ✨ New Features
+
+#### Artist Pages & Clickable Artist / Album Navigation
+- **Dedicated Artist view (`/artist`)**: Displays artist artwork, subscribers, description, Play/Shuffle actions, top songs with Show All, and release shelves, resolving both browse IDs and artist-name fallbacks.
+- **Direct artist & album links across the UI**: Clicking an artist name in the bottom player bar, Now Playing (including fullscreen/immersive mode, exiting fullscreen smoothly), Quick picks tiles, song cards, track rows, or queue rows opens the artist page; clicking an album name opens its album track list view without disrupting track playback semantics.
+
+#### Collection & Playlist Track Lists
+- **Dedicated playlist & album views**: Clicking a playlist, album, or mix card across Home shelves and Library opens a dedicated collection view (`/playlist`) listing its tracks with Play All, Shuffle, progressive loading, clickable artist headers on albums, and track action menus.
+- **Direct corner play buttons**: Clicking the hover/focus play button on a collection card starts playback immediately without opening the detail view.
+
+#### Lyrics: Off Mode
+- **Fourth lyrics display mode**: Added `"off"` alongside `"sm"`, `"md"`, and `"lg"` in Settings and the Now Playing `Aa` cycler, hiding the lyrics pane while centering and enlarging the album artwork stage.
+
+### 🛠 Fixes & Improvements
+- **Smooth animations & low-end UI responsiveness**: Eliminated redundant panel `backdrop-filter` passes, lowered blur radii with dedicated composited layers for ambient art, optimized `GooRenderer` shaders/metaballs/DPR and player restore reveals to use GPU `transform`/`opacity` instead of per-frame `clipPath`, replaced forced layout reflows in sidebar/refresh animations with Web Animations API resets, capped `AmbientVisualRenderer` backing size, promoted GPU CSS properties (`@property`) for rubberband scrolling, and isolated list card/row layout containment.
+- **Fullscreen Now Playing layout**: Fixed immersive bounds clipping, active lyric right-edge scrollbar collision, centered album art and track details when lyrics are off, glass backdrop token styling, and dynamic ambient shader canvas resizing on fullscreen transitions.
+- **Continuous rubberband scrolling & floating stage sync**: Extended elastic pull to mid-scroll wheel gestures, isolated queue rubberband transforms to `.queue-panel`, and synchronized `#app` floating backdrop offsets with `.main` so content no longer spills over a stationary background box.
+- **Sidebar tap jiggle**: Added a lightweight single-tap rubberband jiggle animation when clicking left sidebar navigation or brand controls.
+
+### 📦 Build & Installer
+- Version bumped to `0.6.1` across all manifests (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+- Windows NSIS installer executable (`Sonora_0.6.1_x64-setup.exe`).
+
+---
+
+## [0.6.0] – 2026-11-24
+
+### ✨ New Features
+
+#### YouTube Music Ad Filtering
+- **Integrated ad filtering**: Built-in native ad filtering using Brave adblock rules and player response inspection, blocking pre-roll and audio ads without interrupting music streams or breaking Google sign-in.
+- Seamlessly integrated with floating window and desktop playback controls.
+
+#### Song Radio & Continuous Queue Recommendations
+- **Automated song radio**: Automatically starts radio recommendations when playing songs from search results or track action menus.
+- **Infinite queue replenishment**: Dynamically fetches and queues new recommendations as the playback queue runs low.
+
+#### Song Context Menus & Local Playlists
+- **Song actions menu**: Right-click or menu button opens rich context actions (Queue Next, Queue Later, Add to Playlist, Search Artist, Search Album).
+- **Local playlist management**: Add tracks to local playlists directly with duplicate detection and an intuitive playlist picker.
+
+#### Account Synchronization
+- **Bidirectional account sync**: Synchronizes track likes, unlikes, and listening history between Sonora and YouTube Music accounts.
+
+#### Search Category Chips & Shelves
+- **YouTube Music filter chips**: Filter search results by category (Songs, Albums, Artists, Featured Playlists, Community Playlists).
+- **Rich collection shelves**: Interactive shelf rendering for multi-item music collections.
+
+#### Authentic Branding & Visual Experience
+- **Authentic Sonora Insignia**: Custom musical 'S' vector branding across all application sizes, titlebar, and Windows shell icons.
+- **Fluid launch & restore animations**: Cube transformation splash screen with ripple reveal and liquid symbiote restore animations with taskbar origin awareness.
+- **Tactile UI gestures**: Rubberband elastic overscroll on containers and overdrag physics on player sliders.
+- **About Sonora Dialog**: Centered brand header with a dismissible about popup showing runtime metadata and quick actions.
+
+### 🛠 Fixes & Improvements
+- **Reliable queue reordering**: Restricted queue dragging strictly to grip handles to eliminate accidental track skips while clicking items.
+- **Floating stage refinements**: Smoother floating panel movement, resize constraints, and overscroll fixes.
+- **Volume slider constraint**: Fixed volume slider thumb clamping within exact boundary limits during drag gestures.
+
+### 📦 Build & Installer
+- Version bumped to `0.6.0` across all manifests (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+- Windows NSIS installer executable (`Sonora_0.6.0_x64-setup.exe`).
+
+---
+
 ## [0.5.1] – 2026-11-24
 
 ### 🛠 Fixes & Sync Improvements

@@ -96,6 +96,7 @@ body {
 .main,
 .queue-panel,
 .player {
+  contain: layout style;
   background: var(--glass-sheen), var(--color-panel);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
@@ -128,7 +129,10 @@ body {
   height: 130%;
   max-width: none;
   object-fit: cover;
-  filter: blur(var(--ambient-glow-blur)) saturate(150%);
+  filter: blur(var(--ambient-glow-blur)) saturate(140%);
+  /* Keep the blurred artwork cached in its own texture layer across transforms. */
+  transform: translateZ(0);
+  will-change: opacity;
   opacity: 0;
   transition: opacity var(--duration-ambience) var(--ease-in-out);
 }

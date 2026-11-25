@@ -8,6 +8,7 @@
 
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
+import { openAlbum, openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { LyricsController } from "@/lib/lyrics/synced-lyrics";
 import { AmbientVisualRenderer } from "@/lib/visuals/ambient-renderer";
@@ -15,9 +16,11 @@ import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { Track } from "@/types/music";
+import type { Track, UserSettings } from "@/types/music";
 
 export function renderNowPlaying(container: HTMLElement): void {
+  // Ensure scrolled views don't offset the absolute-positioned Now Playing stage.
+  if (container.parentElement) container.parentElement.scrollTop = 0;
   const currentTrack = playerEngine.currentTrack;
   const settings = storage.getSettings();
 
@@ -70,7 +73,7 @@ export function renderNowPlaying(container: HTMLElement): void {
   // aside and the screen becomes artwork on the left, lyrics on the right.
   let immersive = false;
 
-  const setImmersive = async (on: boolean): Promise<void> => {
+  const applyImmersiveUi = (on: boolean): void => {
     immersive = on;
     if (on) document.documentElement.dataset.immersive = "";
     else delete document.documentElement.dataset.immersive;
@@ -79,6 +82,11 @@ export function renderNowPlaying(container: HTMLElement): void {
     const label = on ? "Leave fullscreen lyrics" : "Fullscreen lyrics";
     fullscreenBtn.setAttribute("title", label);
     fullscreenBtn.setAttribute("aria-label", label);
+    requestAnimationFrame(() => visualEngine.handleResize());
+  };
+
+  const setImmersive = async (on: boolean): Promise<void> => {
+    applyImmersiveUi(on);
 
     try {
       if (isTauri()) {
@@ -93,6 +101,13 @@ export function renderNowPlaying(container: HTMLElement): void {
       console.error("[now-playing] fullscreen failed:", err);
     }
   };
+
+  const onFullscreenChange = (): void => {
+    if (!isTauri() && immersive && !document.fullscreenElement) {
+      applyImmersiveUi(false);
+    }
+  };
+  document.addEventListener("fullscreenchange", onFullscreenChange);
 
   const fullscreenBtn = el("button", {
     className: "now-playing__fs-btn",
@@ -115,29 +130,41 @@ export function renderNowPlaying(container: HTMLElement): void {
   window.addEventListener("keydown", onKeyDown);
 
   // ── Lyrics typography scaling ─────────────
-  let lyricsSize: "sm" | "md" | "lg" = settings.lyricsFontSize ?? "md";
-  const sizeLabels: Record<"sm" | "md" | "lg", string> = {
+  type LyricsSizeOption = NonNullable<UserSettings["lyricsFontSize"]>;
+  const sizeLabels: Record<LyricsSizeOption, string> = {
     sm: "Small",
     md: "Medium",
     lg: "Large",
+    off: "Off",
   };
-  const sizeCycle: Array<"sm" | "md" | "lg"> = ["sm", "md", "lg"];
+  const sizeCycle: LyricsSizeOption[] = ["sm", "md", "lg", "off"];
+  let lyricsSize: LyricsSizeOption =
+    settings.lyricsFontSize && sizeCycle.includes(settings.lyricsFontSize)
+      ? settings.lyricsFontSize
+      : "md";
+
+  const formatLyricsLabel = (size: LyricsSizeOption): string =>
+    size === "off" ? "Lyrics: Off" : `Lyrics text size: ${sizeLabels[size]}`;
 
   const fontBtn = el("button", {
-    className: "now-playing__mode-btn",
+    className: `now-playing__mode-btn${lyricsSize === "off" ? " now-playing__mode-btn--off" : ""}`,
     text: "Aa",
     attrs: {
-      "aria-label": `Lyrics text size: ${sizeLabels[lyricsSize]}`,
-      title: `Lyrics text size: ${sizeLabels[lyricsSize]}`,
+      type: "button",
+      "aria-label": formatLyricsLabel(lyricsSize),
+      title: formatLyricsLabel(lyricsSize),
+      "aria-pressed": String(lyricsSize === "off"),
     },
     onClick: () => {
       const nextIdx = (sizeCycle.indexOf(lyricsSize) + 1) % sizeCycle.length;
       lyricsSize = sizeCycle[nextIdx];
       storage.saveSettings({ lyricsFontSize: lyricsSize });
       nowPlayingRoot.dataset.lyricsSize = lyricsSize;
-      const label = `Lyrics text size: ${sizeLabels[lyricsSize]}`;
+      const label = formatLyricsLabel(lyricsSize);
       fontBtn.setAttribute("aria-label", label);
       fontBtn.setAttribute("title", label);
+      fontBtn.setAttribute("aria-pressed", String(lyricsSize === "off"));
+      fontBtn.classList.toggle("now-playing__mode-btn--off", lyricsSize === "off");
     },
   });
 
@@ -171,14 +198,48 @@ export function renderNowPlaying(container: HTMLElement): void {
     text: currentTrack?.title || "No track playing",
   });
 
-  const artistEl = el("p", {
+  const openCurrentArtist = () => {
+    const activeTrack = playerEngine.currentTrack;
+    if (!activeTrack?.artist.trim()) return;
+    if (immersive) void setImmersive(false);
+    openArtist({ id: activeTrack.artistId, name: activeTrack.artist });
+  };
+
+  const openCurrentAlbum = () => {
+    const activeTrack = playerEngine.currentTrack;
+    const albumTitle = activeTrack?.album?.trim();
+    if (!activeTrack || !albumTitle) return;
+    if (immersive) void setImmersive(false);
+    openAlbum({
+      id: activeTrack.albumId,
+      title: albumTitle,
+      artist: activeTrack.artist,
+      artworkUrl: activeTrack.artworkUrl,
+    });
+  };
+
+  const artistEl = el("button", {
     className: "now-playing__artist truncate",
     text: currentTrack?.artist || "Select a song from the library",
+    attrs: {
+      type: "button",
+      ...(currentTrack?.artist.trim()
+        ? { title: `Open artist: ${currentTrack.artist}`, "aria-label": `Open artist ${currentTrack.artist}` }
+        : { disabled: "" }),
+    },
+    onClick: openCurrentArtist,
   });
 
-  const albumEl = el("p", {
+  const albumEl = el("button", {
     className: "now-playing__album truncate",
     text: currentTrack?.album || "",
+    attrs: {
+      type: "button",
+      ...(currentTrack?.album?.trim()
+        ? { title: `Open album: ${currentTrack.album}`, "aria-label": `Open album ${currentTrack.album}` }
+        : { disabled: "" }),
+    },
+    onClick: openCurrentAlbum,
   });
 
   const infoCol = el("div", {
@@ -222,10 +283,41 @@ export function renderNowPlaying(container: HTMLElement): void {
   unsubs.push(
     playerEngine.on("trackChange", (track: Track | null) => {
       if (track) {
-        artImg.src = track.artworkUrl;
+        artImg.src = track.artworkUrl || "/artwork-placeholder.svg";
+        artImg.alt = track.title || "Track artwork";
         titleEl.textContent = track.title;
         artistEl.textContent = track.artist;
-        albumEl.textContent = track.album || "";
+        const hasArtist = Boolean(track.artist.trim());
+        artistEl.toggleAttribute("disabled", !hasArtist);
+        if (hasArtist) {
+          artistEl.setAttribute("title", `Open artist: ${track.artist}`);
+          artistEl.setAttribute("aria-label", `Open artist ${track.artist}`);
+        } else {
+          artistEl.removeAttribute("title");
+          artistEl.removeAttribute("aria-label");
+        }
+        const albumTitle = track.album?.trim() ?? "";
+        albumEl.textContent = albumTitle;
+        albumEl.toggleAttribute("disabled", !albumTitle);
+        if (albumTitle) {
+          albumEl.setAttribute("title", `Open album: ${albumTitle}`);
+          albumEl.setAttribute("aria-label", `Open album ${albumTitle}`);
+        } else {
+          albumEl.removeAttribute("title");
+          albumEl.removeAttribute("aria-label");
+        }
+      } else {
+        artImg.src = "/artwork-placeholder.svg";
+        artImg.alt = "Track artwork";
+        titleEl.textContent = "No track playing";
+        artistEl.textContent = "Select a song from the library";
+        artistEl.setAttribute("disabled", "");
+        artistEl.removeAttribute("title");
+        artistEl.removeAttribute("aria-label");
+        albumEl.textContent = "";
+        albumEl.setAttribute("disabled", "");
+        albumEl.removeAttribute("title");
+        albumEl.removeAttribute("aria-label");
       }
     }),
   );
@@ -248,6 +340,7 @@ export function renderNowPlaying(container: HTMLElement): void {
     if (destroyed) return;
     destroyed = true;
     window.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
     // Leaving the page must not strand the window in a lyrics presentation.
     if (immersive) void setImmersive(false);
     visualEngine.destroy();

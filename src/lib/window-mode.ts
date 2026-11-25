@@ -85,6 +85,7 @@ function watchLayout(): void {
   // Opening "Up next" changes the grid without resizing every observed part.
   const app = document.getElementById("app");
   if (app) new MutationObserver(scheduleRegionSync).observe(app, { attributes: true, attributeFilter: ["class"] });
+  new MutationObserver(scheduleRegionSync).observe(document.documentElement, { attributes: true, attributeFilter: ["data-immersive"] });
   new MutationObserver(scheduleRegionSync).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["open"] });
 }
 

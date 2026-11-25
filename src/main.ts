@@ -26,6 +26,8 @@ import { renderHome } from "@/views/home";
 import { renderExplore } from "@/views/explore";
 import { renderSearch } from "@/views/search";
 import { renderLibrary } from "@/views/library";
+import { renderCollection } from "@/views/collection";
+import { renderArtist } from "@/views/artist";
 import { renderSettings } from "@/views/settings";
 import { renderNowPlaying } from "@/views/now-playing";
 
@@ -107,6 +109,8 @@ function init(): void {
     .route("/albums", renderLibrary)
     .route("/artists", renderLibrary)
     .route("/history", renderLibrary)
+    .route("/playlist", renderCollection)
+    .route("/artist", renderArtist)
     .route("/settings", renderSettings)
     .route("/now-playing", renderNowPlaying);
 
@@ -205,7 +209,11 @@ function setupGlobalShortcuts(): void {
       }
       case "KeyF":
         if (window.location.hash === "#/now-playing") {
-          window.history.back();
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            router.navigate("/");
+          }
         } else {
           router.navigate("/now-playing");
         }

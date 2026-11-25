@@ -50,7 +50,7 @@ describe("About Sonora Pop-up and centered brand logo", () => {
     expect(title?.textContent).toBe("Sonora");
 
     const version = dialog?.querySelector(".about-popup__version");
-    expect(version?.textContent).toContain("v0.5.1");
+    expect(version?.textContent).toContain("v0.6.1");
 
     const metaList = dialog?.querySelector(".about-popup__meta-list");
     expect(metaList?.textContent).toContain("Runtime");

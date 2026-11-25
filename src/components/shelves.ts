@@ -2,18 +2,20 @@
  * Shelves of YouTube Music items, shared by Home and Explore.
  *
  * Song rows become compact tiles; albums, playlists, mixes, videos and
- * artists become cards. Albums, playlists and mixes play from the top when
- * clicked; artists open a search for their songs.
+ * artists become cards. Clicking a song artist opens its Artist page, clicking
+ * an album/playlist card opens its track list (or plays via the hover play button),
+ * and clicking an artist card opens the Artist page.
  */
 
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
+import { createInlineArtistLink } from "@/components/track-links";
 import { icon } from "@/icons";
-import { catalog, CatalogError, type HomeCollection, type HomeItem, type HomeShelf } from "@/lib/ytm/catalog";
+import { CatalogError, type HomeCollection, type HomeItem, type HomeShelf } from "@/lib/ytm/catalog";
+import { openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
-import { router } from "@/lib/router";
-import { searchQuery } from "@/lib/search-query";
+import { openCollection, playYtmCollection } from "@/views/collection";
 import type { Track } from "@/types/music";
 
 const QUICK_PICK_LIMIT = 16;
@@ -106,7 +108,7 @@ function createQuickTile(track: Track, queue: Track[]): HTMLElement {
         className: "quick-tile__meta",
         children: [
           el("span", { className: "quick-tile__title truncate", text: track.title }),
-          el("span", { className: "quick-tile__subtitle truncate", text: track.artist }),
+          createInlineArtistLink(track.artist, track.artistId, "quick-tile__subtitle truncate"),
         ],
       }),
       el("span", { className: "quick-tile__play", html: icon("play"), attrs: { "aria-hidden": "true" } }),
@@ -130,38 +132,100 @@ function cardShell(options: {
   artworkUrl: string;
   title: string;
   subtitle: string;
+  subtitleNode?: HTMLElement;
   label: string;
   round?: boolean;
   playable?: boolean;
   onClick: () => void;
+  onPlay?: () => void;
+  playLabel?: string;
 }): { card: HTMLElement; subtitle: HTMLElement } {
-  const subtitle = el("span", { className: "shelf-card__subtitle truncate", text: options.subtitle });
-  const card = el("button", {
-    className: `shelf-card${options.round ? " shelf-card--round" : ""}`,
-    attrs: { type: "button", "aria-label": options.label },
-    children: [
-      el("span", {
-        className: "shelf-card__art",
+  const subtitle = options.subtitleNode ?? el("span", { className: "shelf-card__subtitle truncate", text: options.subtitle });
+  const hasSeparatePlay = options.playable !== false && Boolean(options.onPlay);
+  const playControl =
+    options.playable === false
+      ? []
+      : hasSeparatePlay
+        ? [
+            el("button", {
+              className: "shelf-card__play",
+              html: icon("play"),
+              attrs: {
+                type: "button",
+                "aria-label": options.playLabel ?? `Play ${options.title}`,
+                title: options.playLabel ?? `Play ${options.title}`,
+              },
+              onClick: (e) => {
+                e.stopPropagation();
+                options.onPlay?.();
+              },
+              onKeyDown: (e) => {
+                e.stopPropagation();
+              },
+            }),
+          ]
+        : [el("span", { className: "shelf-card__play", html: icon("play"), attrs: { "aria-hidden": "true" } })];
+
+  const card = hasSeparatePlay
+    ? el("div", {
+        className: `shelf-card${options.round ? " shelf-card--round" : ""}`,
+        attrs: { role: "button", tabindex: "0", "aria-label": options.label },
         children: [
-          el("img", { attrs: { src: options.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" } }),
-          ...(options.playable === false
-            ? []
-            : [el("span", { className: "shelf-card__play", html: icon("play"), attrs: { "aria-hidden": "true" } })]),
+          el("span", {
+            className: "shelf-card__art",
+            children: [
+              el("img", { attrs: { src: options.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" } }),
+              ...playControl,
+            ],
+          }),
+          el("span", { className: "shelf-card__title truncate", text: options.title }),
+          subtitle,
         ],
-      }),
-      el("span", { className: "shelf-card__title truncate", text: options.title }),
-      subtitle,
-    ],
-    onClick: options.onClick,
-  });
+        onClick: options.onClick,
+        onKeyDown: (e) => {
+          if (e.target === card && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            options.onClick();
+          }
+        },
+      })
+    : el("button", {
+        className: `shelf-card${options.round ? " shelf-card--round" : ""}`,
+        attrs: { type: "button", "aria-label": options.label },
+        children: [
+          el("span", {
+            className: "shelf-card__art",
+            children: [
+              el("img", { attrs: { src: options.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" } }),
+              ...playControl,
+            ],
+          }),
+          el("span", { className: "shelf-card__title truncate", text: options.title }),
+          subtitle,
+        ],
+        onClick: options.onClick,
+      });
+
   return { card, subtitle };
 }
 
 export function createSongCard(track: Track, queue: Track[]): HTMLElement {
+  const artistLink = createInlineArtistLink(track.artist, track.artistId, "shelf-card__subtitle truncate");
+  const subtitleNode = track.duration
+    ? el("span", {
+        className: "shelf-card__subtitle truncate",
+        children: [
+          createInlineArtistLink(track.artist, track.artistId, "shelf-card__artist-link"),
+          ` · ${formatTime(track.duration)}`,
+        ],
+      })
+    : artistLink;
+
   const { card } = cardShell({
     artworkUrl: track.artworkUrl,
     title: track.title,
     subtitle: track.duration ? `${track.artist} · ${formatTime(track.duration)}` : track.artist,
+    subtitleNode,
     label: `Play ${track.title} by ${track.artist}`,
     onClick: () => playerEngine.playTrack(track, queue),
   });
@@ -170,49 +234,58 @@ export function createSongCard(track: Track, queue: Track[]): HTMLElement {
   return card;
 }
 
-/** Albums, playlists and mixes play from the top; artists open a search for their songs. */
+/**
+ * Albums, playlists and mixes open their track list when the card is clicked,
+ * and play straight away when the hover play button is clicked; artists open the Artist page.
+ */
 export function createCollectionCard(item: HomeCollection): HTMLElement {
   if (item.kind === "artist") {
     return cardShell({
       artworkUrl: item.artworkUrl,
       title: item.title,
       subtitle: item.subtitle,
-      label: `Find songs by ${item.title}`,
+      label: `Open artist ${item.title}`,
       round: true,
       playable: false,
-      onClick: () => {
-        searchQuery.set(item.title);
-        router.navigate("/search");
-      },
+      onClick: () => openArtist({ id: item.artistId, name: item.title, artworkUrl: item.artworkUrl }),
     }).card;
   }
 
   let loading = false;
+  const playCollection = async () => {
+    if (loading || !item.playlistId) return;
+    loading = true;
+    card.setAttribute("aria-busy", "true");
+    subtitle.textContent = "Loading…";
+    try {
+      const tracks = await playYtmCollection(item.playlistId);
+      subtitle.textContent = tracks.length > 0 ? item.subtitle : "Nothing playable here";
+    } catch (err) {
+      subtitle.textContent = err instanceof CatalogError ? err.message : `Couldn't load this ${item.kind}.`;
+    } finally {
+      loading = false;
+      card.removeAttribute("aria-busy");
+    }
+  };
+
   const { card, subtitle } = cardShell({
     artworkUrl: item.artworkUrl,
     title: item.title,
     subtitle: item.subtitle,
-    label: `Play ${item.title}`,
-    onClick: async () => {
-      if (loading || !item.playlistId) return;
-      loading = true;
-      card.setAttribute("aria-busy", "true");
-      subtitle.textContent = "Loading…";
-      try {
-        let first: Track | undefined;
-        const tracks = await catalog.getPlaylistTracks(item.playlistId, (more) => {
-          if (first) playerEngine.extendQueue(first, more);
-        });
-        first = tracks[0];
-        subtitle.textContent = tracks.length > 0 ? item.subtitle : "Nothing playable here";
-        if (tracks.length > 0) playerEngine.playTrack(tracks[0], tracks);
-      } catch (err) {
-        subtitle.textContent = err instanceof CatalogError ? err.message : `Couldn't load this ${item.kind}.`;
-      } finally {
-        loading = false;
-        card.removeAttribute("aria-busy");
-      }
+    label: `Open ${item.title}`,
+    playLabel: `Play ${item.title}`,
+    onClick: () => {
+      if (!item.playlistId) return;
+      openCollection({
+        source: "ytm",
+        id: item.playlistId,
+        kind: item.kind === "album" ? "album" : "playlist",
+        title: item.title,
+        subtitle: item.subtitle,
+        artworkUrl: item.artworkUrl,
+      });
     },
+    onPlay: () => void playCollection(),
   });
   return card;
 }

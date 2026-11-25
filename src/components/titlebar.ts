@@ -89,9 +89,16 @@ export function createTitlebar(): HTMLElement {
                 },
                 onClick: (e) => {
                   const btn = e.currentTarget as HTMLElement;
-                  btn.classList.remove("is-spinning");
-                  void btn.offsetWidth; // restart the spin on repeated clicks
-                  btn.classList.add("is-spinning");
+                  const anims = typeof btn.getAnimations === "function" ? btn.getAnimations() : [];
+                  if (btn.classList.contains("is-spinning") && anims.length > 0) {
+                    anims.forEach((anim) => {
+                      anim.currentTime = 0;
+                      anim.play();
+                    });
+                  } else {
+                    btn.classList.remove("is-spinning");
+                    requestAnimationFrame(() => btn.classList.add("is-spinning"));
+                  }
                   catalog.clearCache();
                   router.refresh();
                 },
