@@ -1,6 +1,6 @@
 {
   "name": "sonora",
-  "version": "0.6.1",
+  "version": "0.6.8",
   "description": "An immersive YouTube Music desktop client for Windows",
   "type": "module",
   "scripts": {

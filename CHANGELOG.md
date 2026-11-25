@@ -4,6 +4,22 @@ All notable changes to Sonora are documented in this file.
 
 ---
 
+## [0.6.8] – 2026-11-26
+
+### 🛠 Fixes & Improvements
+
+#### Playable YouTube Video Music Search & Filter Fixes
+- **Unified song & music-video search**: Searching in Sonora now automatically surfaces music uploaded as YouTube videos (such as official audio uploads and video-only releases) alongside official YouTube Music Art Tracks when the `Songs` filter misses or lacks strong matches, playing them as audio-only tracks without switching to a video player.
+- **Fixed search category parameter forwarding (`ytm.rs` & `ytm_bridge.js`)**: `YtmRequest::Search` now accepts, validates, and forwards `params` across the Tauri bridge instead of silently dropping category filters and forcing `SONGS_ONLY`.
+- **Fixed `Albums` filter parameter**: Updated `SEARCH_FILTER_PARAMS.albums` to `EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D` so album searches return YouTube Music's Albums shelf instead of unfiltered results.
+- **Unfiltered search, user-channel & Top Result parsing**: Updated `parseSearchSongs`, `parseListItem`, `parseCardItem`, `parseWatchPlaylist`, and `parseArtistPage` to parse `musicCardShelfRenderer` Top Result cards and `itemSectionRenderer` rows, recognize `MUSIC_PAGE_TYPE_USER_CHANNEL` creators, skip leading category badges and non-music podcast episodes, and prefer `longSubscriberCountText` on channel artist pages.
+
+### 📦 Build & Installer
+- Version bumped to `0.6.8` across all manifests (`package.json`, `Cargo.toml`, `tauri.conf.json`).
+- Windows NSIS installer executable (`Sonora_0.6.8_x64-setup.exe`).
+
+---
+
 ## [0.6.1] – 2026-11-24
 
 ### ✨ New Features
