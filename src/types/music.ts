@@ -122,6 +122,8 @@ export interface UserSettings {
   density: "comfortable" | "compact";
   lyricsFontSize?: "sm" | "md" | "lg" | "off";
   volume: number;
+  shuffle: boolean;
+  repeat: RepeatMode;
   audioQuality: AudioQualityMode;
   audioEnhancement: AudioEnhancementProfile;
   normalizeVolume: boolean;

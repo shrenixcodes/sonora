@@ -114,11 +114,16 @@ function renderLikedSongs(container: HTMLElement): void {
  * `remote` is null when the account's likes aren't available.
  */
 function showLikedSongs(container: HTMLElement, remote: Track[] | null, notice?: HTMLElement): void {
-  const remoteIds = new Set((remote ?? []).map((t) => t.id));
-  const likedTracks = dedupeById([...storage.getLikedTracks(), ...(remote ?? [])]);
-  const rerender = () => {
+  const remoteTracks = remote ? [...remote] : null;
+  const remoteIds = new Set((remoteTracks ?? []).map((t) => t.id));
+  const likedTracks = dedupeById([...storage.getLikedTracks(), ...(remoteTracks ?? [])]);
+  const rerender = (changedId?: string, isNowLiked?: boolean) => {
+    if (changedId && isNowLiked === false && remoteTracks) {
+      const idx = remoteTracks.findIndex((item) => item.id === changedId);
+      if (idx !== -1) remoteTracks.splice(idx, 1);
+    }
     container.replaceChildren();
-    showLikedSongs(container, remote, notice);
+    showLikedSongs(container, remoteTracks, notice);
   };
 
   const playAllBtn = el("button", {
@@ -141,13 +146,7 @@ function showLikedSongs(container: HTMLElement, remote: Track[] | null, notice?:
       el("span", { text: "Shuffle" }),
     ],
     onClick: () => {
-      if (likedTracks.length > 0) {
-        playerEngine.setQueue(likedTracks);
-        if (!playerEngine.currentState.shuffle) {
-          playerEngine.toggleShuffle();
-        }
-        playerEngine.playTrack(likedTracks[0]);
-      }
+      void playerEngine.playShuffled(likedTracks);
     },
   });
 
@@ -593,7 +592,7 @@ function createTrackRow(
   track: Track,
   index: number,
   queueContext: Track[],
-  onToggleLike?: () => void,
+  onToggleLike?: (trackId: string, liked: boolean) => void,
   likedOnYtm = false,
 ): HTMLElement {
   const isLiked = likedOnYtm || storage.isLiked(track.id);
@@ -639,18 +638,25 @@ function createTrackRow(
       el("button", {
         className: `track-row__like-btn${isLiked ? " track-row__like-btn--active" : ""}`,
         html: icon("heart"),
-        // Likes from the account can't be changed from Sonora yet.
-        attrs: likedOnYtm
-          ? { "aria-label": "Liked on YouTube Music", title: "Liked on YouTube Music", disabled: "" }
-          : { "aria-label": `Like ${track.title}`, title: "Like track", "aria-pressed": String(isLiked) },
+        attrs: {
+          "aria-label": isLiked ? `Unlike ${track.title}` : `Like ${track.title}`,
+          title: likedOnYtm ? "Unlike from YouTube Music" : isLiked ? "Unlike track" : "Like track",
+          "aria-pressed": String(isLiked),
+        },
         onClick: (e) => {
           e.stopPropagation();
-          if (likedOnYtm) return;
-          const liked = storage.toggleLike(track);
+          let liked: boolean;
+          if (likedOnYtm) {
+            liked = false;
+            void catalog.rateTrack(track.id, false);
+          } else {
+            liked = storage.toggleLike(track);
+          }
           const btn = e.currentTarget as HTMLElement;
           btn.classList.toggle("track-row__like-btn--active", liked);
           btn.setAttribute("aria-pressed", String(liked));
-          if (onToggleLike) onToggleLike();
+          btn.setAttribute("aria-label", liked ? `Unlike ${track.title}` : `Like ${track.title}`);
+          if (onToggleLike) onToggleLike(track.id, liked);
         },
       }),
       el("span", {

@@ -2,7 +2,7 @@
  * Persistent local storage for user preferences, playlists, history, and liked tracks.
  */
 
-import type { Track, Playlist, UserSettings } from "@/types/music";
+import type { Track, Playlist, RepeatMode, UserSettings } from "@/types/music";
 import { EventEmitter } from "@/lib/events";
 import { sanitizeAudioEnhancement, sanitizeAudioQuality } from "@/lib/audio-quality";
 
@@ -30,12 +30,33 @@ export const DEFAULT_SETTINGS: UserSettings = {
   density: "comfortable",
   lyricsFontSize: "md",
   volume: 0.8,
+  shuffle: false,
+  repeat: "off",
   audioQuality: "high",
   audioEnhancement: "off",
   normalizeVolume: true,
   autoPlayNext: true,
   enableDiscordRpc: true,
 };
+
+const VALID_REPEAT_MODES = new Set<RepeatMode>(["off", "all", "one"]);
+
+function normalizeSettings(raw: Partial<UserSettings> | null | undefined, fallback: UserSettings = DEFAULT_SETTINGS): UserSettings {
+  const merged = { ...fallback, ...(raw ?? {}) };
+  merged.shuffle = Boolean(merged.shuffle);
+  if (!VALID_REPEAT_MODES.has(merged.repeat)) {
+    merged.repeat = fallback.repeat;
+  }
+  if (typeof merged.volume !== "number" || !Number.isFinite(merged.volume)) {
+    merged.volume = fallback.volume;
+  } else {
+    merged.volume = Math.max(0, Math.min(1, merged.volume));
+  }
+  merged.audioQuality = sanitizeAudioQuality(merged.audioQuality, fallback.audioQuality);
+  merged.audioEnhancement = sanitizeAudioEnhancement(merged.audioEnhancement, fallback.audioEnhancement);
+  merged.normalizeVolume = Boolean(merged.normalizeVolume);
+  return merged;
+}
 
 class StorageService extends EventEmitter<StorageEvents> {
   getSettings(): UserSettings {
@@ -51,11 +72,7 @@ class StorageService extends EventEmitter<StorageEvents> {
           localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...DEFAULT_SETTINGS, ...parsed, enableDiscordRpc: true }));
         } catch {}
       }
-      const merged = { ...DEFAULT_SETTINGS, ...parsed };
-      merged.audioQuality = sanitizeAudioQuality(merged.audioQuality, DEFAULT_SETTINGS.audioQuality);
-      merged.audioEnhancement = sanitizeAudioEnhancement(merged.audioEnhancement, DEFAULT_SETTINGS.audioEnhancement);
-      merged.normalizeVolume = Boolean(merged.normalizeVolume);
-      return merged;
+      return normalizeSettings(parsed);
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
