@@ -340,4 +340,32 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     expect(engine.currentState.status).toBe("error");
     expect(engine.currentState.error).toMatch(/desktop app/);
   });
+
+  it("syncs audio quality settings with the bridge and stores reported audio telemetry", () => {
+    const { engine, sent } = setup();
+
+    engine.handleBridgeState(
+      report({
+        reason: "ready",
+        paused: true,
+        audioInfo: { codec: "Opus", bitrateKbps: 160, sampleRate: 48000, dspActive: true },
+      }),
+    );
+
+    expect(sent[0]).toEqual({
+      action: "audioConfig",
+      value: { quality: "high", profile: "off", normalizeVolume: true },
+    });
+    expect(engine.currentState.audioInfo).toMatchObject({ codec: "Opus", bitrateKbps: 160, dspActive: true });
+
+    storage.saveSettings({ audioQuality: "lossless", audioEnhancement: "clarity", normalizeVolume: false });
+    expect(sent.at(-1)).toEqual({
+      action: "audioConfig",
+      value: { quality: "lossless", profile: "clarity", normalizeVolume: false },
+    });
+
+    const beforeCount = sent.length;
+    storage.saveSettings({ theme: "light" });
+    expect(sent).toHaveLength(beforeCount);
+  });
 });

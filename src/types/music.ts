@@ -54,6 +54,22 @@ export type PlaybackStatus = "idle" | "loading" | "playing" | "paused" | "error"
 
 export type RepeatMode = "off" | "all" | "one";
 
+export type AudioQualityMode = "saver" | "balanced" | "high" | "lossless";
+
+export type AudioEnhancementProfile = "off" | "clarity" | "warm" | "bass" | "vocal";
+
+export interface AudioStreamInfo {
+  codec?: string;
+  bitrateKbps?: number;
+  sampleRate?: number;
+  channels?: number;
+  qualityTier?: string;
+  loudnessDb?: number;
+  dspActive: boolean;
+  dspSampleRate?: number;
+  normalizedGainDb?: number;
+}
+
 export interface PlaybackState {
   currentTrack: Track | null;
   status: PlaybackStatus;
@@ -66,6 +82,8 @@ export interface PlaybackState {
   playbackRate: number;
   /** True while YouTube Music plays an ad; seeking and skipping are unavailable. */
   isAd: boolean;
+  /** Active audio stream and DSP status reported by the bridge. */
+  audioInfo?: AudioStreamInfo | null;
   error?: string;
 }
 
@@ -101,6 +119,8 @@ export interface UserSettings {
   density: "comfortable" | "compact";
   lyricsFontSize?: "sm" | "md" | "lg" | "off";
   volume: number;
+  audioQuality: AudioQualityMode;
+  audioEnhancement: AudioEnhancementProfile;
   normalizeVolume: boolean;
   autoPlayNext: boolean;
   enableDiscordRpc: boolean;

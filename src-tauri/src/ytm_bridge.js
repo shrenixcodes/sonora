@@ -18,10 +18,64 @@
   const ACCOUNT_LOOKUP_ATTEMPTS = 60;
   // The page updates mediaSession metadata shortly after the track switches.
   const METADATA_SETTLE_MS = 600;
+  const AUDIO_CONFIG_STORAGE_KEY = "sonora:audio_config";
+  const MAX_TRACK_META_CACHE = 50;
+
+  const QUALITY_MODES = new Set(["saver", "balanced", "high", "lossless"]);
+  const ENHANCEMENT_PROFILES = new Set(["off", "clarity", "warm", "bass", "vocal"]);
+  const PROFILE_EQ_DB = {
+    off: [0, 0, 0, 0, 0],
+    clarity: [1.5, -2.8, 0.5, 1.8, 2.5],
+    warm: [2.5, 0.8, 0.0, -1.8, -0.8],
+    bass: [4.5, -1.5, 0.0, 0.8, 1.0],
+    vocal: [-1.5, -2.0, 2.2, 2.8, 1.5],
+  };
 
   let video = null;
   let lastTimeReport = 0;
   let lastLoadedVideoId = null;
+  let lastAppliedGainDb = null;
+  let audioGraph = null;
+  let audioGraphFailed = false;
+  const trackAudioMeta = new Map();
+
+  const normalizeAudioConfig = (raw) => {
+    const src = raw && typeof raw === "object" ? raw : {};
+    return {
+      quality: QUALITY_MODES.has(src.quality) ? src.quality : "high",
+      profile: ENHANCEMENT_PROFILES.has(src.profile) ? src.profile : "off",
+      normalizeVolume: typeof src.normalizeVolume === "boolean" ? src.normalizeVolume : true,
+    };
+  };
+
+  const loadStoredAudioConfig = () => {
+    try {
+      const saved = localStorage.getItem(AUDIO_CONFIG_STORAGE_KEY);
+      return saved ? normalizeAudioConfig(JSON.parse(saved)) : normalizeAudioConfig(null);
+    } catch {
+      return normalizeAudioConfig(null);
+    }
+  };
+
+  let audioConfig = loadStoredAudioConfig();
+
+  const saveAudioConfig = (next) => {
+    try {
+      localStorage.setItem(AUDIO_CONFIG_STORAGE_KEY, JSON.stringify(next));
+      if (next.quality === "lossless" || next.quality === "high") {
+        localStorage.setItem(
+          "yt-player-quality",
+          JSON.stringify({
+            data: "highres",
+            expiration: Date.now() + 30 * 86400 * 1000,
+            creation: Date.now(),
+          }),
+        );
+      }
+    } catch {
+      // Storage may be blocked in restricted contexts.
+    }
+  };
 
   const player = () => document.getElementById("movie_player");
   // The player marks itself while an ad runs; the media metadata then describes the ad.
@@ -30,16 +84,189 @@
     return !!(p && p.classList.contains("ad-showing"));
   };
 
-  // Nobody ever sees this page, but a music video still arrives as video and is
-  // decoded frame by frame for a window that is never drawn. Hold the player at
-  // its smallest picture: the audio stream is picked separately and keeps its
-  // quality, so the song plays as a song and the frames stop costing anything.
-  const holdVideoAtMinimum = () => {
-    const p = player();
-    if (p && typeof p.setPlaybackQualityRange === "function") {
-      p.setPlaybackQualityRange("tiny", "tiny");
+  const rememberTrackAudioMeta = (videoId, meta) => {
+    if (!videoId || !meta) return;
+    if (trackAudioMeta.has(videoId)) trackAudioMeta.delete(videoId);
+    trackAudioMeta.set(videoId, meta);
+    if (trackAudioMeta.size > MAX_TRACK_META_CACHE) {
+      const oldest = trackAudioMeta.keys().next().value;
+      if (oldest !== undefined) trackAudioMeta.delete(oldest);
     }
   };
+
+  const parseCodecLabel = (mimeType) => {
+    if (typeof mimeType !== "string") return null;
+    const lower = mimeType.toLowerCase();
+    if (lower.includes("opus")) return "Opus";
+    if (lower.includes("mp4a.40.5")) return "HE-AAC";
+    if (lower.includes("mp4a") || lower.includes("audio/mp4")) return "AAC";
+    if (lower.includes("flac")) return "FLAC";
+    return "Audio";
+  };
+
+  const codecFamilyOf = (format) => {
+    const mime = typeof format?.mimeType === "string" ? format.mimeType.toLowerCase() : "";
+    if (mime.includes("opus")) return "opus";
+    if (mime.includes("mp4a") || mime.includes("audio/mp4")) return "aac";
+    return "other";
+  };
+
+  const bitrateOf = (format) => {
+    if (typeof format?.bitrate === "number" && Number.isFinite(format.bitrate) && format.bitrate > 0) {
+      return format.bitrate;
+    }
+    if (
+      typeof format?.averageBitrate === "number" &&
+      Number.isFinite(format.averageBitrate) &&
+      format.averageBitrate > 0
+    ) {
+      return format.averageBitrate;
+    }
+    return 0;
+  };
+
+  const codecRank = (format) => (codecFamilyOf(format) === "opus" ? 2 : codecFamilyOf(format) === "aac" ? 1 : 0);
+
+  const bestPerFamily = (formats) => {
+    const best = new Map();
+    for (const f of formats) {
+      const fam = codecFamilyOf(f);
+      const prev = best.get(fam);
+      if (!prev || bitrateOf(f) > bitrateOf(prev)) best.set(fam, f);
+    }
+    return Array.from(best.values());
+  };
+
+  const selectAudioFormats = (audioFormats, quality) => {
+    if (!Array.isArray(audioFormats) || audioFormats.length === 0) return audioFormats;
+
+    // Avoid AI auto-dubbed tracks whenever original audio exists.
+    const nonDubbed = audioFormats.filter((f) => !f?.audioTrack || f.audioTrack.isAutoDubbed !== true);
+    let candidates = nonDubbed.length > 0 ? nonDubbed : audioFormats;
+    const defaultTracks = candidates.filter((f) => !f?.audioTrack || f.audioTrack.audioIsDefault !== false);
+    if (defaultTracks.length > 0) candidates = defaultTracks;
+
+    const byBestDesc = (a, b) => bitrateOf(b) - bitrateOf(a) || codecRank(b) - codecRank(a);
+    const byLightest = (a, b) => bitrateOf(a) - bitrateOf(b) || codecRank(b) - codecRank(a);
+
+    if (quality === "balanced") {
+      return candidates;
+    }
+
+    if (quality === "saver") {
+      const light = candidates.filter((f) => {
+        const br = bitrateOf(f);
+        return br >= 44000 && br <= 135000;
+      });
+      if (light.length > 0) return light.slice().sort(byLightest);
+      const underCap = candidates.filter((f) => bitrateOf(f) > 0 && bitrateOf(f) <= 135000);
+      return (underCap.length > 0 ? underCap : candidates).slice().sort(byLightest);
+    }
+
+    if (quality === "lossless") {
+      const highTier = candidates.filter(
+        (f) => f?.audioQuality === "AUDIO_QUALITY_HIGH" || bitrateOf(f) >= 192000,
+      );
+      if (highTier.length > 0) {
+        return highTier.slice().sort(byBestDesc);
+      }
+      const clean = candidates.filter(
+        (f) => bitrateOf(f) >= 96000 && f?.audioQuality !== "AUDIO_QUALITY_LOW",
+      );
+      return (clean.length > 0 ? clean : bestPerFamily(candidates)).slice().sort(byBestDesc);
+    }
+
+    // "high": block low-bitrate ABR downgrades whenever standard/high streams exist.
+    const clean = candidates.filter(
+      (f) => bitrateOf(f) >= 96000 && f?.audioQuality !== "AUDIO_QUALITY_LOW",
+    );
+    return (clean.length > 0 ? clean : bestPerFamily(candidates)).slice().sort(byBestDesc);
+  };
+
+  const inspectAndOptimizePlayerResponse = (result, mutateFormats) => {
+    if (!result || typeof result !== "object") return result;
+    const playerResp =
+      result.playerResponse && typeof result.playerResponse === "object" ? result.playerResponse : result;
+    if (!("videoDetails" in playerResp) && !("streamingData" in playerResp)) return result;
+
+    const videoId =
+      typeof playerResp?.videoDetails?.videoId === "string" ? playerResp.videoDetails.videoId : null;
+    const audioCfg = playerResp?.playerConfig?.audioConfig;
+    const rawLoudness =
+      typeof audioCfg?.loudnessDb === "number" && Number.isFinite(audioCfg.loudnessDb)
+        ? audioCfg.loudnessDb
+        : typeof audioCfg?.perceptualLoudnessDb === "number" && Number.isFinite(audioCfg.perceptualLoudnessDb)
+          ? audioCfg.perceptualLoudnessDb
+          : null;
+
+    const streaming = playerResp.streamingData;
+    let primaryAudio = null;
+    let hasAdaptiveAudio = false;
+
+    if (streaming && Array.isArray(streaming.adaptiveFormats)) {
+      const videoFormats = [];
+      const audioFormats = [];
+      for (const fmt of streaming.adaptiveFormats) {
+        if (typeof fmt?.mimeType === "string" && fmt.mimeType.startsWith("audio/")) {
+          audioFormats.push(fmt);
+        } else {
+          videoFormats.push(fmt);
+        }
+      }
+      if (audioFormats.length > 0) {
+        hasAdaptiveAudio = true;
+        const selected = selectAudioFormats(audioFormats, audioConfig.quality);
+        primaryAudio =
+          audioConfig.quality === "saver"
+            ? selected[selected.length - 1] ?? selected[0]
+            : selected[0];
+        if (mutateFormats) {
+          try {
+            streaming.adaptiveFormats = [...videoFormats, ...selected];
+          } catch {
+            // Frozen or read-only player response objects remain intact.
+          }
+        }
+      }
+    }
+
+    if (videoId) {
+      rememberTrackAudioMeta(videoId, {
+        videoId,
+        loudnessDb: rawLoudness,
+        hasAdaptiveAudio,
+        codec: primaryAudio ? parseCodecLabel(primaryAudio.mimeType) : null,
+        bitrateKbps: primaryAudio ? Math.round(bitrateOf(primaryAudio) / 1000) || null : null,
+        sampleRate:
+          primaryAudio && Number(primaryAudio.audioSampleRate) > 0
+            ? Number(primaryAudio.audioSampleRate)
+            : null,
+        channels:
+          primaryAudio && Number(primaryAudio.audioChannels) > 0
+            ? Number(primaryAudio.audioChannels)
+            : 2,
+        qualityTier: typeof primaryAudio?.audioQuality === "string" ? primaryAudio.audioQuality : null,
+      });
+    }
+
+    return result;
+  };
+
+  // Wrap JSON.parse and Response.prototype.json so streamingData.adaptiveFormats
+  // can be tuned before YouTube Music's player selects a stream.
+  const nativeJsonParse = JSON.parse;
+  JSON.parse = function (...args) {
+    return inspectAndOptimizePlayerResponse(Reflect.apply(nativeJsonParse, this, args), true);
+  };
+
+  if (typeof Response !== "undefined" && Response.prototype.json) {
+    const nativeResponseJson = Response.prototype.json;
+    Response.prototype.json = function (...args) {
+      return Reflect.apply(nativeResponseJson, this, args).then((data) =>
+        inspectAndOptimizePlayerResponse(data, true),
+      );
+    };
+  }
 
   // The player knows what is loaded; the address bar does not. Swapping a track
   // in place leaves the URL on the track before it, so ask the player first and
@@ -73,10 +300,202 @@
     return id || lastLoadedVideoId;
   };
 
+  const getTrackAudioMeta = (videoId) => {
+    if (!videoId) return null;
+    let meta = trackAudioMeta.get(videoId) || null;
+    if (!meta) {
+      const p = player();
+      if (p && typeof p.getPlayerResponse === "function") {
+        try {
+          inspectAndOptimizePlayerResponse(p.getPlayerResponse(), false);
+          meta = trackAudioMeta.get(videoId) || null;
+        } catch {}
+      }
+    }
+    return meta;
+  };
+
+  // Nobody ever sees this page, but a music video still arrives as video and is
+  // decoded frame by frame for a window that is never drawn. When separate
+  // adaptive audio is present, hold video at its smallest picture so frames stop
+  // costing GPU; for muxed-only video streams in high/lossless mode, keep a
+  // higher tier so audio is never downgraded alongside 144p video.
+  const applyPlayerQuality = () => {
+    const p = player();
+    if (!p || typeof p.setPlaybackQualityRange !== "function") return;
+    const meta = getTrackAudioMeta(currentVideoId());
+    const muxedOnly = meta && meta.hasAdaptiveAudio === false;
+    if (muxedOnly && (audioConfig.quality === "high" || audioConfig.quality === "lossless")) {
+      p.setPlaybackQualityRange("medium", "hd720");
+    } else {
+      p.setPlaybackQualityRange("tiny", "tiny");
+    }
+  };
+
+  // ── Web Audio Mastering & Clarity Chain ────────────────────
+  const needsDsp = () =>
+    audioConfig.quality === "lossless" ||
+    audioConfig.profile !== "off" ||
+    audioConfig.normalizeVolume === true;
+
+  const isSafeAudioSource = (element) => {
+    if (!element) return false;
+    const src = element.currentSrc || element.getAttribute("src") || "";
+    if (!src) return false;
+    return src.startsWith("blob:") || src.startsWith(location.origin) || Boolean(element.crossOrigin);
+  };
+
+  const setParam = (param, value, now, tc = 0.05) => {
+    if (!param) return;
+    if (typeof param.setTargetAtTime === "function") {
+      param.setTargetAtTime(value, now, tc);
+    } else {
+      param.value = value;
+    }
+  };
+
+  const ensureAudioGraph = (element) => {
+    if (audioGraph || audioGraphFailed || !element) return audioGraph;
+    if (!needsDsp() || !isSafeAudioSource(element)) return null;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (typeof AudioCtx !== "function") return null;
+
+    try {
+      const ctx = new AudioCtx({ latencyHint: "playback" });
+      if (typeof ctx.createMediaElementSource !== "function") {
+        audioGraphFailed = true;
+        return null;
+      }
+      const source = ctx.createMediaElementSource(element);
+      const highpass = ctx.createBiquadFilter();
+      highpass.type = "peaking";
+      highpass.frequency.value = 26;
+      highpass.Q.value = 0.707;
+      highpass.gain.value = 0;
+
+      const eqSpecs = [
+        ["lowshelf", 85, 0.707],
+        ["peaking", 280, 1.1],
+        ["peaking", 1000, 0.9],
+        ["peaking", 3600, 1.1],
+        ["highshelf", 11500, 0.707],
+      ];
+      const eq = eqSpecs.map(([type, freq, q]) => {
+        const filter = ctx.createBiquadFilter();
+        filter.type = type;
+        filter.frequency.value = freq;
+        filter.Q.value = q;
+        filter.gain.value = 0;
+        return filter;
+      });
+
+      const normGain = ctx.createGain();
+      normGain.gain.value = 1;
+
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = 0;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 1;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.15;
+
+      let prev = source;
+      prev.connect(highpass);
+      prev = highpass;
+      for (const band of eq) {
+        prev.connect(band);
+        prev = band;
+      }
+      prev.connect(normGain);
+      normGain.connect(limiter);
+      limiter.connect(ctx.destination);
+
+      audioGraph = { ctx, element, source, highpass, eq, normGain, limiter };
+      return audioGraph;
+    } catch {
+      audioGraphFailed = true;
+      return null;
+    }
+  };
+
+  const syncAudioGraph = () => {
+    if (!video) return;
+    const graph = ensureAudioGraph(video);
+    if (!graph) {
+      lastAppliedGainDb = null;
+      return;
+    }
+
+    if (graph.ctx.state === "suspended" && typeof graph.ctx.resume === "function") {
+      graph.ctx.resume().catch(() => {});
+    }
+
+    const now = typeof graph.ctx.currentTime === "number" ? graph.ctx.currentTime : 0;
+    const lossless = audioConfig.quality === "lossless";
+    const profile = audioConfig.profile;
+    const activeDsp = lossless || profile !== "off" || audioConfig.normalizeVolume;
+
+    if (lossless || profile !== "off") {
+      graph.highpass.type = "highpass";
+      setParam(graph.highpass.frequency, 26, now, 0.04);
+      setParam(graph.highpass.Q, 0.707, now, 0.04);
+    } else {
+      graph.highpass.type = "peaking";
+      setParam(graph.highpass.gain, 0, now, 0.04);
+    }
+
+    const bands =
+      lossless && profile === "off"
+        ? [0, 0, 0, 0, 0.8]
+        : PROFILE_EQ_DB[profile] || PROFILE_EQ_DB.off;
+    graph.eq.forEach((band, i) => setParam(band.gain, bands[i], now, 0.05));
+
+    const meta = getTrackAudioMeta(currentVideoId());
+    let normDb = 0;
+    if (audioConfig.normalizeVolume && meta && typeof meta.loudnessDb === "number") {
+      normDb = Math.max(-12, Math.min(7, -meta.loudnessDb));
+    }
+    const maxBoost = Math.max(0, ...bands);
+    const headroomDb = activeDsp ? -maxBoost * 0.55 : 0;
+    const totalGainDb = normDb + headroomDb;
+    lastAppliedGainDb = activeDsp ? Math.round(totalGainDb * 10) / 10 : null;
+    setParam(graph.normGain.gain, Math.pow(10, totalGainDb / 20), now, 0.06);
+
+    if (activeDsp) {
+      setParam(graph.limiter.threshold, lossless || audioConfig.normalizeVolume ? -1.5 : -1.0, now, 0.04);
+      setParam(graph.limiter.knee, 6, now, 0.04);
+      setParam(graph.limiter.ratio, 10, now, 0.04);
+      setParam(graph.limiter.attack, 0.003, now, 0.04);
+      setParam(graph.limiter.release, 0.15, now, 0.04);
+    } else {
+      setParam(graph.limiter.threshold, 0, now, 0.04);
+      setParam(graph.limiter.knee, 0, now, 0.04);
+      setParam(graph.limiter.ratio, 1, now, 0.04);
+    }
+  };
+
+  const buildAudioInfo = (videoId) => {
+    const meta = getTrackAudioMeta(videoId);
+    const dspActive = Boolean(audioGraph && needsDsp());
+    if (!meta && !dspActive) return null;
+    return {
+      codec: meta ? meta.codec : null,
+      bitrateKbps: meta ? meta.bitrateKbps : null,
+      sampleRate: meta ? meta.sampleRate : null,
+      channels: meta ? meta.channels : null,
+      qualityTier: meta ? meta.qualityTier : null,
+      loudnessDb: meta ? meta.loudnessDb : null,
+      dspActive,
+      dspSampleRate: audioGraph && audioGraph.ctx.sampleRate ? Math.round(audioGraph.ctx.sampleRate) : null,
+      normalizedGainDb: lastAppliedGainDb,
+    };
+  };
+
   const send = (reason) => {
     const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
     if (!invoke) return;
 
+    const videoId = currentVideoId();
     const metadata = navigator.mediaSession ? navigator.mediaSession.metadata : null;
     const artwork = metadata && metadata.artwork && metadata.artwork.length
       ? metadata.artwork[metadata.artwork.length - 1].src
@@ -86,7 +505,7 @@
     invoke("ytm_report", {
       state: {
         reason,
-        videoId: currentVideoId(),
+        videoId,
         title: metadata ? metadata.title || null : null,
         artist: metadata ? metadata.artist || null : null,
         album: metadata ? metadata.album || null : null,
@@ -98,6 +517,7 @@
         muted: video ? video.muted : false,
         ad: isAdPlaying(),
         signedIn: !!(window.ytcfg && window.ytcfg.get && window.ytcfg.get("LOGGED_IN")),
+        audioInfo: buildAudioInfo(videoId),
       },
     }).catch(() => {});
   };
@@ -129,11 +549,17 @@
   const attach = (element) => {
     if (video === element) return;
     video = element;
+    audioGraph = null;
+    audioGraphFailed = false;
     for (const type of ["play", "pause", "ended", "volumechange", "seeked"]) {
-      element.addEventListener(type, () => send(type));
+      element.addEventListener(type, () => {
+        if (type === "play") syncAudioGraph();
+        send(type);
+      });
     }
     element.addEventListener("loadedmetadata", () => {
-      holdVideoAtMinimum();
+      applyPlayerQuality();
+      syncAudioGraph();
       send("track");
       setTimeout(() => send("track"), METADATA_SETTLE_MS);
     });
@@ -144,12 +570,13 @@
         send("time");
       }
     });
-    holdVideoAtMinimum();
+    applyPlayerQuality();
+    syncAudioGraph();
     send("ready");
   };
 
   // The app keeps looking for the <video> element to handle creation or replacement.
-  const lookup = setInterval(() => {
+  setInterval(() => {
     const element = document.querySelector("video");
     if (element && element !== video) {
       attach(element);
@@ -279,6 +706,7 @@
       const p = player();
       switch (action) {
         case "play":
+          syncAudioGraph();
           if (video) video.play().catch(() => send("blocked"));
           break;
         case "pause":
@@ -286,8 +714,10 @@
           break;
         case "toggle":
           if (video) {
-            if (video.paused) video.play().catch(() => send("blocked"));
-            else video.pause();
+            if (video.paused) {
+              syncAudioGraph();
+              video.play().catch(() => send("blocked"));
+            } else video.pause();
           }
           break;
         case "load":
@@ -319,6 +749,13 @@
             if (p && typeof p.setVolume === "function") p.setVolume(Math.round(value * 100));
             if (video) video.volume = value;
           }
+          break;
+        case "audioConfig":
+          audioConfig = normalizeAudioConfig(value);
+          saveAudioConfig(audioConfig);
+          applyPlayerQuality();
+          syncAudioGraph();
+          send("audio");
           break;
       }
     },
