@@ -10,9 +10,9 @@
   [![Tauri 2](https://img.shields.io/badge/Tauri-2-FFC131.svg)](https://v2.tauri.app/)
 
   <br /><br />
-  <img src="docs/images/splash-launch.gif" alt="Sonora launch splash revealing floating Now Playing window with The Strokes - Ode To The Mets" width="760" />
+  <img src="docs/images/splash-launch.gif" alt="Sonora launch splash revealing floating Now Playing window with Joji - LOVE YOU LESS" width="760" />
   <br />
-  <sub>Liquid splash intro revealing Sonora's floating window, adaptive artwork backdrop, and synced lyrics (<em>The Strokes — Ode To The Mets</em>).</sub>
+  <sub>Liquid splash intro revealing Sonora's floating window, adaptive artwork backdrop, and synced lyrics (<em>Joji — LOVE YOU LESS</em>).</sub>
 </div>
 
 Sonora combines a vanilla TypeScript interface and WebGL ambience with a Tauri 2 / Rust desktop shell. Playback and catalog requests run through the official YouTube Music web app inside an isolated WebView2 profile. Sonora is a community project and is not affiliated with or endorsed by Google or YouTube Music.
