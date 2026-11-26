@@ -1,0 +1,9 @@
+{
+  "theme": "dark",
+  "accentColor": "#A78BFA",
+  "ambientMode": "minimal",
+  "ambientFpsLimit": 30,
+  "ambientIntensity": 0.4,
+  "density": "comfortable",
+  "lyricsFontSize": "md"
+}

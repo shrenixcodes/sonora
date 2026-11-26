@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "Sonora Design Tokens & Palette Export",
+  "direction": "muted-editorial",
+  "source": "src/styles/tokens.css & src/views/settings.ts",
+  "themes": {
+    "dark": {
+      "name": "Charcoal",
+      "colorScheme": "dark",
+      "colors": {
+        "bg": "#17151C",
+        "surface": "#211E29",
+        "surfaceSecondary": "#292532",
+        "text": "#F4F0F6",
+        "textSecondary": "#A9A3B3",
+        "textTertiary": "#736D7E",
+        "accent": "#A78BFA",
+        "accentHover": "#B9A2FB",
+        "accentSecondary": "#C9A96E",
+        "border": "#393342",
+        "borderSubtle": "#2E2938",
+        "hover": "rgba(167, 139, 250, 0.08)",
+        "active": "rgba(167, 139, 250, 0.14)",
+        "overlay": "rgba(23, 21, 28, 0.75)",
+        "scrollbar": "#393342",
+        "scrollbarHover": "#4A4356",
+        "danger": "#EF4444",
+        "success": "#22C55E",
+        "warning": "#F59E0B",
+        "panel": "rgba(22, 19, 29, 0.62)",
+        "panelBorder": "rgba(255, 255, 255, 0.13)",
+        "ambience1": "#A78BFA",
+        "ambience2": "#3B2F5C",
+        "ambience3": "#C9A96E",
+        "ambienceStrength": "42%",
+        "ambientArtOpacity": 0.6
+      }
+    },
+    "light": {
+      "name": "Bone",
+      "colorScheme": "light",
+      "colors": {
+        "bg": "#F0EBDD",
+        "surface": "#F8F5EC",
+        "surfaceSecondary": "#E7E2D4",
+        "text": "#202820",
+        "textSecondary": "#6C7169",
+        "textTertiary": "#8E9389",
+        "accent": "#315E48",
+        "accentHover": "#3D7459",
+        "accentSecondary": "#D95342",
+        "border": "#D8D1C3",
+        "borderSubtle": "#E0DBD0",
+        "hover": "rgba(49, 94, 72, 0.08)",
+        "active": "rgba(49, 94, 72, 0.14)",
+        "overlay": "rgba(240, 235, 221, 0.75)",
+        "scrollbar": "#D8D1C3",
+        "scrollbarHover": "#C5BEAF",
+        "danger": "#DC2626",
+        "success": "#16A34A",
+        "warning": "#D97706",
+        "panel": "rgba(248, 245, 236, 0.76)",
+        "panelBorder": "rgba(255, 255, 255, 0.45)",
+        "ambience1": "#315E48",
+        "ambience2": "#D8C9A8",
+        "ambience3": "#D95342",
+        "ambienceStrength": "22%",
+        "ambientArtOpacity": 0.4
+      }
+    }
+  },
+  "accents": [
+    { "name": "Dusty Purple", "hex": "#A78BFA", "role": "Calm, default dark accent" },
+    { "name": "Bottle Green", "hex": "#315E48", "role": "Grounded, default light accent" },
+    { "name": "Electric Blue", "hex": "#3B82F6", "role": "Crisp, energetic focus" },
+    { "name": "Muted Gold", "hex": "#C9A96E", "role": "Warm highlights, dark secondary" },
+    { "name": "Coral", "hex": "#D95342", "role": "Warm contrast, light secondary" },
+    { "name": "Rose Pink", "hex": "#F472B6", "role": "Soft emphasis" },
+    { "name": "Emerald", "hex": "#10B981", "role": "Bright green emphasis" },
+    { "name": "Teal", "hex": "#14B8A6", "role": "Cool, balanced emphasis" }
+  ],
+  "typography": {
+    "sans": "\"Inter\", \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif",
+    "mono": "\"Cascadia Mono\", \"Cascadia Code\", Consolas, monospace",
+    "scalePx": {
+      "xs": 11,
+      "sm": 12,
+      "base": 13,
+      "md": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24,
+      "3xl": 30,
+      "4xl": 36
+    },
+    "weights": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    },
+    "lineHeights": {
+      "tight": 1.2,
+      "normal": 1.5,
+      "relaxed": 1.65
+    }
+  },
+  "radiiPx": {
+    "sm": 4,
+    "md": 6,
+    "lg": 8,
+    "xl": 12,
+    "2xl": 16,
+    "floatingStage": 26,
+    "full": 9999
+  },
+  "motion": {
+    "durationsMs": {
+      "fast": 120,
+      "normal": 200,
+      "windowMorph": 210,
+      "slow": 320,
+      "slower": 500,
+      "ambience": 1200
+    },
+    "easings": {
+      "out": "cubic-bezier(0.16, 1, 0.3, 1)",
+      "inOut": "cubic-bezier(0.45, 0, 0.55, 1)",
+      "spring": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      "morph": "cubic-bezier(0.22, 1, 0.36, 1)"
+    }
+  }
+}
