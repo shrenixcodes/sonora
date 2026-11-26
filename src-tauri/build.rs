@@ -7,6 +7,8 @@ use std::{env, fs};
 const APP_COMMANDS: &[&str] = &[
     "get_app_info",
     "get_platform_info",
+    "check_for_updates",
+    "install_update",
     "discord_set_activity",
     "discord_clear_activity",
     "ytm_report",

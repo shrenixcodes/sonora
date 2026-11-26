@@ -19,7 +19,9 @@ import { discordRpc } from "@/lib/discord-rpc";
 import { searchQuery } from "@/lib/search-query";
 import { account } from "@/lib/ytm/account";
 import { catalog } from "@/lib/ytm/catalog";
+import { showAboutPopup } from "@/components/about-popup";
 import { showSignInConfirmation } from "@/components/sign-in-confirm";
+import { describeUpdateSnapshot, updater } from "@/lib/updater";
 
 // Views
 import { renderHome } from "@/views/home";
@@ -72,6 +74,7 @@ function init(): void {
   discordRpc.init();
   initRestoreAnimation();
   initRubberbandUX();
+  initLaunchAutoUpdater();
 
   // Manual animation preview shortcuts: F8 = Splash, F9 = Taskbar restore
   window.addEventListener("keydown", (e) => {
@@ -223,6 +226,54 @@ function setupGlobalShortcuts(): void {
 }
 
 // Initialize when DOM is ready
+function initLaunchAutoUpdater(): void {
+  let toast: HTMLElement | null = null;
+  let dismissed = false;
+
+  const renderToast = () => {
+    const snap = updater.state;
+    const active = snap.status === "available" || snap.status === "downloading" || snap.status === "installing";
+    if (!active || dismissed) {
+      toast?.remove();
+      toast = null;
+      return;
+    }
+
+    const { label } = describeUpdateSnapshot(snap);
+    if (!toast) {
+      const textEl = el("span", { className: "update-toast__text", text: label });
+      const actionBtn = el("button", {
+        className: "update-toast__action",
+        text: "Details",
+        attrs: { type: "button" },
+        onClick: () => { void showAboutPopup(); },
+      });
+      const dismissBtn = el("button", {
+        className: "update-toast__close",
+        text: "×",
+        attrs: { type: "button", "aria-label": "Dismiss update notice" },
+        onClick: () => {
+          dismissed = true;
+          toast?.remove();
+          toast = null;
+        },
+      });
+      toast = el("div", {
+        className: "update-toast",
+        attrs: { role: "status", "aria-live": "polite" },
+        children: [textEl, actionBtn, dismissBtn],
+      });
+      document.body.appendChild(toast);
+    } else {
+      const textEl = toast.querySelector<HTMLElement>(".update-toast__text");
+      if (textEl) textEl.textContent = label;
+    }
+  };
+
+  updater.on("change", renderToast);
+  void updater.autoUpdateOnLaunch();
+}
+
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {

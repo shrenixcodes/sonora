@@ -9,6 +9,7 @@ import { el } from "@/lib/dom";
 import { icon } from "@/icons";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
+import { describeUpdateSnapshot, updater } from "@/lib/updater";
 
 interface AppInfo {
   name: string;
@@ -41,9 +42,12 @@ export async function showAboutPopup(): Promise<void> {
   }
 
   let isClosing = false;
+  let stopUpdater: (() => void) | null = null;
   const closeDialog = () => {
     if (isClosing) return;
     isClosing = true;
+    stopUpdater?.();
+    stopUpdater = null;
     dialog.classList.add("is-closing");
     setTimeout(() => {
       if (typeof dialog.close === "function") {
@@ -61,6 +65,58 @@ export async function showAboutPopup(): Promise<void> {
     html: icon("close"),
     onClick: closeDialog,
   });
+
+  const updateStatusLabel = el("span", { className: "about-popup__update-status" });
+  const updateDetailText = el("span", { className: "about-popup__update-detail" });
+  const updateBox = el("div", {
+    className: "about-popup__update",
+    attrs: { role: "status", "aria-live": "polite" },
+    children: [updateStatusLabel, updateDetailText],
+  });
+
+  const updateBtn = el("button", {
+    className: "btn btn--secondary about-popup__update-btn",
+    attrs: { type: "button" },
+    text: "Check for Updates",
+    onClick: () => {
+      const state = updater.state;
+      if (state.status === "available") {
+        void updater.installUpdate();
+      } else {
+        void updater.checkForUpdates({ force: true });
+      }
+    },
+  }) as HTMLButtonElement;
+
+  const syncUpdateUi = () => {
+    const snap = updater.state;
+    const summary = describeUpdateSnapshot(snap);
+    updateStatusLabel.textContent = summary.label;
+    updateDetailText.textContent = summary.detail;
+    updateBox.dataset.state = snap.status;
+
+    const busy = snap.status === "checking" || snap.status === "downloading" || snap.status === "installing";
+    updateBtn.disabled = busy;
+    if (snap.status === "available") {
+      const actionLabel = snap.info?.installerUrl ? `Update to v${snap.info.latestVersion}` : `Download v${snap.info?.latestVersion ?? ""}`;
+      updateBtn.textContent = actionLabel;
+      updateBtn.className = "btn btn--primary about-popup__update-btn";
+    } else if (snap.status === "checking") {
+      updateBtn.textContent = "Checking…";
+      updateBtn.className = "btn btn--secondary about-popup__update-btn";
+    } else if (snap.status === "downloading" || snap.status === "installing") {
+      updateBtn.textContent = "Updating…";
+      updateBtn.className = "btn btn--primary about-popup__update-btn";
+    } else if (snap.status === "error") {
+      updateBtn.textContent = "Retry Check";
+      updateBtn.className = "btn btn--secondary about-popup__update-btn";
+    } else {
+      updateBtn.textContent = "Check for Updates";
+      updateBtn.className = "btn btn--secondary about-popup__update-btn";
+    }
+  };
+  syncUpdateUi();
+  stopUpdater = updater.on("change", syncUpdateUi);
 
   const replayBtn = el("button", {
     className: "btn btn--secondary about-popup__replay-btn",
@@ -145,11 +201,12 @@ export async function showAboutPopup(): Promise<void> {
               }),
             ],
           }),
+          updateBox,
         ],
       }),
       el("div", {
         className: "about-popup__actions",
-        children: [replayBtn, doneBtn],
+        children: [updateBtn, replayBtn, doneBtn],
       }),
     ],
   }) as HTMLDialogElement;
@@ -180,4 +237,7 @@ export async function showAboutPopup(): Promise<void> {
     dialog.setAttribute("open", "");
   }
   doneBtn.focus();
+  if (updater.state.status === "idle") {
+    void updater.checkForUpdates();
+  }
 }
