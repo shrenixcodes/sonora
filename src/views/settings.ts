@@ -13,6 +13,8 @@ import {
   audioQualityOption,
   formatAudioTelemetry,
 } from "@/lib/audio-quality";
+import { FALLBACK_APP_INFO, FALLBACK_PLATFORM_INFO, formatVersionSummary, getAppRuntimeInfo } from "@/lib/app-info";
+import { showNoticeDialog } from "@/components/modal-dialog";
 import { playerEngine } from "@/lib/playback/engine";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
@@ -23,6 +25,61 @@ import { storage } from "@/lib/storage";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
 import { triggerRestoreAnimation } from "@/lib/visuals/symbiote";
 import type { UserSettings, AmbientVisualMode, AudioEnhancementProfile, AudioQualityMode, PlaybackState } from "@/types/music";
+
+const VALID_AMBIENT_MODES = new Set<AmbientVisualMode>(["aurora", "fluid", "glow", "cinematic", "minimal", "none"]);
+const VALID_FPS_LIMITS = new Set<UserSettings["ambientFpsLimit"]>([15, 30, 60]);
+const VALID_DENSITIES = new Set<UserSettings["density"]>(["comfortable", "compact"]);
+const VALID_LYRICS_SIZES = new Set<NonNullable<UserSettings["lyricsFontSize"]>>(["sm", "md", "lg", "off"]);
+
+export type ThemeSettings = Pick<
+  UserSettings,
+  "theme" | "accentColor" | "ambientMode" | "ambientFpsLimit" | "ambientIntensity" | "density" | "lyricsFontSize"
+>;
+
+export function pickThemeSettings(settings: UserSettings): ThemeSettings {
+  return {
+    theme: settings.theme,
+    accentColor: settings.accentColor,
+    ambientMode: settings.ambientMode,
+    ambientFpsLimit: settings.ambientFpsLimit,
+    ambientIntensity: settings.ambientIntensity,
+    density: settings.density,
+    lyricsFontSize: settings.lyricsFontSize ?? "md",
+  };
+}
+
+export function parseThemeImport(raw: unknown): Partial<ThemeSettings> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Theme configuration must be a JSON object.");
+  }
+  const input = raw as Record<string, unknown>;
+  const patch: Partial<ThemeSettings> = {};
+
+  if (input.theme === "dark" || input.theme === "light") patch.theme = input.theme;
+  if (input.accentColor === null || (typeof input.accentColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(input.accentColor))) {
+    patch.accentColor = input.accentColor;
+  }
+  if (typeof input.ambientMode === "string" && VALID_AMBIENT_MODES.has(input.ambientMode as AmbientVisualMode)) {
+    patch.ambientMode = input.ambientMode as AmbientVisualMode;
+  }
+  if (typeof input.ambientFpsLimit === "number" && VALID_FPS_LIMITS.has(input.ambientFpsLimit as UserSettings["ambientFpsLimit"])) {
+    patch.ambientFpsLimit = input.ambientFpsLimit as UserSettings["ambientFpsLimit"];
+  }
+  if (typeof input.ambientIntensity === "number" && Number.isFinite(input.ambientIntensity)) {
+    patch.ambientIntensity = Math.max(0.1, Math.min(1, input.ambientIntensity));
+  }
+  if (typeof input.density === "string" && VALID_DENSITIES.has(input.density as UserSettings["density"])) {
+    patch.density = input.density as UserSettings["density"];
+  }
+  if (typeof input.lyricsFontSize === "string" && VALID_LYRICS_SIZES.has(input.lyricsFontSize as NonNullable<UserSettings["lyricsFontSize"]>)) {
+    patch.lyricsFontSize = input.lyricsFontSize as UserSettings["lyricsFontSize"];
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new Error("No valid Sonora theme settings were found in this file.");
+  }
+  return patch;
+}
 
 const ACCENT_COLORS = [
   { name: "Dusty Purple", hex: "#A78BFA" },
@@ -145,6 +202,7 @@ export function renderSettings(container: HTMLElement): void {
       // ── YouTube Music Service ────────────────────────────
       // ── Keyboard Shortcuts ───────────────────────────────
       createSettingsSection("Keyboard Shortcuts", [
+        createShortcutRow("Ctrl + K", "Focus search"),
         createShortcutRow("Space", "Play / Pause playback"),
         createShortcutRow("← / →", "Seek 5 seconds backward / forward"),
         createShortcutRow("↑ / ↓", "Adjust volume up / down"),
@@ -155,11 +213,7 @@ export function renderSettings(container: HTMLElement): void {
 
       // ── About ────────────────────────────────────────────
       createSettingsSection("About Sonora", [
-        createSettingRow(
-          "Sonora Desktop",
-          "Version 0.1.0 (Windows x64 Native)",
-          el("span", { className: "settings__tag", text: "Production Ready" }),
-        ),
+        createVersionRow(),
         createSettingRow(
           "Architecture",
           "Tauri 2 • Rust Backend • WebGL Ambient Shaders • Vite",
@@ -636,6 +690,21 @@ function createToggle(
   return toggle;
 }
 
+function createVersionRow(): HTMLElement {
+  const row = createSettingRow(
+    "Sonora Desktop",
+    formatVersionSummary(FALLBACK_APP_INFO, FALLBACK_PLATFORM_INFO),
+    el("span", { className: "settings__tag", text: "Production Ready" }),
+  );
+  const description = row.querySelector<HTMLElement>(".settings__row-description");
+  void getAppRuntimeInfo().then(({ app, platform }) => {
+    if (description) {
+      description.textContent = formatVersionSummary(app, platform);
+    }
+  });
+  return row;
+}
+
 function createThemeImportExport(): HTMLElement {
   const container = el("div", {
     className: "settings__actions-group",
@@ -644,8 +713,8 @@ function createThemeImportExport(): HTMLElement {
         className: "settings__btn",
         text: "Export Theme JSON",
         onClick: () => {
-          const settings = storage.getSettings();
-          const blob = new Blob([JSON.stringify(settings, null, 2)], {
+          const themeConfig = pickThemeSettings(storage.getSettings());
+          const blob = new Blob([JSON.stringify(themeConfig, null, 2)], {
             type: "application/json",
           });
           const url = URL.createObjectURL(blob);
@@ -667,15 +736,19 @@ function createThemeImportExport(): HTMLElement {
             if (input.files && input.files[0]) {
               try {
                 const text = await input.files[0].text();
-                const json = JSON.parse(text);
-                storage.saveSettings(json);
-                if (json.theme === "dark" || json.theme === "light") {
-                  themeManager.set(json.theme);
+                const themePatch = parseThemeImport(JSON.parse(text));
+                const updated = storage.saveSettings(themePatch);
+                if (themePatch.theme) {
+                  themeManager.set(themePatch.theme);
                 }
-                applyAccent(storage.getSettings().accentColor, themeManager.theme);
+                document.body.classList.toggle("density-compact", updated.density === "compact");
+                applyAccent(updated.accentColor, themeManager.theme);
                 router.refresh();
-              } catch {
-                alert("Failed to parse theme JSON file.");
+              } catch (err) {
+                showNoticeDialog({
+                  title: "Could not import theme",
+                  message: err instanceof Error ? err.message : "Failed to parse theme JSON file.",
+                });
               }
             }
           };

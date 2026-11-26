@@ -53,17 +53,17 @@ describe("song context menu", () => {
     expect(play).toHaveBeenCalledWith(song);
   });
 
-  it("opens category searches and disables an unavailable album", () => {
+  it("opens artist and album pages directly and disables an unavailable album", () => {
     const navigate = vi.spyOn(router, "navigate").mockImplementation(() => {});
     const card = document.createElement("button");
-    attachSongContextMenu(card, song);
+    const richSong: Track = { ...song, artistId: "UC_ART1", albumId: "MPRE_ALB1" };
+    attachSongContextMenu(card, richSong);
     button(open(card), "Go to Artist").click();
-    expect(searchQuery.value).toBe("Artist");
-    expect(searchQuery.takeTargetFilter()).toBe("artists");
-    expect(navigate).toHaveBeenCalledWith("/search");
+    expect(navigate).toHaveBeenCalledWith("/artist?id=UC_ART1&name=Artist");
     button(open(card), "Go to Album").click();
-    expect(searchQuery.value).toBe("Album Artist");
-    expect(searchQuery.takeTargetFilter()).toBe("albums");
+    expect(navigate).toHaveBeenCalledWith(
+      "/playlist?source=ytm&id=MPRE_ALB1&kind=album&title=Album&subtitle=Artist",
+    );
     const missing = document.createElement("div");
     attachSongContextMenu(missing, { ...song, album: undefined });
     expect(button(open(missing), "Go to Album").disabled).toBe(true);

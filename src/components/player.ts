@@ -101,17 +101,28 @@ class PlayerBar {
     });
 
     // ── Track Info ────────────────────────────────────────
+    const openNowPlaying = () => router.navigate("/now-playing");
+    const onActivateKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation();
+        openNowPlaying();
+      }
+    };
+
     const artwork = el("div", {
       className: "player__artwork",
-      attrs: { role: "button", title: "Open Now Playing" },
-      onClick: () => router.navigate("/now-playing"),
+      attrs: { role: "button", tabindex: "0", title: "Open Now Playing" },
+      onClick: openNowPlaying,
+      onKeyDown: onActivateKey,
     });
 
     const title = el("span", {
       className: "player__title truncate",
       text: "Nothing playing",
-      attrs: { role: "button", title: "Open Now Playing" },
-      onClick: () => router.navigate("/now-playing"),
+      attrs: { role: "button", tabindex: "0", title: "Open Now Playing" },
+      onClick: openNowPlaying,
+      onKeyDown: onActivateKey,
     });
 
     const artist = el("button", {

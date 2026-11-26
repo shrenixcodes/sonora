@@ -3,8 +3,7 @@ import { showPlaylistPicker } from "@/components/playlist-picker";
 import { launchSongRadio } from "@/components/song-radio";
 import { icon } from "@/icons";
 import { playerEngine } from "@/lib/playback/engine";
-import { router } from "@/lib/router";
-import { searchQuery } from "@/lib/search-query";
+import { openAlbum, openArtist } from "@/lib/navigation";
 import type { Track } from "@/types/music";
 
 let closeMenu: (() => void) | null = null;
@@ -59,14 +58,21 @@ export function attachSongContextMenu(element: HTMLElement, track: Track): void 
     action("Add to Queue", "queue", () => queue(false));
     action("Add to Playlist", "playlist", () => showPlaylistPicker(track));
     action("Start Song Radio", "radio", () => { void launchSongRadio(track); });
+    const artistName = track.artist?.trim();
     action("Go to Artist", "artist", () => {
-      searchQuery.searchFor(track.artist.trim(), "artists");
-      router.navigate("/search");
-    }, !track.artist?.trim(), "Find the artist in search");
+      if (artistName) openArtist({ id: track.artistId, name: artistName });
+    }, !artistName, artistName ? `Open artist: ${artistName}` : "Artist information is unavailable");
+    const albumTitle = track.album?.trim();
     action("Go to Album", "album", () => {
-      searchQuery.searchFor(`${track.album} ${track.artist}`.trim(), "albums");
-      router.navigate("/search");
-    }, !track.album?.trim(), track.album ? "Find the album in search" : "Album information is unavailable");
+      if (albumTitle) {
+        openAlbum({
+          id: track.albumId,
+          title: albumTitle,
+          artist: track.artist,
+          artworkUrl: track.artworkUrl,
+        });
+      }
+    }, !albumTitle, albumTitle ? `Open album: ${albumTitle}` : "Album information is unavailable");
     const copyButton = action("Copy Link", "link", async () => {
       try {
         await copyLink(`https://music.youtube.com/watch?v=${encodeURIComponent(track.id)}`);
