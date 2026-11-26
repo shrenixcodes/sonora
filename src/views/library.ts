@@ -7,6 +7,7 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { showPromptDialog } from "@/components/modal-dialog";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
 import { createTrackAlbumControl, createTrackArtistControl } from "@/components/track-links";
@@ -307,20 +308,25 @@ function renderPlaylists(container: HTMLElement): void {
       el("span", { text: "New Playlist" }),
     ],
     onClick: () => {
-      const name = prompt("Enter playlist title:");
-      if (name && name.trim()) {
-        const newPl: Playlist = {
-          id: `pl_${Date.now()}`,
-          title: name.trim(),
-          description: "Custom user playlist",
-          trackCount: 0,
-          tracks: [],
-          isCustom: true,
-          artworkUrl:
-            "/artwork-placeholder.svg",
-        };
-        storage.savePlaylist(newPl);
-      }
+      showPromptDialog({
+        title: "New Playlist",
+        subtitle: "Give your Sonora playlist a name.",
+        placeholder: "Late Night Drives",
+        confirmLabel: "Create",
+        emptyError: "Please enter a playlist title.",
+        onConfirm: (title) => {
+          const newPl: Playlist = {
+            id: `pl_${Date.now()}`,
+            title,
+            description: "Custom user playlist",
+            trackCount: 0,
+            tracks: [],
+            isCustom: true,
+            artworkUrl: "/artwork-placeholder.svg",
+          };
+          storage.savePlaylist(newPl);
+        },
+      });
     },
   });
 
