@@ -10,10 +10,11 @@
 import type { LyricsData, PlaybackState, RepeatMode, Track } from "@/types/music";
 import { EventEmitter } from "@/lib/events";
 import { storage } from "@/lib/storage";
+import { audioConfigFromSettings } from "@/lib/audio-quality";
 import { extractPalette, type ArtworkPalette } from "@/lib/visuals/color-extractor";
 import { lyricsService } from "@/lib/lyrics/providers";
 import { PlayQueue } from "@/lib/playback/queue";
-import { ytmBridge, type YtmCommand, type YtmState } from "@/lib/playback/ytm-bridge";
+import { ytmBridge, type YtmAudioConfig, type YtmCommand, type YtmState } from "@/lib/playback/ytm-bridge";
 
 export interface PlaybackEvents {
   stateChange: PlaybackState;
@@ -67,6 +68,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   /** When the last skip was handled, and the load a run of them is still waiting to send. */
   private lastSkipAt = 0;
   private skipTimer: number | null = null;
+  private lastSentAudioConfigKey: string | null = null;
 
   constructor(private readonly bridge: PlaybackBridge = ytmBridge) {
     super();
@@ -74,6 +76,13 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     if (bridge.available) {
       bridge.onState((s) => this.handleBridgeState(s)).catch((err) => this.fail(err));
     }
+    storage.on("settingsChange", (settings) => {
+      const next = audioConfigFromSettings(settings);
+      const key = JSON.stringify(next);
+      if (key !== this.lastSentAudioConfigKey) {
+        this.syncAudioConfig(next);
+      }
+    });
   }
 
   get currentState(): PlaybackState {
@@ -245,6 +254,17 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   /** Applies a report from the YouTube Music page. Public for tests. */
   handleBridgeState(report: YtmState): void {
+    // Sync audio preferences on page startup/reload or first bridge contact.
+    if (report.reason === "ready" || this.lastSentAudioConfigKey === null) {
+      this.syncAudioConfig();
+    }
+    if (report.audioInfo !== undefined) {
+      this.state.audioInfo = report.audioInfo;
+    }
+    if (report.reason === "audio") {
+      this.emit("stateChange", this.currentState);
+      return;
+    }
     // Sign-in status only; it says nothing about playback.
     if (report.reason === "account") return;
     // Media keys and the system media controls skip through Sonora's queue.
@@ -391,6 +411,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.setCurrent(track, false);
     this.state.status = "loading";
     this.state.duration = track.duration || 0;
+    this.state.audioInfo = null;
     this.setTime(0);
     this.emit("stateChange", this.currentState);
 
@@ -454,6 +475,14 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       if (!stillCurrent()) return;
       this.lyrics = lyrics;
       this.emit("lyricsChange", lyrics);
+    });
+  }
+
+  private syncAudioConfig(config: YtmAudioConfig = audioConfigFromSettings(storage.getSettings())): void {
+    this.lastSentAudioConfigKey = JSON.stringify(config);
+    if (!this.bridge.available) return;
+    this.bridge.control({ action: "audioConfig", value: config }).catch((err) => {
+      console.warn("[PlaybackEngine] Could not sync audio configuration:", err);
     });
   }
 

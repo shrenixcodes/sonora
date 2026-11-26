@@ -4,6 +4,7 @@
 
 import type { Track, Playlist, UserSettings } from "@/types/music";
 import { EventEmitter } from "@/lib/events";
+import { sanitizeAudioEnhancement, sanitizeAudioQuality } from "@/lib/audio-quality";
 
 export interface StorageEvents {
   likeChange: { trackId: string; isLiked: boolean; track: Track };
@@ -29,6 +30,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   density: "comfortable",
   lyricsFontSize: "md",
   volume: 0.8,
+  audioQuality: "high",
+  audioEnhancement: "off",
   normalizeVolume: true,
   autoPlayNext: true,
   enableDiscordRpc: true,
@@ -48,7 +51,11 @@ class StorageService extends EventEmitter<StorageEvents> {
           localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...DEFAULT_SETTINGS, ...parsed, enableDiscordRpc: true }));
         } catch {}
       }
-      return { ...DEFAULT_SETTINGS, ...parsed };
+      const merged = { ...DEFAULT_SETTINGS, ...parsed };
+      merged.audioQuality = sanitizeAudioQuality(merged.audioQuality, DEFAULT_SETTINGS.audioQuality);
+      merged.audioEnhancement = sanitizeAudioEnhancement(merged.audioEnhancement, DEFAULT_SETTINGS.audioEnhancement);
+      merged.normalizeVolume = Boolean(merged.normalizeVolume);
+      return merged;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
@@ -57,6 +64,9 @@ class StorageService extends EventEmitter<StorageEvents> {
   saveSettings(settings: Partial<UserSettings>): UserSettings {
     const current = this.getSettings();
     const updated = { ...current, ...settings };
+    updated.audioQuality = sanitizeAudioQuality(updated.audioQuality, current.audioQuality);
+    updated.audioEnhancement = sanitizeAudioEnhancement(updated.audioEnhancement, current.audioEnhancement);
+    updated.normalizeVolume = Boolean(updated.normalizeVolume);
     try {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
     } catch (err) {

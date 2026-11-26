@@ -9,6 +9,15 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+import type { AudioEnhancementProfile, AudioQualityMode, AudioStreamInfo } from "@/types/music";
+
+/** Audio preferences forwarded from Sonora's Settings to the YouTube Music bridge. */
+export interface YtmAudioConfig {
+  quality: AudioQualityMode;
+  profile: AudioEnhancementProfile;
+  normalizeVolume: boolean;
+}
+
 /** Mirrors `YtmState` in ytm.rs. */
 export interface YtmState {
   reason: string;
@@ -26,6 +35,8 @@ export interface YtmState {
   ad: boolean;
   /** YouTube Music's own signed-in flag. */
   signedIn: boolean;
+  /** Negotiated audio stream and Web Audio DSP status. */
+  audioInfo?: AudioStreamInfo | null;
 }
 
 /** Mirrors `YtmCommand` in ytm.rs. */
@@ -33,7 +44,8 @@ export type YtmCommand =
   | { action: "play" | "pause" | "toggle" | "next" | "previous" }
   | { action: "seek"; value: number }
   | { action: "volume"; value: number }
-  | { action: "load"; value: string };
+  | { action: "load"; value: string }
+  | { action: "audioConfig"; value: YtmAudioConfig };
 
 export const ytmBridge = {
   get available(): boolean {

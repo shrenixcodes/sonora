@@ -47,13 +47,25 @@ const reports = () =>
   );
 
 describe("YouTube Music bridge script", () => {
+  const originalJsonParse = JSON.parse;
+  const originalResponseJson = typeof Response !== "undefined" ? Response.prototype.json : undefined;
+
   beforeEach(() => {
+    localStorage.clear();
+    JSON.parse = originalJsonParse;
+    if (typeof Response !== "undefined" && originalResponseJson) {
+      Response.prototype.json = originalResponseJson;
+    }
     vi.useFakeTimers();
     win.__TAURI_INTERNALS__ = { invoke: vi.fn(() => Promise.resolve()) };
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    JSON.parse = originalJsonParse;
+    if (typeof Response !== "undefined" && originalResponseJson) {
+      Response.prototype.json = originalResponseJson;
+    }
     delete win.__TAURI_INTERNALS__;
     delete win.__sonoraBridge;
   });
@@ -187,5 +199,301 @@ describe("YouTube Music bridge script", () => {
     new Function(source)();
 
     expect(win.__sonoraBridge).toBeUndefined();
+  });
+
+  describe("audio quality and Web Audio DSP", () => {
+    it("prefers highest quality original audio formats in lossless mode and saves bandwidth in saver mode", () => {
+      setupPage({ ad: false });
+      const bridge = loadBridge();
+
+      const samplePayload = () =>
+        JSON.stringify({
+          videoDetails: { videoId: "dQw4w9WgXcQ", title: "Track" },
+          playerConfig: { audioConfig: { loudnessDb: -4.5 } },
+          streamingData: {
+            adaptiveFormats: [
+              { itag: 137, mimeType: 'video/mp4; codecs="avc1.640028"', bitrate: 2000000 },
+              {
+                itag: 249,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 52000,
+                audioQuality: "AUDIO_QUALITY_LOW",
+                audioSampleRate: "48000",
+              },
+              {
+                itag: 140,
+                mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+                bitrate: 129000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "44100",
+              },
+              {
+                itag: 251,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 160000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "48000",
+              },
+              {
+                itag: 774,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 256000,
+                audioQuality: "AUDIO_QUALITY_HIGH",
+                audioSampleRate: "48000",
+              },
+              {
+                itag: 999,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 256000,
+                audioQuality: "AUDIO_QUALITY_HIGH",
+                audioTrack: { isAutoDubbed: true, audioIsDefault: false },
+              },
+            ],
+          },
+        });
+
+      bridge.exec("audioConfig", { quality: "lossless", profile: "clarity", normalizeVolume: true } as unknown as number);
+      const losslessParsed = JSON.parse(samplePayload()) as {
+        streamingData: { adaptiveFormats: Array<{ itag: number }> };
+      };
+      expect(losslessParsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([137, 774]);
+
+      bridge.exec("audioConfig", { quality: "high", profile: "off", normalizeVolume: true } as unknown as number);
+      const highParsed = JSON.parse(samplePayload()) as {
+        streamingData: { adaptiveFormats: Array<{ itag: number }> };
+      };
+      expect(highParsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([137, 774, 251, 140]);
+
+      bridge.exec("audioConfig", { quality: "saver", profile: "off", normalizeVolume: false } as unknown as number);
+      const saverParsed = JSON.parse(samplePayload()) as {
+        streamingData: { adaptiveFormats: Array<{ itag: number }> };
+      };
+      expect(saverParsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([137, 249, 140]);
+    });
+
+    it("avoids forcing tiny quality when only muxed formats exist in high or lossless mode", () => {
+      const { video, player } = setupPage({ ad: false });
+      const playerWithRange = player as HTMLElement & {
+        setPlaybackQualityRange: ReturnType<typeof vi.fn>;
+        getPlayerResponse: () => unknown;
+      };
+      playerWithRange.setPlaybackQualityRange = vi.fn();
+      playerWithRange.getPlayerResponse = () => ({
+        videoDetails: { videoId: "dQw4w9WgXcQ" },
+        streamingData: {
+          adaptiveFormats: [{ itag: 18, mimeType: 'video/mp4; codecs="avc1.42001E, mp4a.40.2"', bitrate: 500000 }],
+        },
+      });
+
+      const bridge = loadBridge();
+      bridge.exec("audioConfig", { quality: "lossless", profile: "off", normalizeVolume: true } as unknown as number);
+      video.dispatchEvent(new Event("loadedmetadata"));
+
+      expect(playerWithRange.setPlaybackQualityRange).toHaveBeenLastCalledWith("medium", "hd720");
+    });
+
+    it("wires Web Audio EQ, loudness normalization, and safety limiter for blob media", () => {
+      const { video } = setupPage({ ad: false });
+      Object.defineProperty(video, "currentSrc", {
+        value: "blob:https://music.youtube.com/stream-1",
+        configurable: true,
+      });
+
+      const createdFilters: Array<{
+        type: string;
+        frequency: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        Q: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        gain: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        connect: ReturnType<typeof vi.fn>;
+      }> = [];
+      const createdGains: Array<{ gain: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> }; connect: ReturnType<typeof vi.fn> }> = [];
+      const createdCompressors: Array<{
+        threshold: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        knee: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        ratio: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        attack: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        release: { value: number; setTargetAtTime: ReturnType<typeof vi.fn> };
+        connect: ReturnType<typeof vi.fn>;
+      }> = [];
+
+      const makeParam = (initial = 0) => ({ value: initial, setTargetAtTime: vi.fn() });
+      class FakeAudioContext {
+        state = "running";
+        currentTime = 1.5;
+        sampleRate = 48000;
+        destination = { kind: "destination" };
+        resume = vi.fn(async () => {});
+        createMediaElementSource = vi.fn(() => ({ connect: vi.fn() }));
+        createBiquadFilter = vi.fn(() => {
+          const f = { type: "peaking", frequency: makeParam(), Q: makeParam(), gain: makeParam(), connect: vi.fn() };
+          createdFilters.push(f);
+          return f;
+        });
+        createGain = vi.fn(() => {
+          const g = { gain: makeParam(1), connect: vi.fn() };
+          createdGains.push(g);
+          return g;
+        });
+        createDynamicsCompressor = vi.fn(() => {
+          const c = {
+            threshold: makeParam(),
+            knee: makeParam(),
+            ratio: makeParam(1),
+            attack: makeParam(),
+            release: makeParam(),
+            connect: vi.fn(),
+          };
+          createdCompressors.push(c);
+          return c;
+        });
+      }
+
+      vi.stubGlobal("AudioContext", FakeAudioContext);
+      try {
+        const bridge = loadBridge();
+        JSON.parse(
+          JSON.stringify({
+            videoDetails: { videoId: "dQw4w9WgXcQ" },
+            playerConfig: { audioConfig: { loudnessDb: -4.0 } },
+            streamingData: {
+              adaptiveFormats: [
+                {
+                  itag: 774,
+                  mimeType: 'audio/webm; codecs="opus"',
+                  bitrate: 256000,
+                  audioSampleRate: "48000",
+                  audioQuality: "AUDIO_QUALITY_HIGH",
+                },
+              ],
+            },
+          }),
+        );
+
+        bridge.exec("audioConfig", { quality: "lossless", profile: "clarity", normalizeVolume: true } as unknown as number);
+
+        expect(createdFilters).toHaveLength(6); // highpass + 5 EQ bands
+        expect(createdFilters[0].type).toBe("highpass");
+        expect(createdFilters[2].gain.setTargetAtTime).toHaveBeenCalledWith(-2.8, 1.5, 0.05); // 280 Hz de-mud
+        expect(createdFilters[5].gain.setTargetAtTime).toHaveBeenCalledWith(2.5, 1.5, 0.05); // 11.5 kHz air
+        expect(createdCompressors[0].ratio.setTargetAtTime).toHaveBeenCalledWith(10, 1.5, 0.04);
+
+        const lastReport = win.__TAURI_INTERNALS__!.invoke.mock.calls.at(-1)![1] as {
+          state: { reason: string; audioInfo?: { codec?: string; bitrateKbps?: number; dspActive?: boolean; dspSampleRate?: number } };
+        };
+        expect(lastReport.state.reason).toBe("audio");
+        expect(lastReport.state.audioInfo).toMatchObject({
+          codec: "Opus",
+          bitrateKbps: 256,
+          dspActive: true,
+          dspSampleRate: 48000,
+        });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("falls back to best available quality without stopping when lossless stream is unavailable", () => {
+      const { video } = setupPage({ ad: false });
+      const bridge = loadBridge();
+
+      bridge.exec("audioConfig", { quality: "lossless", profile: "off", normalizeVolume: true } as unknown as number);
+
+      const parsed = JSON.parse(
+        JSON.stringify({
+          videoDetails: { videoId: "dQw4w9WgXcQ", title: "Standard Track" },
+          streamingData: {
+            adaptiveFormats: [
+              {
+                itag: 249,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 52000,
+                audioQuality: "AUDIO_QUALITY_LOW",
+                audioSampleRate: "48000",
+              },
+              {
+                itag: 140,
+                mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+                bitrate: 129000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "44100",
+              },
+              {
+                itag: 251,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 160000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "48000",
+              },
+            ],
+          },
+        }),
+      ) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+
+      // Keeps best available non-lossless streams (Opus 160k + AAC 129k) instead of failing
+      expect(parsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([251, 140]);
+
+      video.dispatchEvent(new Event("loadedmetadata"));
+      const last = win.__TAURI_INTERNALS__!.invoke.mock.calls.at(-1)![1] as {
+        state: { audioInfo?: { bitrateKbps?: number; effectiveQuality?: string; fallbackUsed?: boolean; fallbackReason?: string } };
+      };
+      expect(last.state.audioInfo).toMatchObject({
+        bitrateKbps: 160,
+        effectiveQuality: "high",
+        fallbackUsed: true,
+      });
+      expect(last.state.audioInfo?.fallbackReason).toContain("best available");
+    });
+
+    it("recovers playback from current time without stopping when a lossless stream stalls or errors", () => {
+      const { video, player } = setupPage({ ad: false });
+      const playerWithLoad = player as HTMLElement & { loadVideoById: ReturnType<typeof vi.fn> };
+      playerWithLoad.loadVideoById = vi.fn();
+
+      const bridge = loadBridge();
+      bridge.exec("audioConfig", { quality: "lossless", profile: "off", normalizeVolume: true } as unknown as number);
+
+      const twoTierPayload = () =>
+        JSON.stringify({
+          videoDetails: { videoId: "dQw4w9WgXcQ", title: "Track" },
+          streamingData: {
+            adaptiveFormats: [
+              {
+                itag: 251,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 160000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "48000",
+              },
+              {
+                itag: 774,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 256000,
+                audioQuality: "AUDIO_QUALITY_HIGH",
+                audioSampleRate: "48000",
+              },
+            ],
+          },
+        });
+
+      const initial = JSON.parse(twoTierPayload()) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+      expect(initial.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([774]);
+
+      // Simulate active playback at 42s, then a stall for >4s
+      Object.defineProperty(video, "paused", { value: false, configurable: true });
+      video.currentTime = 42;
+      video.dispatchEvent(new Event("waiting"));
+      vi.advanceTimersByTime(4100);
+
+      expect(playerWithLoad.loadVideoById).toHaveBeenCalledWith("dQw4w9WgXcQ", 42);
+
+      // Reloaded playerResponse now includes the fallback 160k stream
+      const recovered = JSON.parse(twoTierPayload()) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+      expect(recovered.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([251]);
+
+      const reportStates = win.__TAURI_INTERNALS__!.invoke.mock.calls.map(
+        ([, args]) => (args as { state: { reason: string; audioInfo?: { fallbackUsed?: boolean; effectiveQuality?: string } } }).state,
+      );
+      expect(reportStates.some((s) => s.reason === "audio" && s.audioInfo?.fallbackUsed && s.audioInfo.effectiveQuality === "high")).toBe(true);
+    });
   });
 });

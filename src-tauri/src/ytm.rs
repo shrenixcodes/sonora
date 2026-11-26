@@ -31,6 +31,66 @@ mod adblock;
 const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
      --autoplay-policy=no-user-gesture-required";
 
+/// Audio stream quality preference configured by Sonora.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioQualityMode {
+    Saver,
+    Balanced,
+    High,
+    Lossless,
+}
+
+/// Tonal enhancement preset applied by the Web Audio mastering chain.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioEnhancementProfile {
+    Off,
+    Clarity,
+    Warm,
+    Bass,
+    Vocal,
+}
+
+/// Audio settings forwarded to the YouTube Music webview bridge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct YtmAudioConfig {
+    pub quality: AudioQualityMode,
+    pub profile: AudioEnhancementProfile,
+    pub normalize_volume: bool,
+}
+
+/// Negotiated audio format and DSP telemetry reported by the bridge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct YtmAudioInfo {
+    #[serde(default)]
+    pub codec: Option<String>,
+    #[serde(default)]
+    pub bitrate_kbps: Option<u32>,
+    #[serde(default)]
+    pub sample_rate: Option<u32>,
+    #[serde(default)]
+    pub channels: Option<u8>,
+    #[serde(default)]
+    pub quality_tier: Option<String>,
+    #[serde(default)]
+    pub loudness_db: Option<f64>,
+    #[serde(default)]
+    pub dsp_active: bool,
+    #[serde(default)]
+    pub dsp_sample_rate: Option<u32>,
+    #[serde(default)]
+    pub normalized_gain_db: Option<f64>,
+    #[serde(default)]
+    pub effective_quality: Option<AudioQualityMode>,
+    #[serde(default)]
+    pub fallback_used: bool,
+    #[serde(default)]
+    pub fallback_reason: Option<String>,
+}
+
 /// Playback snapshot reported by the bridge script.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +111,9 @@ pub struct YtmState {
     /// YouTube Music's own signed-in flag for this page.
     #[serde(default)]
     pub signed_in: bool,
+    /// Negotiated audio stream and DSP telemetry.
+    #[serde(default)]
+    pub audio_info: Option<YtmAudioInfo>,
 }
 
 /// Last signed-in flag seen, to notice the moment a sign-in completes.
@@ -74,6 +137,7 @@ pub enum YtmCommand {
     Seek(f64),
     Volume(f64),
     Load(String),
+    AudioConfig(YtmAudioConfig),
 }
 
 pub fn create_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
@@ -162,6 +226,12 @@ fn command_script(command: &YtmCommand) -> Option<String> {
         }
         return Some(format!(
             "window.__sonoraBridge ? window.__sonoraBridge.exec(\"load\", \"{id}\") \n             : location.assign(\"/watch?v={id}\");"
+        ));
+    }
+    if let YtmCommand::AudioConfig(config) = command {
+        let payload = serde_json::to_string(config).ok()?;
+        return Some(format!(
+            "window.__sonoraBridge && window.__sonoraBridge.exec(\"audioConfig\", {payload});"
         ));
     }
     let (action, value) = match command {
@@ -548,6 +618,7 @@ mod tests {
             muted: false,
             ad: false,
             signed_in,
+            audio_info: None,
         };
         assert!(sign_in_completed(false, &state(true)));
         assert!(!sign_in_completed(true, &state(true)));
@@ -564,6 +635,49 @@ mod tests {
         )
         .unwrap();
         assert!(!parsed.signed_in);
+        assert!(parsed.audio_info.is_none());
+    }
+
+    #[test]
+    fn parses_audio_config_commands_and_telemetry() {
+        let cmd: YtmCommand = serde_json::from_str(
+            r#"{"action":"audioConfig","value":{"quality":"lossless","profile":"clarity","normalizeVolume":true}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            cmd,
+            YtmCommand::AudioConfig(YtmAudioConfig {
+                quality: AudioQualityMode::Lossless,
+                profile: AudioEnhancementProfile::Clarity,
+                normalize_volume: true,
+            })
+        );
+        let script = command_script(&cmd).unwrap();
+        assert!(script.contains(r#"exec("audioConfig", "#));
+        assert!(script.contains(r#""quality":"lossless""#));
+        assert!(script.contains(r#""profile":"clarity""#));
+        assert!(script.contains(r#""normalizeVolume":true"#));
+
+        assert!(
+            serde_json::from_str::<YtmCommand>(
+                r#"{"action":"audioConfig","value":{"quality":"invalid","profile":"clarity","normalizeVolume":true}}"#
+            )
+            .is_err()
+        );
+
+        let state: YtmState = serde_json::from_str(
+            r#"{"reason":"audio","videoId":"dQw4w9WgXcQ","title":null,"artist":null,"album":null,
+                "artworkUrl":null,"paused":false,"currentTime":1,"duration":200,"volume":0.8,
+                "muted":false,"ad":false,"audioInfo":{"codec":"Opus","bitrateKbps":160,"sampleRate":48000,"dspActive":true,"normalizedGainDb":-2.5,"effectiveQuality":"high","fallbackUsed":true,"fallbackReason":"Lossless stream unavailable"}}"#,
+        )
+        .unwrap();
+        let info = state.audio_info.unwrap();
+        assert_eq!(info.codec.as_deref(), Some("Opus"));
+        assert_eq!(info.bitrate_kbps, Some(160));
+        assert_eq!(info.sample_rate, Some(48000));
+        assert!(info.dsp_active);
+        assert_eq!(info.effective_quality, Some(AudioQualityMode::High));
+        assert!(info.fallback_used);
     }
 
     #[test]
