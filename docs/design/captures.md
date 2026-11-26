@@ -10,4 +10,4 @@ Use real captures from the current desktop build. Do not use generated mockups, 
 4. Record a short muted visualizer clip, then export an optimized GIF or video. Do not claim the clip represents a different mode or release.
 5. Place approved captures in `docs/images/` and link them from the README with descriptive alt text. Verify paths on GitHub and check the file sizes before committing.
 
-The current repository does not yet contain an approved hero recording or the requested screenshot set. The palette illustration in this folder documents color tokens; it is not a substitute for those captures.
+The approved v0.7.20 desktop capture set lives in `docs/images/` (launch splash GIF, taskbar restore GIF, floating `Fluid` hero GIF, all 5 Now Playing visualizer screenshots recorded with *Joji – LOVE YOU LESS* and *The Strokes – Ode To The Mets*, plus matched Charcoal Dark and Bone Light Search screenshots). The palette and mood board graphics in this folder document color tokens separately.

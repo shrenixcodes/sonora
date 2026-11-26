@@ -8,6 +8,11 @@
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Platform: Windows 10/11 x64](https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-0078D6.svg)](#install)
   [![Tauri 2](https://img.shields.io/badge/Tauri-2-FFC131.svg)](https://v2.tauri.app/)
+
+  <br /><br />
+  <img src="docs/images/splash-launch.gif" alt="Sonora launch splash revealing floating Now Playing window with The Strokes - Ode To The Mets" width="760" />
+  <br />
+  <sub>Liquid splash intro revealing Sonora's floating window, adaptive artwork backdrop, and synced lyrics (<em>The Strokes — Ode To The Mets</em>).</sub>
 </div>
 
 Sonora combines a vanilla TypeScript interface and WebGL ambience with a Tauri 2 / Rust desktop shell. Playback and catalog requests run through the official YouTube Music web app inside an isolated WebView2 profile. Sonora is a community project and is not affiliated with or endorsed by Google or YouTube Music.
@@ -18,13 +23,24 @@ Sonora combines a vanilla TypeScript interface and WebGL ambience with a Tauri 2
 
 ## Visual Direction
 
-![Sonora theme and accent palette](docs/design/palette.svg)
+Real desktop captures from the Windows release build (showing floating dark window framing, synced LRCLIB lyrics, and adaptive artwork palettes across **Joji — *LOVE YOU LESS*** and **The Strokes — *Ode To The Mets***):
 
-![Sonora muted editorial mood board](docs/design/moodboard.svg)
+### Live Floating Window Previews
 
-*Note: The graphics above are vector design references generated from [tokens.css](src/styles/tokens.css) and [settings.ts](src/views/settings.ts), not screenshots of the running app. Real Windows app captures (hero visualizer GIF/video, 5-mode grid, and side-by-side Dark/Light screenshots) are awaiting capture into `docs/images/` — see [the capture guide](docs/design/captures.md) for the exact shot list and privacy checklist.*
+| Fluid Visualizer (`Floating Window`) | Taskbar Restore (`Minimized → Restored`) |
+| :---: | :---: |
+| ![Sonora Fluid visualizer in floating dark mode playing The Strokes - Ode To The Mets](docs/images/hero-visualizer.gif) | ![Sonora taskbar restore animation unveiling floating Now Playing window](docs/images/splash-restore.gif) |
+| Continuous domain-warped shader ribbons behind synced lyrics (*The Strokes — Ode To The Mets*) | Vinyl artwork emerge burst restoring from minimized/taskbar state |
 
 ### Visualizer Modes (`Now Playing`)
+
+| Aurora (`Joji — LOVE YOU LESS`) | Fluid (`Joji — LOVE YOU LESS`) |
+| :---: | :---: |
+| ![Sonora Aurora visualizer mode playing Joji - LOVE YOU LESS](docs/images/visualizer-aurora.png) | ![Sonora Fluid visualizer mode playing Joji - LOVE YOU LESS](docs/images/visualizer-fluid.png) |
+
+| Glow (`The Strokes — Ode To The Mets`) | Cinematic (`The Strokes — Ode To The Mets`) | Minimal (`The Strokes — Ode To The Mets`) |
+| :---: | :---: | :---: |
+| ![Sonora Glow visualizer mode playing The Strokes - Ode To The Mets](docs/images/visualizer-glow.png) | ![Sonora Cinematic visualizer mode playing The Strokes - Ode To The Mets](docs/images/visualizer-cinematic.png) | ![Sonora Minimal visualizer mode playing The Strokes - Ode To The Mets](docs/images/visualizer-minimal.png) |
 
 | Mode | Shader Effect | Behavior |
 | --- | --- | --- |
@@ -39,6 +55,10 @@ See [the shader reference](docs/design/shaders.md) for GLSL uniform and color-ex
 
 ### Theme Foundations (Dark vs. Light)
 
+| Dark Theme (`Charcoal`) | Light Theme (`Bone`) |
+| :---: | :---: |
+| ![Sonora Charcoal Dark theme Search view playing Ode To The Mets](docs/images/theme-dark.png) | ![Sonora Bone Light theme Search view playing Ode To The Mets](docs/images/theme-light.png) |
+
 | Aspect | Dark Theme (`Charcoal`) | Light Theme (`Bone`) |
 | --- | --- | --- |
 | **Base / Surface** | `#17151C` / `#211E29` (`#292532` elevated) | `#F0EBDD` / `#F8F5EC` (`#E7E2D4` elevated) |
@@ -46,6 +66,17 @@ See [the shader reference](docs/design/shaders.md) for GLSL uniform and color-ex
 | **Default Accent** | Dusty Purple `#A78BFA` (secondary `#C9A96E`) | Bottle Green `#315E48` (secondary `#D95342`) |
 | **Now Playing Stage** | Dark `#17151C` theater backdrop | Always dark `#17151C` over shaders for contrast |
 | **Artwork Accent Adaptation** | WCAG AA `4.5:1` contrast-clamped `palette.vibrant` | WCAG AA `4.5:1` contrast-clamped `palette.vibrant` |
+
+<details>
+<summary>Design token sheets & mood board references (<code>SVG</code> / <code>JSON</code>)</summary>
+
+![Sonora theme and accent palette](docs/design/palette.svg)
+
+![Sonora muted editorial mood board](docs/design/moodboard.svg)
+
+Color tokens, presets, and capture guidelines live in [DESIGN.md](DESIGN.md), [docs/design/palette.json](docs/design/palette.json), and [the capture guide](docs/design/captures.md).
+
+</details>
 
 ---
 
@@ -199,7 +230,8 @@ sonora/
 ├── docs/
 │   ├── architecture.md       Two-window IPC & Rust backend guide
 │   ├── audio-and-configuration.md  Audio quality, DSP, per-app routing & storage schema
-│   └── design/               Palette exports (SVG/JSON), mood board, presets & shader docs
+│   ├── design/               Palette exports (SVG/JSON), mood board, presets & shader docs
+│   └── images/               Desktop splash/visualizer GIFs & theme/mode screenshots
 ├── public/                   Logo, favicon, placeholder artwork & Inter Variable font
 ├── src/
 │   ├── components/           Titlebar, sidebar, player bar, queue panel, menus & dialogs
