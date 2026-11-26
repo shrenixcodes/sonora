@@ -54,7 +54,10 @@ describe("About Sonora Pop-up and centered brand logo", () => {
 
     const metaList = dialog?.querySelector(".about-popup__meta-list");
     expect(metaList?.textContent).toContain("Runtime");
+    expect(metaList?.textContent).toContain("Windows (x64)");
     expect(metaList?.textContent).toContain("Shreyan Bag");
+    expect(dialog?.textContent).toContain("Relaunch");
+    expect(dialog?.textContent).not.toContain("Replay Splash");
   });
 
   it("dismisses about popup on close button or tap outside", async () => {

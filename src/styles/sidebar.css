@@ -189,15 +189,13 @@
 /* ── About Sonora Pop-up Dialog ────────────────────────────── */
 .about-popup {
   margin: auto;
-  width: min(390px, calc(100vw - 36px));
+  width: min(436px, calc(100vw - 36px));
   padding: var(--space-6);
   border: 1px solid var(--color-panel-border, rgba(255, 255, 255, 0.1));
   border-radius: var(--radius-2xl, 20px);
   background: var(--glass-sheen, rgba(255, 255, 255, 0.04)), var(--color-surface, #181422);
   color: var(--color-text, #ffffff);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
-  -webkit-backdrop-filter: var(--glass-backdrop-deep);
-  backdrop-filter: var(--glass-backdrop-deep);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -289,21 +287,21 @@
 }
 
 .about-popup__body {
-  margin-bottom: var(--space-5, 20px);
+  margin-bottom: 18px;
 }
 
 .about-popup__desc {
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--color-text-secondary, rgba(255, 255, 255, 0.75));
-  margin: 0 0 14px 0;
+  margin: 0 0 16px 0;
 }
 
 .about-popup__meta-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 12px 16px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-lg, 12px);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -314,6 +312,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .about-popup__meta-label {
@@ -325,24 +324,24 @@
   color: var(--color-text-secondary, rgba(255, 255, 255, 0.9));
 }
 
-.about-popup__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-}
-
 .about-popup__update {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 12px;
-  padding: 10px 14px;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 12px 16px;
   border-radius: var(--radius-lg, 12px);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 12px;
+  text-align: left;
+}
+
+.about-popup__update-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .about-popup__update[data-state="available"],
@@ -365,15 +364,47 @@
   color: var(--color-text-secondary, rgba(255, 255, 255, 0.65));
 }
 
-.about-popup__replay-btn {
+.about-popup__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.about-popup__actions .btn {
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  border: 1px solid transparent;
+  font-size: var(--text-sm, 13px);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.about-popup__actions .btn--secondary {
+  border-color: var(--color-border);
+}
+
+.about-popup__done-btn {
+  margin-left: auto;
+  min-width: 72px;
 }
 
 .about-popup__replay-btn svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 440px) {
+  .about-popup__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 @keyframes aboutPopupEnter {

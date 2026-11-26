@@ -21,6 +21,25 @@ interface PlatformInfo {
   arch: string;
 }
 
+function formatPlatformDisplay(info: PlatformInfo): string {
+  const osMap: Record<string, string> = {
+    windows: "Windows",
+    macos: "macOS",
+    darwin: "macOS",
+    linux: "Linux",
+  };
+  const archMap: Record<string, string> = {
+    x86_64: "x64",
+    amd64: "x64",
+    aarch64: "ARM64",
+    arm64: "ARM64",
+    x86: "x86",
+  };
+  const os = osMap[info.os.toLowerCase()] ?? info.os;
+  const arch = archMap[info.arch.toLowerCase()] ?? info.arch;
+  return `${os} (${arch})`;
+}
+
 export async function showAboutPopup(): Promise<void> {
   // Remove any previously open about dialog
   document.querySelector(".about-popup")?.remove();
@@ -71,7 +90,16 @@ export async function showAboutPopup(): Promise<void> {
   const updateBox = el("div", {
     className: "about-popup__update",
     attrs: { role: "status", "aria-live": "polite" },
-    children: [updateStatusLabel, updateDetailText],
+    children: [
+      el("div", {
+        className: "about-popup__update-row",
+        children: [
+          el("span", { className: "about-popup__meta-label", text: "Updates" }),
+          updateStatusLabel,
+        ],
+      }),
+      updateDetailText,
+    ],
   });
 
   const updateBtn = el("button", {
@@ -132,7 +160,7 @@ export async function showAboutPopup(): Promise<void> {
   });
 
   const doneBtn = el("button", {
-    className: "btn btn--primary",
+    className: "btn btn--primary about-popup__done-btn",
     attrs: { type: "button" },
     text: "Done",
     onClick: closeDialog,
@@ -188,7 +216,7 @@ export async function showAboutPopup(): Promise<void> {
                   el("span", { className: "about-popup__meta-label", text: "Platform" }),
                   el("span", {
                     className: "about-popup__meta-val",
-                    text: `${platformInfo.os} (${platformInfo.arch})`,
+                    text: formatPlatformDisplay(platformInfo),
                   }),
                 ],
               }),

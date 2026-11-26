@@ -340,3 +340,18 @@ html[data-window="floating"] .shelf .shelf-card {
   scroll-snap-align: none;
 }
 
+/* Modal dialogs in floating mode keep desktop gaps transparent instead of painting a full-window dark box. */
+html[data-window="floating"] dialog {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-window="floating"] dialog::backdrop {
+  background: transparent;
+}
+
+html[data-window="floating"]:has(dialog[open]) :is(.titlebar, .sidebar, .main, .queue-panel, .player, #app::before) {
+  opacity: 0.45;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
