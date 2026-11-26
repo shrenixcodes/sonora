@@ -122,7 +122,8 @@ describe("Microphone lyrics button and per-app audio output device switcher", ()
 
     const lyricsBtn = player.querySelector<HTMLButtonElement>('button[aria-label="Lyrics"]')!;
     expect(lyricsBtn).not.toBeNull();
-    expect(lyricsBtn.innerHTML).toBe(normalizedSvg("microphone"));
+    expect(lyricsBtn.innerHTML).toBe(normalizedSvg("lyrics"));
+    expect(icons.lyrics).not.toBe(icons.microphone);
     expect(player.querySelector('button[aria-label="Now Playing"]')).toBeNull();
 
     const deviceBtn = player.querySelector<HTMLButtonElement>(".player__device-btn")!;
@@ -193,5 +194,24 @@ describe("Microphone lyrics button and per-app audio output device switcher", ()
       expect(deviceBtn.classList.contains("player__extra-btn--active")).toBe(false);
     });
     expect(storage.getSettings().audioOutputDeviceId).toBeNull();
+  });
+
+  it("throttles redundant audio enumeration across rapid window focus events", async () => {
+    invokeMock.mockResolvedValue({
+      devices: [speakers],
+      selectedDeviceId: null,
+      effectiveDeviceId: speakers.id,
+      canRoutePerApp: true,
+    });
+
+    await audioDevices.init();
+    const initialCalls = invokeMock.mock.calls.filter(([cmd]) => cmd === "get_audio_output_devices").length;
+
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("focus"));
+    await Promise.resolve();
+
+    const afterFocusCalls = invokeMock.mock.calls.filter(([cmd]) => cmd === "get_audio_output_devices").length;
+    expect(afterFocusCalls).toBe(initialCalls);
   });
 });

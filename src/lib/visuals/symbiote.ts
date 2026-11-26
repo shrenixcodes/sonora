@@ -571,6 +571,9 @@ interface Flyer {
   breathe?: [number, number];
   /** The disc's grooves fade and it squares off into the artwork over this window. */
   settle?: [number, number];
+  lastOpacity?: string;
+  lastRadius?: string;
+  lastDisc?: string;
 }
 
 function bezier(t: Curve, u: number): Point {
@@ -578,13 +581,6 @@ function bezier(t: Curve, u: number): Point {
   const b = 2 * (1 - u) * u;
   const c = u * u;
   return { x: a * t.sx + b * t.cx + c * t.tx, y: a * t.sy + b * t.cy + c * t.ty };
-}
-
-function bezierNormal(t: Curve, u: number): Point {
-  const dx = 2 * (1 - u) * (t.cx - t.sx) + 2 * u * (t.tx - t.cx);
-  const dy = 2 * (1 - u) * (t.cy - t.sy) + 2 * u * (t.ty - t.cy);
-  const len = Math.hypot(dx, dy) || 1;
-  return { x: -dy / len, y: dx / len };
 }
 
 /** Rough length of a curve (its control polygon). */
@@ -597,21 +593,28 @@ function tendrilHead(t: Tendril, now: number): Point {
 }
 
 function pushTendril(out: Blob[], t: Tendril, now: number, view: Bounds): void {
-  if (now < t.start) return;
+  if (now < t.start || t.segments <= 0) return;
   const p = clamp01((now - t.start) / t.travel);
   const headU = easeLunge(p);
   const emerge = easeOutCubic(clamp01(p * 3.5));
   const melt = clamp01((now - t.melt) / t.meltDur);
   const spacing = (pathLength(t) * headU) / t.segments;
+  const invSeg = 1 / t.segments;
+  const d0x = t.cx - t.sx;
+  const d0y = t.cy - t.sy;
+  const d1x = t.tx - t.cx;
+  const d1y = t.ty - t.cy;
 
   for (let i = 0; i <= t.segments; i++) {
-    const k = i / t.segments; // 0 = head, 1 = root at the edge
+    const k = i * invSeg; // 0 = head, 1 = root at the edge
     const u = headU * (1 - k);
-    const pos = bezier(t, u);
+    const omt = 1 - u;
+    const px = omt * omt * t.sx + 2 * omt * u * t.cx + u * u * t.tx;
+    const py = omt * omt * t.sy + 2 * omt * u * t.cy + u * u * t.ty;
 
     // Head is thickest, the middle thins out, the root pools where it came from
     const profile = k < 0.15 ? 1 - k * 0.9 : 0.62 - (k - 0.15) * 0.45 + Math.pow(k, 6) * 0.55;
-    const pulse = 1 + 0.13 * Math.sin(now * 0.018 + i * 0.85 + t.phase);
+    const pulse = 1 + 0.12 * Math.sin(now * 0.018 + i * 0.85 + t.phase);
     let r = t.baseR * profile * pulse * emerge;
 
     // Melt from the root toward the head, so the tendril snaps into droplets
@@ -622,10 +625,12 @@ function pushTendril(out: Blob[], t: Tendril, now: number, view: Bounds): void {
     }
     if (r < 0.6) continue;
 
-    const n = bezierNormal(t, u);
+    const dx = 2 * omt * d0x + 2 * u * d1x;
+    const dy = 2 * omt * d0y + 2 * u * d1y;
+    const len = Math.hypot(dx, dy) || 1;
     const sway = Math.sin(u * Math.PI * 3 + now * 0.011 + t.phase) * t.wobble * k;
-    const x = pos.x + n.x * sway;
-    const y = pos.y + n.y * sway;
+    const x = px + (-dy / len) * sway;
+    const y = py + (dx / len) * sway;
     // Most of a tendril from a far screen edge is outside the window
     if (x + r * 2 < view.left || x - r * 2 > view.right || y + r * 2 < view.top || y - r * 2 > view.bottom) continue;
     // Overlapping segments share the field, so a chain is as thick as one blob
@@ -679,7 +684,11 @@ function placeFlyer(f: Flyer, t: number): void {
   if (f.settle) {
     const m = easeInOutCubic(clamp01((t - f.settle[0]) / (f.settle[1] - f.settle[0])));
     radius = lerp(size / 2, leg.radius1, m);
-    f.el.style.setProperty("--disc", (1 - m).toFixed(3));
+    const discStr = (1 - m).toFixed(3);
+    if (f.lastDisc !== discStr) {
+      f.lastDisc = discStr;
+      f.el.style.setProperty("--disc", discStr);
+    }
   } else if (leg.radius0 !== leg.radius1) {
     radius = lerp(leg.radius0, leg.radius1, easeInOutCubic(clamp01((p - 0.35) / 0.65)));
   }
@@ -690,9 +699,17 @@ function placeFlyer(f: Flyer, t: number): void {
     (f.spinner ? "" : ` rotate(${angle.toFixed(2)}deg)`);
   if (f.spinner) f.spinner.style.transform = `rotate(${angle.toFixed(2)}deg)`;
   if (f.settle || leg.radius0 !== leg.radius1) {
-    f.el.style.borderRadius = `${(radius / Math.max(0.01, scale)).toFixed(1)}px`;
+    const radiusStr = `${(radius / Math.max(0.01, scale)).toFixed(1)}px`;
+    if (f.lastRadius !== radiusStr) {
+      f.lastRadius = radiusStr;
+      f.el.style.borderRadius = radiusStr;
+    }
   }
-  f.el.style.opacity = (1 - clamp01((t - f.fadeStart) / f.fadeDur)).toFixed(3);
+  const opStr = (1 - clamp01((t - f.fadeStart) / f.fadeDur)).toFixed(3);
+  if (f.lastOpacity !== opStr) {
+    f.lastOpacity = opStr;
+    f.el.style.opacity = opStr;
+  }
 }
 
 // ── Window position tracking ──────────────────────────────────
@@ -909,12 +926,12 @@ function addTendrils(
       ...path,
       start: t0,
       travel,
-      melt: t0 + travel + 60,
-      meltDur: 360 + Math.random() * 120,
+      melt: t0 + travel + 50,
+      meltDur: 320 + Math.random() * 100,
       baseR: baseR * (i === 0 ? 1 : 0.7 + Math.random() * 0.25),
-      segments: clamp(Math.round(len / (baseR * 0.72)), 10, 64),
+      segments: clamp(Math.round(len / (baseR * 0.9)), 8, 36),
       phase: Math.random() * 6.28,
-      wobble: 8 + Math.random() * 14,
+      wobble: 7 + Math.random() * 11,
       color: i === 0 ? color : (color + i) % 3,
     });
     if (t0 + travel < arrival) {
@@ -928,7 +945,7 @@ function addTendrils(
 
 /** Liquid blooms out from the impact point to cover a piece, then melts away. */
 function addFlood(scene: Scene, rect: Rect, arrival: number, entry: Point, color: number): void {
-  const spacing = Math.max(56, Math.sqrt((rect.width * rect.height) / 12));
+  const spacing = Math.max(76, Math.sqrt((rect.width * rect.height) / 9));
   const cols = Math.max(1, Math.round(rect.width / spacing));
   const rows = Math.max(1, Math.round(rect.height / spacing));
   const cellW = rect.width / cols;
@@ -964,22 +981,22 @@ function addFlood(scene: Scene, rect: Rect, arrival: number, entry: Point, color
   scene.end = Math.max(scene.end, arrival + MELT_MS);
 }
 
-/** The piece rushes in along the tendril's direction with a small overshoot. */
+/** The piece rushes in along the tendril's direction with a subtle settle overshoot. */
 function popPiece(scene: Scene, node: HTMLElement, rect: Rect, arrival: number, entry: Point): void {
-  const distance = Math.min(80, 30 + Math.min(rect.width, rect.height) * 0.05);
+  const distance = Math.min(52, 22 + Math.min(rect.width, rect.height) * 0.04);
   animate(
     scene,
     node,
     [
-      { opacity: 0, transform: `translate(${-entry.x * distance}px, ${-entry.y * distance}px) scale(0.94)` },
-      { opacity: 1, transform: `translate(${entry.x * 4}px, ${entry.y * 4}px) scale(1.006)`, offset: 0.6 },
+      { opacity: 0, transform: `translate3d(${(-entry.x * distance).toFixed(1)}px, ${(-entry.y * distance).toFixed(1)}px, 0) scale(0.96)` },
+      { opacity: 1, transform: `translate3d(${(entry.x * 2).toFixed(1)}px, ${(entry.y * 2).toFixed(1)}px, 0) scale(1.003)`, offset: 0.68 },
       { opacity: 1, transform: "none" },
     ],
-    { duration: 560, delay: arrival + 30, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" },
+    { duration: 440, delay: arrival + 20, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
   );
   // In the floating layout the page sits on a stage (#app::before plus the
   // artwork behind it); it is part of the same piece and must not show early
-  if (isFloating() && node.matches(".main")) revealBackdrop(scene, arrival + 30, entry, distance);
+  if (isFloating() && node.matches(".main")) revealBackdrop(scene, arrival + 20, entry, distance);
 }
 
 function isFloating(): boolean {
@@ -996,14 +1013,14 @@ function revealBackdrop(scene: Scene, at: number, entry: Point | null, distance 
   const art = document.querySelector(".ambient-art");
   const keyframes: Keyframe[] = entry
     ? [
-        { opacity: 0, transform: `translate(${-entry.x * distance}px, ${-entry.y * distance}px) scale(0.94)` },
-        { opacity: 1, transform: `translate(${entry.x * 4}px, ${entry.y * 4}px) scale(1.006)`, offset: 0.6 },
+        { opacity: 0, transform: `translate3d(${(-entry.x * distance).toFixed(1)}px, ${(-entry.y * distance).toFixed(1)}px, 0) scale(0.96)` },
+        { opacity: 1, transform: `translate3d(${(entry.x * 2).toFixed(1)}px, ${(entry.y * 2).toFixed(1)}px, 0) scale(1.003)`, offset: 0.68 },
         { opacity: 1, transform: "none" },
       ]
     : [{ opacity: 0 }, { opacity: 1 }];
   const timing: KeyframeAnimationOptions = entry
-    ? { duration: 560, delay: at, easing: "cubic-bezier(0.2, 0.9, 0.25, 1)" }
-    : { duration: 520, delay: at, easing: "ease-out" };
+    ? { duration: 440, delay: at, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
+    : { duration: 420, delay: at, easing: "ease-out" };
   animate(scene, app, keyframes, { ...timing, pseudoElement: "::before" });
   animate(scene, art, keyframes, timing);
 }
@@ -1193,33 +1210,33 @@ function buildRestore(scene: Scene, mode: RevealMode, g: ScreenGeometry): void {
   scene.end = Math.max(scene.end, landsAt + 700);
 }
 
-/** Launch: logo from the taskbar pools in the middle, then bursts into the interface. */
+/** Launch: logo from the taskbar pools in the middle, then bursts cleanly into the interface. */
 function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   const { right: width, bottom: height } = scene.view;
   const anchor = taskbarAnchor(g);
   const center = { x: width / 2, y: height * 0.47 };
-  const logoSize = clamp(Math.min(width, height) * 0.15, 76, 132);
+  const logoSize = clamp(Math.min(width, height) * 0.145, 76, 128);
 
   // 1. Logo rides a tendril out of the taskbar, on screen from the first frame
-  const path = curve(anchor, center, randomBend(0.2, 0.4), 260);
+  const path = curve(anchor, center, randomBend(0.12, 0.28), 220);
   const hidden = Math.min(0.85, hiddenFraction(path, scene.view, logoSize / 2));
-  const travel = clamp(620 / (1 - hidden), 620, 2200);
+  const travel = clamp(440 / (1 - hidden), 440, 1800);
   const start = -hidden * travel;
   const flight = start + travel;
-  const burst = flight + 420;
+  const burst = flight + 260;
 
   const carrier: Tendril = {
     ...path,
     start,
     travel,
     melt: flight + 20,
-    meltDur: 520,
-    baseR: logoSize * 0.42,
-    segments: clamp(Math.round(pathLength(path) / 14), 12, 64),
+    meltDur: 420,
+    baseR: logoSize * 0.4,
+    segments: clamp(Math.round(pathLength(path) / 18), 10, 38),
     phase: Math.random() * 6.28,
-    wobble: 14,
+    wobble: 10,
     color: 0,
-    headHold: burst + 120,
+    headHold: burst + 80,
   };
   scene.tendrils.push(carrier);
 
@@ -1232,42 +1249,42 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   const slot = document.querySelector<HTMLElement>(".sidebar__brand-icon");
   const slotRect = slot ? visibleRect(slot) : null;
 
-  // 2. It pools into a droplet; a crown of drops splashes off on impact
-  const poolR = logoSize * 0.78;
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + Math.random() * 0.4;
-    const d = i === 0 ? 0 : poolR * 0.42;
+  // 2. It pools into a crisp droplet; a ring of drops splashes off on impact
+  const poolR = logoSize * 0.74;
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + Math.random() * 0.35;
+    const d = i === 0 ? 0 : poolR * 0.4;
     scene.membranes.push({
       fromX: center.x,
       fromY: center.y,
       toX: center.x + Math.cos(a) * d,
       toY: center.y + Math.sin(a) * d,
-      r: poolR * (i === 0 ? 0.85 : 0.5 + Math.random() * 0.12),
-      start: flight - 90 + i * 16,
-      grow: 300,
-      melt: burst + 80 + Math.random() * 220,
-      meltDur: 340 + Math.random() * 160,
-      driftX: Math.cos(a) * 26,
-      driftY: Math.sin(a) * 26,
+      r: poolR * (i === 0 ? 0.84 : 0.48 + Math.random() * 0.1),
+      start: flight - 70 + i * 14,
+      grow: 220,
+      melt: burst + 50 + Math.random() * 160,
+      meltDur: 280 + Math.random() * 120,
+      driftX: Math.cos(a) * 22,
+      driftY: Math.sin(a) * 22,
       phase: Math.random() * 6.28,
       color: i % 3,
     });
   }
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-    const d = poolR * (1.25 + Math.random() * 0.55);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+    const d = poolR * (1.2 + Math.random() * 0.45);
     scene.membranes.push({
       fromX: center.x + Math.cos(a) * poolR * 0.5,
       fromY: center.y + Math.sin(a) * poolR * 0.5,
       toX: center.x + Math.cos(a) * d,
       toY: center.y + Math.sin(a) * d,
-      r: 5 + Math.random() * 8,
+      r: 5 + Math.random() * 6,
       start: flight - 10,
-      grow: 240,
-      melt: flight + 200 + Math.random() * 120,
-      meltDur: 220,
-      driftX: Math.cos(a) * 30,
-      driftY: Math.sin(a) * 30 + 12,
+      grow: 190,
+      melt: flight + 160 + Math.random() * 90,
+      meltDur: 180,
+      driftX: Math.cos(a) * 24,
+      driftY: Math.sin(a) * 24 + 10,
       phase: Math.random() * 6.28,
       color: (i + 1) % 3,
     });
@@ -1277,13 +1294,13 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   pieces.forEach(({ node, rect }, i) => {
     const target = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     const away = Math.atan2(target.y - center.y, target.x - center.x);
-    const spawnCount = rect.width * rect.height > 120000 ? 2 : 1;
+    const spawnCount = rect.width * rect.height > 150000 ? 2 : 1;
     const spawns = Array.from({ length: spawnCount }, () => {
-      const a = away + (Math.random() - 0.5) * 1.2;
+      const a = away + (Math.random() - 0.5) * 1.1;
       return { x: center.x + Math.cos(a) * poolR * 0.35, y: center.y + Math.sin(a) * poolR * 0.35 };
     });
     const color = (i % 3 + 1) % 3;
-    const { arrival, entry } = addTendrils(scene, rect, spawns, burst + i * (30 + Math.random() * 40), 300, color, 25);
+    const { arrival, entry } = addTendrils(scene, rect, spawns, burst + i * (18 + Math.random() * 20), 240, color, 20);
     addFlood(scene, rect, arrival, entry, color);
     popPiece(scene, node, rect, arrival, entry);
   });
@@ -1291,24 +1308,24 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
   // 4. The player bar is struck from the pool at its album art
   if (player && playerRect) {
     const landing = artRect ?? { x: playerRect.x + 12, y: playerRect.y + playerRect.height / 2 - 24, width: 48, height: 48 };
-    const { arrival } = addTendrils(scene, landing, [center], burst + 20, 300, 0);
-    revealPlayer(scene, player, playerRect, { x: landing.x + landing.width / 2, y: landing.y + landing.height / 2 }, landing, arrival - 30, 0);
+    const { arrival } = addTendrils(scene, landing, [center], burst + 15, 240, 0);
+    revealPlayer(scene, player, playerRect, { x: landing.x + landing.width / 2, y: landing.y + landing.height / 2 }, landing, arrival - 25, 0);
   }
 
   if (!isFloating()) revealBackdrop(scene, burst, null);
 
-  // 5. The logo: in with the carrier, breathes in the pool, then flies to the sidebar brand
+  // 5. The logo: in with the carrier, breathes in the pool, then flies smoothly to the sidebar brand
   const logo = makeFlyer("logo", logoSize);
-  const legs: FlightLeg[] = [{ path: carrier, size0: 28, size1: logoSize, radius0: 0, radius1: 0, spin: -20 }];
-  let fadeStart = burst + 60;
+  const legs: FlightLeg[] = [{ path: carrier, size0: 28, size1: logoSize, radius0: 0, radius1: 0, spin: -16 }];
+  let fadeStart = burst + 40;
   if (slot && slotRect) {
     const home = { x: slotRect.x + slotRect.width / 2, y: slotRect.y + slotRect.height / 2 };
-    const legTravel = clamp(Math.hypot(home.x - center.x, home.y - center.y) / 2.2, 380, 640);
+    const legTravel = clamp(Math.hypot(home.x - center.x, home.y - center.y) / 2.6, 300, 480);
     const leg: Tendril = {
-      ...curve(center, home, randomBend(0.12, 0.3)),
-      start: burst + 60,
+      ...curve(center, home, randomBend(0.1, 0.24)),
+      start: burst + 40,
       travel: legTravel,
-      melt: burst + 60 + legTravel,
+      melt: burst + 40 + legTravel,
       meltDur: 1,
       baseR: 0,
       segments: 0,
@@ -1317,12 +1334,12 @@ function buildLaunch(scene: Scene, g: ScreenGeometry): void {
       color: 0,
     };
     legs.push({ path: leg, size0: logoSize, size1: Math.max(slotRect.width, slotRect.height), radius0: 0, radius1: 0, spin: 0 });
-    fadeStart = burst + 60 + legTravel + 40;
-    animate(scene, slot, [{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: fadeStart - 40 });
+    fadeStart = burst + 40 + legTravel + 20;
+    animate(scene, slot, [{ opacity: 0 }, { opacity: 1 }], { duration: 150, delay: fadeStart - 30 });
   }
-  scene.flyers.push({ ...logo, base: logoSize, legs, fadeStart, fadeDur: 160, breathe: [flight, burst + 60] });
+  scene.flyers.push({ ...logo, base: logoSize, legs, fadeStart, fadeDur: 150, breathe: [flight, burst + 40] });
 
-  scene.end = Math.max(scene.end, fadeStart + 200);
+  scene.end = Math.max(scene.end, fadeStart + 180);
 }
 
 // ── Runtime ───────────────────────────────────────────────────
@@ -1367,13 +1384,19 @@ function liquidRenderer(): GooRenderer | null {
   return renderer;
 }
 
+function warmShadersNow(): void {
+  if (shouldReduceMotion() || active) return;
+  const goo = liquidRenderer();
+  if (!goo) return;
+  goo.resize(window.innerWidth || 1024, window.innerHeight || 768);
+  goo.warmUp();
+}
+
 /** Compiles the liquid shaders while idle after launch finishes so startup never stutters. */
 export function warmUpSymbiote(): void {
   const warm = () => {
     if (shouldReduceMotion() || active || launched) return;
-    const goo = liquidRenderer();
-    goo?.resize(window.innerWidth || 1024, window.innerHeight || 768);
-    goo?.render([]);
+    warmShadersNow();
   };
   setTimeout(() => {
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
@@ -1458,15 +1481,9 @@ function play(kind: "restore" | "launch", mode: RevealMode): Promise<void> {
 
   if (typeof requestAnimationFrame !== "function") return finished;
 
-  const t0 = performance.now();
+  let t0: number | null = null;
   const blobs: Blob[] = [];
-  const frame = (stamp: number): void => {
-    if (active !== run) return;
-    const t = stamp - t0;
-    if (t > end) {
-      stopSymbiote();
-      return;
-    }
+  const renderAt = (t: number): void => {
     for (const flyer of scene.flyers) placeFlyer(flyer, t);
     if (goo) {
       blobs.length = 0;
@@ -1474,10 +1491,21 @@ function play(kind: "restore" | "launch", mode: RevealMode): Promise<void> {
       for (const tendril of scene.tendrils) pushTendril(blobs, tendril, t, scene.view);
       goo.render(blobs);
     }
+  };
+  const frame = (stamp: number): void => {
+    if (active !== run) return;
+    if (t0 === null) t0 = stamp;
+    const t = Math.max(0, stamp - t0);
+    if (t > end) {
+      stopSymbiote();
+      return;
+    }
+    renderAt(t);
     run.raf = requestAnimationFrame(frame);
   };
-  // Place everything for the first frame right away, then follow the display
-  frame(t0);
+  // Place everything for frame 0 immediately, then anchor timeline on the first vsync callback
+  renderAt(0);
+  run.raf = requestAnimationFrame(frame);
   return finished;
 }
 
@@ -1580,9 +1608,17 @@ export function playLaunchAnimation(options: { force?: boolean } = {}): Promise<
   return settle().then(() => play("launch", "natural"));
 }
 
-/** Resolves once fonts are in and two frames have gone by (at most ~400 ms). */
+/** Resolves once fonts are ready and WebGL2 shaders are pre-warmed (at most ~350 ms). */
 function settle(): Promise<void> {
-  const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve();
+  warmShadersNow();
+  const docFonts = (document as Document & { fonts?: { status?: string; ready: Promise<unknown> } }).fonts;
+  if (docFonts?.status === "loaded") {
+    return new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame !== "function") return resolve();
+      requestAnimationFrame(() => resolve());
+    });
+  }
+  const fonts = docFonts?.ready ?? Promise.resolve();
   const capped = Promise.race([fonts, new Promise((r) => setTimeout(r, 350))]);
   return capped.then(
     () =>

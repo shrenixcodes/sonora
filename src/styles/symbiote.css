@@ -12,6 +12,8 @@
   width: 100vw;
   height: 100vh;
   pointer-events: none;
+  contain: layout style size;
+  transform: translateZ(0);
   z-index: 9998;
 }
 
@@ -127,8 +129,16 @@ html.app--restoring {
 /* Promote the pieces to their own layers before they move, so the first
    frame of the entrance does not stall building them */
 html.symbiote-primed :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art),
-html.app--restoring :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art) {
+html.app--restoring :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art),
+html.is-window-morphing :is(.titlebar, .sidebar, .main, .queue-panel, .player) {
   will-change: transform, opacity;
+}
+
+/* Suppress intermediate hover/child transitions while morphing between floating and maximized states */
+html.is-window-morphing .player__artwork,
+html.is-window-morphing .shelf-card,
+html.is-window-morphing .sidebar__link {
+  transition: none !important;
 }
 
 /* Hover lifts would fight the entrance transforms */

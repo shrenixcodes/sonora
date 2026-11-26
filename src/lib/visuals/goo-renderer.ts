@@ -120,12 +120,20 @@ function compile(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgr
   const v = make(gl.VERTEX_SHADER, vs);
   const f = make(gl.FRAGMENT_SHADER, fs);
   const program = gl.createProgram();
-  if (!v || !f || !program) return null;
+  if (!v || !f || !program) {
+    if (v) gl.deleteShader(v);
+    if (f) gl.deleteShader(f);
+    if (program) gl.deleteProgram(program);
+    return null;
+  }
   gl.attachShader(program, v);
   gl.attachShader(program, f);
   gl.linkProgram(program);
+  gl.deleteShader(v);
+  gl.deleteShader(f);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     console.error("[goo] link:", gl.getProgramInfoLog(program));
+    gl.deleteProgram(program);
     return null;
   }
   return program;
@@ -173,7 +181,8 @@ export class GooRenderer {
         antialias: false,
         depth: false,
         stencil: false,
-        powerPreference: "high-performance",
+        // Use the already-active iGPU instead of triggering a discrete-GPU wake hitch on laptops.
+        powerPreference: "low-power",
       });
       if (!gl) return null;
       return new GooRenderer(canvas, gl);
@@ -248,9 +257,12 @@ export class GooRenderer {
   /** Sizes the canvas to the window (CSS px). */
   resize(width: number, height: number): void {
     const gl = this.gl;
-    // Cap canvas backing store at 1x CSS px so Pass 2 shading stays fast on HiDPI / low-end GPUs.
-    const cw = Math.max(1, Math.round(width));
-    const ch = Math.max(1, Math.round(height));
+    // Cap internal composite resolution (~1280px max edge / <=0.75x) so Pass 2 stays fast at high resolutions
+    // while preserving crisp fwidth-antialiased curved silhouettes when stretched to full viewport.
+    const longest = Math.max(1, width, height);
+    const canvasScale = Math.min(0.75, 1280 / longest);
+    const cw = Math.max(1, Math.round(width * canvasScale));
+    const ch = Math.max(1, Math.round(height * canvasScale));
     if (this.canvas.width !== cw || this.canvas.height !== ch) {
       this.canvas.width = cw;
       this.canvas.height = ch;
@@ -259,7 +271,7 @@ export class GooRenderer {
     this.viewH = height;
 
     // The field only needs to be smooth; the threshold keeps edges crisp
-    const scale = width * height > 1_600_000 ? 0.28 : 0.35;
+    const scale = width * height > 1_600_000 ? 0.25 : 0.32;
     const fw = Math.max(1, Math.round(width * scale));
     const fh = Math.max(1, Math.round(height * scale));
     if (fw === this.fieldW && fh === this.fieldH) return;
@@ -344,6 +356,12 @@ export class GooRenderer {
     gl.uniform3fv(this.compSheenLoc, this.sheen);
     gl.uniform3fv(this.compRimLoc, this.rim);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Forces ANGLE / GPU driver pipeline compilation off-screen before animation frame 0. */
+  warmUp(): void {
+    this.render([{ x: -200, y: -200, r: 2, w: 0.01, c: 0 }]);
+    this.clear();
   }
 
   clear(): void {

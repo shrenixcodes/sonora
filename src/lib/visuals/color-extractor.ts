@@ -72,6 +72,18 @@ function getHsl(r: number, g: number, b: number): [number, number, number] {
 import { BoundedCache } from "@/lib/cache";
 
 const paletteCache = new BoundedCache<string, ArtworkPalette>(150);
+const SAMPLE_SIZE = 64;
+let sampleCanvas: HTMLCanvasElement | null = null;
+let sampleCtx: CanvasRenderingContext2D | null = null;
+
+function getSamplingContext(): CanvasRenderingContext2D | null {
+  if (sampleCtx) return sampleCtx;
+  sampleCanvas = document.createElement("canvas");
+  sampleCanvas.width = SAMPLE_SIZE;
+  sampleCanvas.height = SAMPLE_SIZE;
+  sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+  return sampleCtx;
+}
 
 export async function extractPalette(imageUrl: string): Promise<ArtworkPalette> {
   if (!imageUrl) return DEFAULT_PALETTE;
@@ -91,20 +103,17 @@ export async function extractPalette(imageUrl: string): Promise<ArtworkPalette> 
     img.onload = () => {
       clearTimeout(timeout);
       try {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const ctx = getSamplingContext();
         if (!ctx) {
           resolve(DEFAULT_PALETTE);
           return;
         }
 
-        // Downscale for fast, efficient color sampling
-        const size = 64;
-        canvas.width = size;
-        canvas.height = size;
-        ctx.drawImage(img, 0, 0, size, size);
+        // Downscale into the reused 64x64 surface to avoid per-track canvas allocations
+        ctx.clearRect(0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
+        ctx.drawImage(img, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
 
-        const imgData = ctx.getImageData(0, 0, size, size);
+        const imgData = ctx.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE);
         const data = imgData.data;
 
         const colorBuckets: Array<{ r: number; g: number; b: number; weight: number }> = [];

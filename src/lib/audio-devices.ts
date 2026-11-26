@@ -81,6 +81,40 @@ export function transportBadgeText(transport: AudioTransport): string {
   return TRANSPORT_LABELS[transport];
 }
 
+function snapshotsMatch(a: AudioOutputState, b: {
+  devices: AudioOutputDevice[];
+  selectedDeviceId: string | null;
+  effectiveDeviceId: string | null;
+  canRoutePerApp: boolean;
+}): boolean {
+  if (
+    a.selectedDeviceId !== b.selectedDeviceId ||
+    a.effectiveDeviceId !== b.effectiveDeviceId ||
+    a.canRoutePerApp !== b.canRoutePerApp ||
+    a.error !== null ||
+    a.devices.length !== b.devices.length
+  ) {
+    return false;
+  }
+  for (let i = 0; i < a.devices.length; i++) {
+    const da = a.devices[i];
+    const db = b.devices[i];
+    if (
+      da.id !== db.id ||
+      da.name !== db.name ||
+      da.description !== db.description ||
+      da.deviceType !== db.deviceType ||
+      da.transport !== db.transport ||
+      da.isDefault !== db.isDefault
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const FOCUS_REFRESH_COOLDOWN_MS = 15_000;
+
 export class AudioDeviceController extends EventEmitter<AudioOutputEvents> {
   private state: AudioOutputState = {
     devices: [FALLBACK_OUTPUT_DEVICE],
@@ -92,6 +126,8 @@ export class AudioDeviceController extends EventEmitter<AudioOutputEvents> {
   };
   private initialized = false;
   private listenersAttached = false;
+  private inFlightRefresh: Promise<AudioOutputState> | null = null;
+  private lastRefreshedAt = 0;
 
   get snapshot(): AudioOutputState {
     return {
@@ -120,6 +156,8 @@ export class AudioDeviceController extends EventEmitter<AudioOutputEvents> {
 
   resetForTest(): void {
     this.initialized = false;
+    this.inFlightRefresh = null;
+    this.lastRefreshedAt = 0;
     this.state = {
       devices: [FALLBACK_OUTPUT_DEVICE],
       selectedDeviceId: null,
@@ -158,7 +196,11 @@ export class AudioDeviceController extends EventEmitter<AudioOutputEvents> {
     }
     if (typeof window !== "undefined") {
       window.addEventListener("focus", () => {
-        if (this.initialized && isTauri()) {
+        if (
+          this.initialized &&
+          isTauri() &&
+          Date.now() - this.lastRefreshedAt >= FOCUS_REFRESH_COOLDOWN_MS
+        ) {
           void this.refresh();
         }
       });
@@ -170,29 +212,52 @@ export class AudioDeviceController extends EventEmitter<AudioOutputEvents> {
       const savedId = storage.getSettings().audioOutputDeviceId ?? null;
       const valid = savedId && this.state.devices.some((d) => d.id === savedId) ? savedId : null;
       const fallbackDefault = this.defaultDevice.id;
-      this.setState({
+      const patch = {
+        devices: this.state.devices,
         selectedDeviceId: valid,
         effectiveDeviceId: valid ?? fallbackDefault,
-        error: null,
-      });
+        canRoutePerApp: this.state.canRoutePerApp,
+      };
+      this.lastRefreshedAt = Date.now();
+      if (!snapshotsMatch(this.state, patch)) {
+        this.setState({
+          selectedDeviceId: patch.selectedDeviceId,
+          effectiveDeviceId: patch.effectiveDeviceId,
+          error: null,
+        });
+      }
       return this.snapshot;
     }
 
+    if (this.inFlightRefresh) return this.inFlightRefresh;
+
+    const run = (async (): Promise<AudioOutputState> => {
+      try {
+        const snap = await invoke<AudioOutputSnapshot>("get_audio_output_devices");
+        const devices = snap.devices.length > 0 ? snap.devices : [FALLBACK_OUTPUT_DEVICE];
+        const next = {
+          devices,
+          selectedDeviceId: snap.selectedDeviceId,
+          effectiveDeviceId: snap.effectiveDeviceId ?? devices[0]?.id ?? null,
+          canRoutePerApp: snap.canRoutePerApp,
+        };
+        this.lastRefreshedAt = Date.now();
+        if (!snapshotsMatch(this.state, next)) {
+          this.setState({ ...next, error: null });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err || "Unable to list audio devices.");
+        this.setState({ error: message });
+      }
+      return this.snapshot;
+    })();
+
+    this.inFlightRefresh = run;
     try {
-      const snap = await invoke<AudioOutputSnapshot>("get_audio_output_devices");
-      const devices = snap.devices.length > 0 ? snap.devices : [FALLBACK_OUTPUT_DEVICE];
-      this.setState({
-        devices,
-        selectedDeviceId: snap.selectedDeviceId,
-        effectiveDeviceId: snap.effectiveDeviceId ?? devices[0]?.id ?? null,
-        canRoutePerApp: snap.canRoutePerApp,
-        error: null,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err || "Unable to list audio devices.");
-      this.setState({ error: message });
+      return await run;
+    } finally {
+      this.inFlightRefresh = null;
     }
-    return this.snapshot;
   }
 
   async select(deviceId: string | null): Promise<boolean> {

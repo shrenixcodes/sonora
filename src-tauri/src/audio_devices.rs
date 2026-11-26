@@ -9,6 +9,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+const TREE_RESCAN_INTERVAL: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +58,7 @@ pub struct AudioOutputSnapshot {
 pub struct AudioOutputState {
     selected_device_id: Mutex<Option<String>>,
     applied_pids: Mutex<HashMap<u32, Option<String>>>,
+    last_tree_scan: Mutex<Option<Instant>>,
 }
 
 impl AudioOutputState {
@@ -68,10 +72,22 @@ impl AudioOutputState {
         let target_clone = target_id.clone();
         drop(selected_guard);
 
+        let now = Instant::now();
+        if let Ok(mut last_scan) = self.last_tree_scan.lock() {
+            if let Some(prev) = *last_scan
+                && now.duration_since(prev) < TREE_RESCAN_INTERVAL
+            {
+                return;
+            }
+            *last_scan = Some(now);
+        }
+
         let pids = sonora_process_tree_pids();
         let Ok(mut applied) = self.applied_pids.lock() else {
             return;
         };
+        let live_pids: HashSet<u32> = pids.iter().copied().collect();
+        applied.retain(|pid, _| live_pids.contains(pid));
         let pending: Vec<u32> = pids
             .into_iter()
             .filter(|pid| applied.get(pid).is_none_or(|prev| prev.as_deref() != Some(&target_clone)))
@@ -616,6 +632,9 @@ pub fn set_audio_output_device(
         for pid in pids {
             applied.insert(pid, normalized.clone());
         }
+    }
+    if let Ok(mut last_scan) = state.last_tree_scan.lock() {
+        *last_scan = Some(Instant::now());
     }
 
     Ok(build_snapshot(devices, normalized))

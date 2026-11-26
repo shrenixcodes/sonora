@@ -90,8 +90,9 @@ body {
   }
 }
 
-/* Shared look for the sidebar, content, queue and player panels: liquid
-   glass over the ambient glow, with a specular sheen and refractive edge. */
+/* Shared look for the sidebar, content, queue and player panels: translucent
+   liquid glass over the pre-blurred ambient backdrop, skipping redundant
+   backdrop-filter readbacks during layout switches and scrolling. */
 .sidebar,
 .main,
 .queue-panel,
@@ -101,8 +102,6 @@ body {
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl);
   box-shadow: var(--glass-edge);
-  -webkit-backdrop-filter: var(--glass-backdrop);
-  backdrop-filter: var(--glass-backdrop);
 }
 
 /* ── Ambient mode ────────────────────────────────────────

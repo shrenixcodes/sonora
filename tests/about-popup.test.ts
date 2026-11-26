@@ -55,7 +55,28 @@ describe("About Sonora Pop-up and centered brand logo", () => {
     const metaList = dialog?.querySelector(".about-popup__meta-list");
     expect(metaList?.textContent).toContain("Runtime");
     expect(metaList?.textContent).toContain("Windows (x64)");
-    expect(metaList?.textContent).toContain("Shreyan Bag");
+    expect(metaList?.textContent).toContain("shrenixcodes");
+    expect(metaList?.textContent).not.toContain("Shreyan Bag");
+
+    const authorLink = dialog?.querySelector<HTMLAnchorElement>(".about-popup__meta-link");
+    expect(authorLink).not.toBeNull();
+    expect(authorLink?.getAttribute("href")).toBe("https://github.com/shrenixcodes/sonora");
+
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    try {
+      authorLink?.click();
+      expect(openSpy).toHaveBeenCalledWith(
+        "https://github.com/shrenixcodes/sonora",
+        "_blank",
+        "noopener,noreferrer",
+      );
+    } finally {
+      openSpy.mockRestore();
+    }
+
+    expect(dialog?.querySelector(".about-popup__done-btn")).toBeNull();
+    expect(dialog?.textContent).not.toContain("Done");
+    expect(dialog?.textContent).toContain("Check for Updates");
     expect(dialog?.textContent).toContain("Relaunch");
     expect(dialog?.textContent).not.toContain("Replay Splash");
   });

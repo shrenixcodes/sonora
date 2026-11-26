@@ -9,7 +9,7 @@ import { el } from "@/lib/dom";
 import { icon } from "@/icons";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
-import { describeUpdateSnapshot, updater } from "@/lib/updater";
+import { describeUpdateSnapshot, openExternalUrl, SONORA_REPO_URL, updater } from "@/lib/updater";
 
 interface AppInfo {
   name: string;
@@ -159,16 +159,32 @@ export async function showAboutPopup(): Promise<void> {
     },
   });
 
-  const doneBtn = el("button", {
-    className: "btn btn--primary about-popup__done-btn",
-    attrs: { type: "button" },
-    text: "Done",
-    onClick: closeDialog,
+  const authorLink = el("a", {
+    className: "about-popup__meta-val about-popup__meta-link",
+    attrs: {
+      href: SONORA_REPO_URL,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      title: SONORA_REPO_URL,
+      "aria-label": "shrenixcodes — Open Sonora repository on GitHub",
+    },
+    children: [
+      el("span", { text: "shrenixcodes" }),
+      el("span", {
+        className: "about-popup__meta-link-icon",
+        html: icon("externalLink"),
+        attrs: { "aria-hidden": "true" },
+      }),
+    ],
+    onClick: (e) => {
+      e.preventDefault();
+      void openExternalUrl(SONORA_REPO_URL);
+    },
   });
 
   const dialog = el("dialog", {
     className: "about-popup",
-    attrs: { "aria-labelledby": "about-popup-title" },
+    attrs: { "aria-labelledby": "about-popup-title", tabindex: "-1" },
     children: [
       closeBtn,
       el("div", {
@@ -224,7 +240,7 @@ export async function showAboutPopup(): Promise<void> {
                 className: "about-popup__meta-item",
                 children: [
                   el("span", { className: "about-popup__meta-label", text: "Author" }),
-                  el("span", { className: "about-popup__meta-val", text: "Shreyan Bag" }),
+                  authorLink,
                 ],
               }),
             ],
@@ -234,7 +250,7 @@ export async function showAboutPopup(): Promise<void> {
       }),
       el("div", {
         className: "about-popup__actions",
-        children: [updateBtn, replayBtn, doneBtn],
+        children: [updateBtn, replayBtn],
       }),
     ],
   }) as HTMLDialogElement;
@@ -264,7 +280,7 @@ export async function showAboutPopup(): Promise<void> {
   } else {
     dialog.setAttribute("open", "");
   }
-  doneBtn.focus();
+  dialog.focus({ preventScroll: true });
   if (updater.state.status === "idle") {
     void updater.checkForUpdates();
   }

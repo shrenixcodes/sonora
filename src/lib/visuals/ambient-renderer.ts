@@ -171,6 +171,20 @@ const CINEMATIC_FRAGMENT_SRC = `
   }
 `;
 
+const PALETTE_KEYS = ["dominant", "vibrant", "secondary", "dark"] as const;
+const PALETTE_CONVERGE_EPSILON = 0.0015;
+
+type PaletteColors = Record<(typeof PALETTE_KEYS)[number], [number, number, number]>;
+
+function clonePaletteColors(src: PaletteColors): PaletteColors {
+  return {
+    dominant: [...src.dominant],
+    vibrant: [...src.vibrant],
+    secondary: [...src.secondary],
+    dark: [...src.dark],
+  };
+}
+
 export class AmbientVisualRenderer {
   private canvas: HTMLCanvasElement;
   private gl: WebGLRenderingContext | null = null;
@@ -186,6 +200,7 @@ export class AmbientVisualRenderer {
     }
   };
   private isRunning = false;
+  private paletteConverged = false;
   private mode: AmbientVisualMode = "aurora";
   private targetFps = 30;
   private lastFrameTime = 0;
@@ -198,14 +213,8 @@ export class AmbientVisualRenderer {
   private uniforms: Record<string, WebGLUniformLocation | null> = {};
 
   // Color targets and interpolated currents
-  private currentPalette: {
-    dominant: [number, number, number];
-    vibrant: [number, number, number];
-    secondary: [number, number, number];
-    dark: [number, number, number];
-  };
-
-  private targetPalette: typeof this.currentPalette;
+  private currentPalette: PaletteColors;
+  private targetPalette: PaletteColors;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -224,7 +233,7 @@ export class AmbientVisualRenderer {
       secondary: [0.79, 0.66, 0.43],
       dark: [0.09, 0.08, 0.11],
     };
-    this.targetPalette = JSON.parse(JSON.stringify(this.currentPalette));
+    this.targetPalette = clonePaletteColors(this.currentPalette);
 
     if (this.gl) {
       this.initBuffers();
@@ -280,17 +289,28 @@ export class AmbientVisualRenderer {
 
     const vert = this.createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SRC);
     const frag = this.createShader(gl, gl.FRAGMENT_SHADER, fragSrc);
-    if (!vert || !frag) return;
+    if (!vert || !frag) {
+      if (vert) gl.deleteShader(vert);
+      if (frag) gl.deleteShader(frag);
+      return;
+    }
 
     const prog = gl.createProgram();
-    if (!prog) return;
+    if (!prog) {
+      gl.deleteShader(vert);
+      gl.deleteShader(frag);
+      return;
+    }
 
     gl.attachShader(prog, vert);
     gl.attachShader(prog, frag);
     gl.linkProgram(prog);
+    gl.deleteShader(vert);
+    gl.deleteShader(frag);
 
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       console.warn("[AmbientRenderer] Program link error:", gl.getProgramInfoLog(prog));
+      gl.deleteProgram(prog);
       return;
     }
 
@@ -318,8 +338,20 @@ export class AmbientVisualRenderer {
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
   }
 
+  private isStaticMode(): boolean {
+    return this.mode === "minimal" || this.mode === "cinematic";
+  }
+
+  private wakeStaticMode(): void {
+    this.paletteConverged = false;
+    if (this.isStaticMode() && !this.isRunning && this.gl && !document.hidden) {
+      this.resume();
+    }
+  }
+
   setMode(mode: AmbientVisualMode): void {
     this.mode = mode;
+    this.paletteConverged = false;
     if (!this.gl) return;
 
     if (mode === "none") {
@@ -374,6 +406,7 @@ export class AmbientVisualRenderer {
         (palette.rgbDominant[2] * 0.2) / 255,
       ],
     };
+    this.wakeStaticMode();
   }
 
   setFpsLimit(fps: 15 | 30 | 60): void {
@@ -382,6 +415,7 @@ export class AmbientVisualRenderer {
 
   setIntensity(intensity: number): void {
     this.intensity = Math.max(0.1, Math.min(1.0, intensity));
+    this.wakeStaticMode();
   }
 
   handleResize(): void {
@@ -398,6 +432,7 @@ export class AmbientVisualRenderer {
       this.canvas.height = height;
       if (this.gl) {
         this.gl.viewport(0, 0, width, height);
+        this.wakeStaticMode();
       }
     }
   }
@@ -449,6 +484,11 @@ export class AmbientVisualRenderer {
     this.lastFrameTime = now - (elapsed % interval);
 
     this.render();
+    // Static modes (minimal, cinematic) have no time-varying animation once colors settle.
+    if (this.gl && this.isStaticMode() && this.paletteConverged) {
+      this.pause();
+      return;
+    }
     this.scheduleFrame(this.lastFrameTime + interval - performance.now());
   };
 
@@ -456,14 +496,20 @@ export class AmbientVisualRenderer {
     if (!this.gl || !this.currentProgram || this.mode === "none") return;
     const gl = this.gl;
 
-    // Smoothly lerp colors towards targets
+    // Smoothly lerp colors towards targets and detect convergence for static modes
     const lerpFactor = 0.05;
-    for (const key of ["dominant", "vibrant", "secondary", "dark"] as const) {
+    let maxDelta = 0;
+    for (const key of PALETTE_KEYS) {
+      const curr = this.currentPalette[key];
+      const targ = this.targetPalette[key];
       for (let i = 0; i < 3; i++) {
-        this.currentPalette[key][i] +=
-          (this.targetPalette[key][i] - this.currentPalette[key][i]) * lerpFactor;
+        const diff = targ[i] - curr[i];
+        const absDiff = diff < 0 ? -diff : diff;
+        if (absDiff > maxDelta) maxDelta = absDiff;
+        curr[i] = absDiff <= PALETTE_CONVERGE_EPSILON ? targ[i] : curr[i] + diff * lerpFactor;
       }
     }
+    this.paletteConverged = maxDelta <= PALETTE_CONVERGE_EPSILON;
 
     const time = (performance.now() - this.startTime) / 1000.0;
 

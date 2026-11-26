@@ -42,7 +42,19 @@ interface UpdaterEvents {
 }
 
 const FALLBACK_VERSION = "0.6.8";
-const LATEST_RELEASE_URL = "https://github.com/shrenixcodes/sonora/releases/latest";
+export const SONORA_REPO_URL = "https://github.com/shrenixcodes/sonora";
+const LATEST_RELEASE_URL = `${SONORA_REPO_URL}/releases/latest`;
+
+/** Open an external URL in the user's default browser across desktop and web contexts. */
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isTauri()) {
+    await invoke("plugin:shell|open", { path: url }).catch(() => {
+      window.open?.(url, "_blank", "noopener,noreferrer");
+    });
+    return;
+  }
+  window.open?.(url, "_blank", "noopener,noreferrer");
+}
 
 export function formatBytes(bytes?: number | null): string | null {
   if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return null;
@@ -176,13 +188,7 @@ export class UpdaterService extends EventEmitter<UpdaterEvents> {
 
     const run = (async (): Promise<void> => {
       if (!currentInfo.installerUrl || !isTauri()) {
-        if (isTauri()) {
-          await invoke("plugin:shell|open", { path: currentInfo.releaseUrl }).catch(() => {
-            window.open?.(currentInfo.releaseUrl, "_blank", "noopener");
-          });
-        } else {
-          window.open?.(currentInfo.releaseUrl, "_blank", "noopener");
-        }
+        await openExternalUrl(currentInfo.releaseUrl);
         return;
       }
 

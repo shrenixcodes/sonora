@@ -18,7 +18,7 @@ vi.mock("@tauri-apps/api/core", async (importOriginal) => {
 });
 
 import { showAboutPopup } from "../src/components/about-popup";
-import { updater, type ReleaseCheckResult } from "../src/lib/updater";
+import { openExternalUrl, SONORA_REPO_URL, updater, type ReleaseCheckResult } from "../src/lib/updater";
 
 const availableRelease: ReleaseCheckResult = {
   currentVersion: "0.6.8",
@@ -132,5 +132,24 @@ describe("Launch auto-update and About popup update checker", () => {
       expect(dialog.querySelector(".about-popup__update-detail")?.textContent).toContain("Network offline");
     });
     expect(dialog.querySelector<HTMLButtonElement>(".about-popup__update-btn")?.textContent).toBe("Retry Check");
+  });
+
+  it("opens Sonora repository author link via Tauri shell plugin", async () => {
+    invokeMock.mockResolvedValue(null);
+    await showAboutPopup();
+
+    const authorLink = document.querySelector<HTMLAnchorElement>(".about-popup__meta-link")!;
+    expect(authorLink.textContent).toContain("shrenixcodes");
+    expect(authorLink.getAttribute("href")).toBe(SONORA_REPO_URL);
+
+    authorLink.click();
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("plugin:shell|open", { path: SONORA_REPO_URL });
+    });
+
+    await openExternalUrl("https://github.com/shrenixcodes/sonora/releases/latest");
+    expect(invokeMock).toHaveBeenCalledWith("plugin:shell|open", {
+      path: "https://github.com/shrenixcodes/sonora/releases/latest",
+    });
   });
 });

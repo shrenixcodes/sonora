@@ -206,6 +206,10 @@
   animation: aboutPopupExit 0.16s ease-in forwards;
 }
 
+.about-popup:focus {
+  outline: none;
+}
+
 .about-popup::backdrop {
   background: rgba(0, 0, 0, 0.58);
 }
@@ -324,6 +328,42 @@
   color: var(--color-text-secondary, rgba(255, 255, 255, 0.9));
 }
 
+.about-popup__meta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text, #ffffff);
+  text-decoration: none;
+  border-radius: var(--radius-sm, 4px);
+  transition: color var(--duration-fast, 150ms);
+}
+
+.about-popup__meta-link:hover {
+  color: var(--color-accent, #a78bfa);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.about-popup__meta-link:focus-visible {
+  outline: 2px solid var(--color-accent, #a78bfa);
+  outline-offset: 2px;
+}
+
+.about-popup__meta-link-icon {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.72;
+}
+
+.about-popup__meta-link-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.about-popup__meta-link:hover .about-popup__meta-link-icon {
+  opacity: 1;
+}
+
 .about-popup__update {
   display: flex;
   flex-direction: column;
@@ -367,11 +407,12 @@
 .about-popup__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
 }
 
 .about-popup__actions .btn {
+  flex: 1 1 0;
   box-sizing: border-box;
   height: 36px;
   padding: 0 14px;
@@ -389,11 +430,6 @@
   border-color: var(--color-border);
 }
 
-.about-popup__done-btn {
-  margin-left: auto;
-  min-width: 72px;
-}
-
 .about-popup__replay-btn svg {
   width: 14px;
   height: 14px;
@@ -403,7 +439,10 @@
 @media (max-width: 440px) {
   .about-popup__actions {
     flex-wrap: wrap;
-    justify-content: flex-end;
+  }
+
+  .about-popup__actions .btn {
+    min-width: 140px;
   }
 }
 

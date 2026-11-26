@@ -813,6 +813,7 @@
 
   // The app keeps looking for the <video> element to handle creation or replacement.
   setInterval(() => {
+    if (video && video.isConnected) return;
     const element = document.querySelector("video");
     if (element && element !== video) {
       attach(element);

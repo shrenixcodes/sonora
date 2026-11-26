@@ -15,6 +15,7 @@ import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
 import { catalog } from "@/lib/ytm/catalog";
 import { prepareMinimize } from "@/lib/visuals/symbiote";
+import { setOptimisticMaximized, subscribeWindowMode } from "@/lib/window-mode";
 
 const GRIP_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
 
@@ -157,8 +158,9 @@ export function createTitlebar(): HTMLElement {
   return titlebar;
 }
 
-/** Maximize/restore button that stays in sync with window state. */
+/** Maximize/restore button that stays in sync with window state without duplicate IPC polling. */
 function createMaximizeButton(appWindow: WindowHandle | null): HTMLElement {
+  let currentMax = false;
   const btn = el("button", {
     className: "titlebar__window-btn",
     html: icon("maximize"),
@@ -166,27 +168,23 @@ function createMaximizeButton(appWindow: WindowHandle | null): HTMLElement {
     onClick: async () => {
       if (!appWindow) return;
       await leaveFullscreen(appWindow);
+      const nextMax = !currentMax;
+      applyButtonState(nextMax);
+      setOptimisticMaximized(nextMax);
       await appWindow.toggleMaximize();
-      await updateState();
     },
   });
 
-  const updateState = async () => {
-    if (!appWindow) return;
-    try {
-      const isMax = await appWindow.isMaximized();
-      btn.innerHTML = icon(isMax ? "restore" : "maximize");
-      const label = isMax ? "Restore" : "Maximize";
-      btn.setAttribute("aria-label", label);
-      btn.setAttribute("title", label);
-    } catch (err) {
-      console.error("[titlebar] failed to check maximized state:", err);
-    }
+  const applyButtonState = (isMax: boolean) => {
+    currentMax = isMax;
+    btn.innerHTML = icon(isMax ? "restore" : "maximize");
+    const label = isMax ? "Restore" : "Maximize";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
   };
 
   if (appWindow) {
-    void updateState();
-    appWindow.onResized(() => void updateState()).catch(() => {});
+    subscribeWindowMode(({ maximized }) => applyButtonState(maximized));
   }
 
   return btn;

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { collectRegions, modeFor } from "../src/lib/window-mode";
+import { describe, it, expect, vi } from "vitest";
+import { collectRegions, modeFor, setOptimisticMaximized, subscribeWindowMode } from "../src/lib/window-mode";
 
 describe("modeFor", () => {
   it("uses the floating layout only at normal size", () => {
@@ -59,5 +59,19 @@ describe("collectRegions", () => {
       { x: 70, y: 10, width: 830, height: 44 },
       { x: 0, y: 14, width: 8, height: 686 },
     ]);
+  });
+
+  it("updates window mode dataset and subscribers immediately on optimistic maximize", () => {
+    const spy = vi.fn();
+    const unsub = subscribeWindowMode(spy);
+    try {
+      setOptimisticMaximized(true);
+      expect(document.documentElement.dataset.window).toBe("full");
+      setOptimisticMaximized(false);
+      expect(document.documentElement.dataset.window).toBe("floating");
+      expect(spy).toHaveBeenLastCalledWith({ mode: "floating", maximized: false });
+    } finally {
+      unsub();
+    }
   });
 });

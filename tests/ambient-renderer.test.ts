@@ -58,4 +58,50 @@ describe("AmbientVisualRenderer frame scheduling", () => {
     vi.advanceTimersByTime(2000);
     expect(frames()).toBe(atPause);
   });
+
+  it("stops waking once static shader modes converge on their target palette", () => {
+    vi.useFakeTimers();
+    const frames = fakeDisplay(60);
+    const visuals = renderer();
+
+    const drawArrays = vi.fn();
+    (visuals as unknown as {
+      gl: Record<string, unknown>;
+      currentProgram: Record<string, unknown>;
+      setShaderSource: (s: string) => void;
+    }).gl = {
+      COLOR_BUFFER_BIT: 0x4000,
+      TRIANGLES: 4,
+      clearColor: vi.fn(),
+      clear: vi.fn(),
+      useProgram: vi.fn(),
+      uniform1f: vi.fn(),
+      uniform3fv: vi.fn(),
+      drawArrays,
+    };
+    (visuals as unknown as { currentProgram: Record<string, unknown> }).currentProgram = {};
+    (visuals as unknown as { setShaderSource: (s: string) => void }).setShaderSource = vi.fn();
+
+    visuals.setMode("minimal");
+    vi.advanceTimersByTime(500);
+    const afterSettle = frames();
+
+    vi.advanceTimersByTime(3000);
+    expect(frames()).toBe(afterSettle);
+    expect(drawArrays).toHaveBeenCalledTimes(1);
+
+    // Updating artwork palette wakes static mode back up briefly to converge
+    visuals.setPalette({
+      dominant: "#ff0000",
+      vibrant: "#00ff00",
+      secondary: "#0000ff",
+      darkMuted: "#110000",
+      lightMuted: "#ffffff",
+      rgbDominant: [255, 0, 0],
+      rgbVibrant: [0, 255, 0],
+      rgbSecondary: [0, 0, 255],
+    });
+    vi.advanceTimersByTime(200);
+    expect(frames()).toBeGreaterThan(afterSettle);
+  });
 });
