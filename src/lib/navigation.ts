@@ -3,6 +3,7 @@
  */
 
 import { router } from "@/lib/router";
+import { BoundedCache } from "@/lib/cache";
 
 export interface ArtistNavTarget {
   id?: string;
@@ -32,7 +33,7 @@ export interface AlbumNavTarget {
   artworkUrl?: string;
 }
 
-const collectionCache = new Map<string, Extract<CollectionTarget, { source: "ytm" }>>();
+const collectionCache = new BoundedCache<string, Extract<CollectionTarget, { source: "ytm" }>>(100);
 
 /** Reads cached metadata stored when navigating to a YouTube Music collection. */
 export function getCachedCollection(id: string): Extract<CollectionTarget, { source: "ytm" }> | undefined {
