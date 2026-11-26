@@ -924,6 +924,43 @@
 .song-radio-btn svg { width: 16px; height: 16px; }
 .song-radio-status { pointer-events: none; position: fixed; right: 20px; bottom: 100px; z-index: var(--z-toast); padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-lg); }
 
+.update-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 104px;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 40px));
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-sm);
+}
+
+.update-toast__text {
+  min-width: 0;
+  flex: 1;
+}
+
+.update-toast__action {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: #ffffff;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.update-toast__close {
+  color: var(--color-text-secondary);
+  padding: 2px 6px;
+}
+
 /* ── Collection / Playlist detail view ───────────────────── */
 
 .collection__back-btn {

@@ -2,6 +2,7 @@ use tauri::{Emitter, Manager, WindowEvent};
 
 mod commands;
 mod discord;
+mod updater;
 mod window_mode;
 mod ytm;
 
@@ -17,6 +18,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::get_platform_info,
+            updater::check_for_updates,
+            updater::install_update,
             discord::discord_set_activity,
             discord::discord_clear_activity,
             ytm::ytm_report,
