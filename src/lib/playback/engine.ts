@@ -70,7 +70,12 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   constructor(private readonly bridge: PlaybackBridge = ytmBridge) {
     super();
-    this.state.volume = storage.getSettings().volume;
+    const settings = storage.getSettings();
+    this.state.volume = settings.volume;
+    this.state.isMuted = settings.volume === 0;
+    this.state.shuffle = settings.shuffle;
+    this.state.repeat = settings.repeat;
+    this.queue.setShuffle(settings.shuffle);
     if (bridge.available) {
       bridge.onState((s) => this.handleBridgeState(s)).catch((err) => this.fail(err));
     }
@@ -201,9 +206,23 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.emit("stateChange", this.currentState);
   }
 
+  /** Starts shuffled playback from a randomly chosen track rather than locking on track 0. */
+  playShuffled(tracks: Track[], random: () => number = Math.random): Promise<void> {
+    if (tracks.length === 0) return Promise.resolve();
+    if (!this.state.shuffle) {
+      this.state.shuffle = true;
+      this.queue.setShuffle(true);
+      storage.saveSettings({ shuffle: true });
+      this.emit("stateChange", this.currentState);
+    }
+    const index = Math.min(tracks.length - 1, Math.max(0, Math.floor(random() * tracks.length)));
+    return this.playTrack(tracks[index], tracks);
+  }
+
   toggleShuffle(): void {
     this.state.shuffle = !this.state.shuffle;
     this.queue.setShuffle(this.state.shuffle);
+    storage.saveSettings({ shuffle: this.state.shuffle });
     this.emit("stateChange", this.currentState);
     this.emit("queueChange", this.queue.all);
   }
@@ -211,6 +230,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   cycleRepeat(): void {
     const modes: RepeatMode[] = ["off", "all", "one"];
     this.state.repeat = modes[(modes.indexOf(this.state.repeat) + 1) % modes.length];
+    storage.saveSettings({ repeat: this.state.repeat });
     this.emit("stateChange", this.currentState);
   }
 

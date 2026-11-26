@@ -171,10 +171,7 @@ export function renderArtist(container: HTMLElement): void {
     attrs: { type: "button", disabled: "" },
     children: [el("span", { className: "btn__icon", html: icon("shuffle") }), el("span", { text: "Shuffle" })],
     onClick: () => {
-      if (tracks.length === 0) return;
-      playerEngine.setQueue(tracks);
-      if (!playerEngine.currentState.shuffle) playerEngine.toggleShuffle();
-      void playerEngine.playTrack(tracks[0]);
+      void playerEngine.playShuffled(tracks);
     },
   }) as HTMLButtonElement;
 

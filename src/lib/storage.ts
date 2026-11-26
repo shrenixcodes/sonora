@@ -2,7 +2,7 @@
  * Persistent local storage for user preferences, playlists, history, and liked tracks.
  */
 
-import type { Track, Playlist, UserSettings } from "@/types/music";
+import type { Track, Playlist, RepeatMode, UserSettings } from "@/types/music";
 import { EventEmitter } from "@/lib/events";
 
 export interface StorageEvents {
@@ -29,10 +29,28 @@ export const DEFAULT_SETTINGS: UserSettings = {
   density: "comfortable",
   lyricsFontSize: "md",
   volume: 0.8,
+  shuffle: false,
+  repeat: "off",
   normalizeVolume: true,
   autoPlayNext: true,
   enableDiscordRpc: true,
 };
+
+const VALID_REPEAT_MODES = new Set<RepeatMode>(["off", "all", "one"]);
+
+function normalizeSettings(raw: Partial<UserSettings> | null | undefined): UserSettings {
+  const merged = { ...DEFAULT_SETTINGS, ...(raw ?? {}) };
+  merged.shuffle = Boolean(merged.shuffle);
+  if (!VALID_REPEAT_MODES.has(merged.repeat)) {
+    merged.repeat = "off";
+  }
+  if (typeof merged.volume !== "number" || !Number.isFinite(merged.volume)) {
+    merged.volume = DEFAULT_SETTINGS.volume;
+  } else {
+    merged.volume = Math.max(0, Math.min(1, merged.volume));
+  }
+  return merged;
+}
 
 class StorageService extends EventEmitter<StorageEvents> {
   getSettings(): UserSettings {
@@ -48,7 +66,7 @@ class StorageService extends EventEmitter<StorageEvents> {
           localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...DEFAULT_SETTINGS, ...parsed, enableDiscordRpc: true }));
         } catch {}
       }
-      return { ...DEFAULT_SETTINGS, ...parsed };
+      return normalizeSettings(parsed);
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
