@@ -31,15 +31,42 @@ const MOODS: MoodCategory[] = [
 ];
 
 const MOSAIC_SIZE = 4;
+const MAX_CONCURRENT_MOOD_FETCHES = 2;
 /** Artwork per mood, kept for the session so revisiting Explore doesn't search again. */
 const moodArtwork = new Map<string, Promise<string[]>>();
+
+let activeMoodFetches = 0;
+const moodFetchWaiters: Array<() => void> = [];
+
+function runLimitedMoodFetch<T>(task: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const start = () => {
+      activeMoodFetches += 1;
+      task()
+        .then(resolve, reject)
+        .finally(() => {
+          activeMoodFetches -= 1;
+          const next = moodFetchWaiters.shift();
+          if (next) next();
+        });
+    };
+
+    if (activeMoodFetches < MAX_CONCURRENT_MOOD_FETCHES) {
+      start();
+    } else {
+      moodFetchWaiters.push(start);
+    }
+  });
+}
 
 function artworkFor(mood: MoodCategory): Promise<string[]> {
   let pending = moodArtwork.get(mood.query);
   if (!pending) {
-    pending = catalog
-      .searchSongs(mood.query)
-      .then((tracks) => tracks.map((t) => t.artworkUrl).filter(Boolean).slice(0, MOSAIC_SIZE));
+    pending = runLimitedMoodFetch(() =>
+      catalog
+        .searchSongs(mood.query)
+        .then((tracks) => tracks.map((t) => t.artworkUrl).filter(Boolean).slice(0, MOSAIC_SIZE)),
+    );
     // A failed lookup is retried on the next visit.
     pending.catch(() => moodArtwork.delete(mood.query));
     moodArtwork.set(mood.query, pending);

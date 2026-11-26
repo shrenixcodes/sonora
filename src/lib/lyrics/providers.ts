@@ -6,9 +6,42 @@
  */
 
 import type { LyricsData, Track } from "@/types/music";
+import { BoundedCache } from "@/lib/cache";
 import { parseLrc } from "./synced-lyrics";
 
-const lyricsCache = new Map<string, LyricsData | null>();
+const LRCLIB_TIMEOUT_MS = 8000;
+const lyricsCache = new BoundedCache<string, LyricsData | null>(150);
+
+function createTimeoutSignal(ms: number): { signal: AbortSignal; cleanup: () => void } {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return { signal: AbortSignal.timeout(ms), cleanup: () => {} };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
+}
+
+function parseLrclibEntry(entry: { syncedLyrics?: string; plainLyrics?: string }, trackId: string): LyricsData | null {
+  if (entry.syncedLyrics) {
+    const parsed = parseLrc(entry.syncedLyrics, trackId);
+    parsed.source = "LRCLIB (Synced)";
+    return parsed;
+  }
+  if (entry.plainLyrics) {
+    const lines = entry.plainLyrics
+      .split("\n")
+      .filter((line: string) => line.trim().length > 0)
+      .map((text: string, idx: number) => ({ timeMs: idx * 3000, text }));
+    return {
+      trackId,
+      isSynced: false,
+      lines,
+      plainLyrics: entry.plainLyrics,
+      source: "LRCLIB (Plain)",
+    };
+  }
+  return null;
+}
 
 export class LyricsService {
   /**
@@ -36,69 +69,44 @@ export class LyricsService {
         params.append("duration", String(Math.round(track.duration)));
       }
 
-      const res = await fetch(`https://lrclib.net/api/get?${params.toString()}`, {
-        headers: {
-          "User-Agent": "Sonora-Music-Player/0.1.0",
-        },
-      });
+      const exactTimeout = createTimeoutSignal(LRCLIB_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(`https://lrclib.net/api/get?${params.toString()}`, {
+          signal: exactTimeout.signal,
+        });
+      } finally {
+        exactTimeout.cleanup();
+      }
 
       if (res.ok) {
         const data = await res.json();
-        if (data.syncedLyrics) {
-          const parsed = parseLrc(data.syncedLyrics, track.id);
-          parsed.source = "LRCLIB (Synced)";
-          lyricsCache.set(cacheKey, parsed);
-          return parsed;
-        } else if (data.plainLyrics) {
-          const lines = data.plainLyrics
-            .split("\n")
-            .filter((l: string) => l.trim().length > 0)
-            .map((text: string, idx: number) => ({ timeMs: idx * 3000, text }));
-          const parsed: LyricsData = {
-            trackId: track.id,
-            isSynced: false,
-            lines,
-            plainLyrics: data.plainLyrics,
-            source: "LRCLIB (Plain)",
-          };
+        const parsed = parseLrclibEntry(data, track.id);
+        if (parsed) {
           lyricsCache.set(cacheKey, parsed);
           return parsed;
         }
       }
 
       // 2. Fallback: Search endpoint if exact lookup didn't match
-      const searchRes = await fetch(
-        `https://lrclib.net/api/search?q=${encodeURIComponent(
-          `${track.artist} ${track.title}`,
-        )}`,
-        {
-          headers: {
-            "User-Agent": "Sonora-Music-Player/0.1.0",
-          },
-        },
-      );
+      const searchTimeout = createTimeoutSignal(LRCLIB_TIMEOUT_MS);
+      let searchRes: Response;
+      try {
+        searchRes = await fetch(
+          `https://lrclib.net/api/search?q=${encodeURIComponent(
+            `${track.artist} ${track.title}`,
+          )}`,
+          { signal: searchTimeout.signal },
+        );
+      } finally {
+        searchTimeout.cleanup();
+      }
 
       if (searchRes.ok) {
         const results = await searchRes.json();
         if (Array.isArray(results) && results.length > 0) {
-          const best = results[0];
-          if (best.syncedLyrics) {
-            const parsed = parseLrc(best.syncedLyrics, track.id);
-            parsed.source = "LRCLIB (Synced)";
-            lyricsCache.set(cacheKey, parsed);
-            return parsed;
-          } else if (best.plainLyrics) {
-            const lines = best.plainLyrics
-              .split("\n")
-              .filter((l: string) => l.trim().length > 0)
-              .map((text: string, idx: number) => ({ timeMs: idx * 3000, text }));
-            const parsed: LyricsData = {
-              trackId: track.id,
-              isSynced: false,
-              lines,
-              plainLyrics: best.plainLyrics,
-              source: "LRCLIB (Plain)",
-            };
+          const parsed = parseLrclibEntry(results[0], track.id);
+          if (parsed) {
             lyricsCache.set(cacheKey, parsed);
             return parsed;
           }

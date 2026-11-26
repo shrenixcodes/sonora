@@ -130,6 +130,24 @@ const GLOW_FRAGMENT_SRC = `
   }
 `;
 
+export const MINIMAL_FRAGMENT_SRC = `
+  precision mediump float;
+  varying vec2 v_uv;
+  uniform float u_time;
+  uniform vec3 u_color_dominant;
+  uniform vec3 u_color_vibrant;
+  uniform vec3 u_color_dark;
+  uniform float u_intensity;
+
+  void main() {
+    float blend = smoothstep(0.0, 1.0, v_uv.y * 0.7 + v_uv.x * 0.3);
+    vec3 col = mix(u_color_dark, u_color_dominant, 0.35 * u_intensity + blend * 0.25);
+    col = mix(col, u_color_vibrant, blend * 0.14 * u_intensity);
+
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
 const CINEMATIC_FRAGMENT_SRC = `
   precision mediump float;
   varying vec2 v_uv;
@@ -326,7 +344,7 @@ export class AmbientVisualRenderer {
         this.setShaderSource(CINEMATIC_FRAGMENT_SRC);
         break;
       case "minimal":
-        this.setShaderSource(GLOW_FRAGMENT_SRC);
+        this.setShaderSource(MINIMAL_FRAGMENT_SRC);
         break;
     }
 

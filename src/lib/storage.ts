@@ -35,6 +35,24 @@ export const DEFAULT_SETTINGS: UserSettings = {
 };
 
 class StorageService extends EventEmitter<StorageEvents> {
+  private likedCache: { raw: string | null; tracks: Track[]; ids: Set<string> } | null = null;
+  private historyCache: { raw: string | null; tracks: Track[] } | null = null;
+
+  private readLikedCache(): { raw: string | null; tracks: Track[]; ids: Set<string> } {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.LIKED_TRACKS);
+      if (this.likedCache && this.likedCache.raw === raw) {
+        return this.likedCache;
+      }
+      const tracks: Track[] = raw ? JSON.parse(raw) : [];
+      const ids = new Set(tracks.map((t) => t.id));
+      this.likedCache = { raw, tracks, ids };
+      return this.likedCache;
+    } catch {
+      return { raw: null, tracks: [], ids: new Set() };
+    }
+  }
+
   getSettings(): UserSettings {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
@@ -67,17 +85,11 @@ class StorageService extends EventEmitter<StorageEvents> {
   }
 
   getLikedTracks(): Track[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.LIKED_TRACKS);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
+    return [...this.readLikedCache().tracks];
   }
 
   isLiked(trackId: string): boolean {
-    const liked = this.getLikedTracks();
-    return liked.some((t) => t.id === trackId);
+    return this.readLikedCache().ids.has(trackId);
   }
 
   toggleLike(track: Track): boolean {
@@ -94,9 +106,12 @@ class StorageService extends EventEmitter<StorageEvents> {
     }
 
     try {
-      localStorage.setItem(STORAGE_KEYS.LIKED_TRACKS, JSON.stringify(liked));
+      const serialized = JSON.stringify(liked);
+      localStorage.setItem(STORAGE_KEYS.LIKED_TRACKS, serialized);
+      this.likedCache = { raw: serialized, tracks: liked, ids: new Set(liked.map((t) => t.id)) };
     } catch (err) {
       console.error("[Storage] Failed to save liked tracks:", err);
+      this.likedCache = null;
     }
 
     this.emit("likeChange", { trackId: track.id, isLiked: isNowLiked, track });
@@ -105,8 +120,13 @@ class StorageService extends EventEmitter<StorageEvents> {
 
   getHistory(): Track[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.HISTORY);
-      return data ? JSON.parse(data) : [];
+      const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
+      if (this.historyCache && this.historyCache.raw === raw) {
+        return [...this.historyCache.tracks];
+      }
+      const tracks: Track[] = raw ? JSON.parse(raw) : [];
+      this.historyCache = { raw, tracks };
+      return [...tracks];
     } catch {
       return [];
     }

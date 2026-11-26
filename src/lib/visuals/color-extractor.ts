@@ -69,7 +69,9 @@ function getHsl(r: number, g: number, b: number): [number, number, number] {
   return [h * 360, s, l];
 }
 
-const paletteCache = new Map<string, ArtworkPalette>();
+import { BoundedCache } from "@/lib/cache";
+
+const paletteCache = new BoundedCache<string, ArtworkPalette>(150);
 
 export async function extractPalette(imageUrl: string): Promise<ArtworkPalette> {
   if (!imageUrl) return DEFAULT_PALETTE;
