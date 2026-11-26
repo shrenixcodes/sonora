@@ -9,7 +9,7 @@
 //! pointer is sampled on a timer. The timer only runs in floating mode and
 //! idles while the window is hidden or minimized.
 
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Runtime, State, Webvi
 
 const MAIN_LABEL: &str = "main";
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
-const IDLE_INTERVAL: Duration = Duration::from_millis(100);
+const IDLE_INTERVAL: Duration = Duration::from_millis(500);
 const ENTRANCE_DURATION: Duration = Duration::from_millis(420);
 const ENTRANCE_FRAME: Duration = Duration::from_millis(16);
 
@@ -39,7 +39,10 @@ impl HitRect {
 
 /// `None` means the window is in its full (maximized) layout with no gaps.
 #[derive(Default)]
-pub struct FloatingRegions(Mutex<Option<Vec<HitRect>>>);
+pub struct FloatingRegions {
+    regions: Mutex<Option<Vec<HitRect>>>,
+    wake: Condvar,
+}
 
 /// Whether a point in CSS pixels lands on any panel.
 fn hits_any(regions: &[HitRect], x: f64, y: f64) -> bool {
@@ -77,7 +80,8 @@ pub fn set_floating_regions(
                 r.len()
             ))
     );
-    *state.0.lock().map_err(|e| e.to_string())? = regions;
+    *state.regions.lock().map_err(|e| e.to_string())? = regions;
+    state.wake.notify_all();
     Ok(())
 }
 
@@ -167,6 +171,28 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
                 return;
             };
 
+            let state = app.state::<FloatingRegions>();
+            let mut guard = match state.regions.lock() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+
+            if guard.is_none() {
+                if ignoring && window.set_ignore_cursor_events(false).is_ok() {
+                    ignoring = false;
+                }
+                if cfg!(windows) {
+                    // On Windows, `install_window_state_handler` tracks minimize/restore via WM_SIZE,
+                    // so we only need the pointer sampler while in floating mode.
+                    guard = match state.wake.wait_while(guard, |r| r.is_none()) {
+                        Ok(g) => g,
+                        Err(_) => return,
+                    };
+                }
+            }
+            let regions = guard.clone();
+            drop(guard);
+
             let is_min = window.is_minimized().unwrap_or(false);
             if was_minimized && !is_min {
                 log::info!("Window restored from minimized state");
@@ -176,13 +202,6 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
                 let _ = window.emit("sonora://minimize", ());
             }
             was_minimized = is_min;
-
-            let regions = app
-                .state::<FloatingRegions>()
-                .0
-                .lock()
-                .ok()
-                .and_then(|guard| guard.clone());
 
             let active = window.is_visible().unwrap_or(false) && !is_min;
             let should_ignore = match (&regions, active) {
