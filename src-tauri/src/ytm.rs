@@ -83,6 +83,12 @@ pub struct YtmAudioInfo {
     pub dsp_sample_rate: Option<u32>,
     #[serde(default)]
     pub normalized_gain_db: Option<f64>,
+    #[serde(default)]
+    pub effective_quality: Option<AudioQualityMode>,
+    #[serde(default)]
+    pub fallback_used: bool,
+    #[serde(default)]
+    pub fallback_reason: Option<String>,
 }
 
 /// Playback snapshot reported by the bridge script.
@@ -662,14 +668,16 @@ mod tests {
         let state: YtmState = serde_json::from_str(
             r#"{"reason":"audio","videoId":"dQw4w9WgXcQ","title":null,"artist":null,"album":null,
                 "artworkUrl":null,"paused":false,"currentTime":1,"duration":200,"volume":0.8,
-                "muted":false,"ad":false,"audioInfo":{"codec":"Opus","bitrateKbps":256,"sampleRate":48000,"dspActive":true,"normalizedGainDb":-2.5}}"#,
+                "muted":false,"ad":false,"audioInfo":{"codec":"Opus","bitrateKbps":160,"sampleRate":48000,"dspActive":true,"normalizedGainDb":-2.5,"effectiveQuality":"high","fallbackUsed":true,"fallbackReason":"Lossless stream unavailable"}}"#,
         )
         .unwrap();
         let info = state.audio_info.unwrap();
         assert_eq!(info.codec.as_deref(), Some("Opus"));
-        assert_eq!(info.bitrate_kbps, Some(256));
+        assert_eq!(info.bitrate_kbps, Some(160));
         assert_eq!(info.sample_rate, Some(48000));
         assert!(info.dsp_active);
+        assert_eq!(info.effective_quality, Some(AudioQualityMode::High));
+        assert!(info.fallback_used);
     }
 
     #[test]

@@ -506,9 +506,13 @@ function createAudioStatusRow(): HTMLElement {
   const update = (nextState?: PlaybackState) => {
     const settings = storage.getSettings();
     const state = nextState ?? playerEngine.currentState;
-    const isLossless = settings.audioQuality === "lossless";
+    const isLossless = settings.audioQuality === "lossless" && !state.audioInfo?.fallbackUsed;
     tag.classList.toggle("settings__tag--lossless", isLossless);
-    tag.textContent = audioQualityOption(settings.audioQuality).badge;
+    if (state.audioInfo?.fallbackUsed && state.audioInfo.effectiveQuality) {
+      tag.textContent = `Best (${audioQualityOption(state.audioInfo.effectiveQuality).label})`;
+    } else {
+      tag.textContent = audioQualityOption(settings.audioQuality).badge;
+    }
     description.textContent = formatAudioTelemetry(settings, state.audioInfo);
   };
 

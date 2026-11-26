@@ -68,6 +68,9 @@ export interface AudioStreamInfo {
   dspActive: boolean;
   dspSampleRate?: number;
   normalizedGainDb?: number;
+  effectiveQuality?: AudioQualityMode;
+  fallbackUsed?: boolean;
+  fallbackReason?: string;
 }
 
 export interface PlaybackState {

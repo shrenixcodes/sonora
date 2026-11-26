@@ -130,6 +130,12 @@
   background: color-mix(in oklab, var(--color-accent) 16%, transparent);
 }
 
+.now-playing__quality-badge--fallback {
+  color: var(--color-text);
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.12);
+}
+
 /* ── Split Layout: Artwork vs Lyrics ─────────────────────── */
 
 .now-playing__body {

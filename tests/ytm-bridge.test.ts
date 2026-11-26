@@ -391,5 +391,109 @@ describe("YouTube Music bridge script", () => {
         vi.unstubAllGlobals();
       }
     });
+
+    it("falls back to best available quality without stopping when lossless stream is unavailable", () => {
+      const { video } = setupPage({ ad: false });
+      const bridge = loadBridge();
+
+      bridge.exec("audioConfig", { quality: "lossless", profile: "off", normalizeVolume: true } as unknown as number);
+
+      const parsed = JSON.parse(
+        JSON.stringify({
+          videoDetails: { videoId: "dQw4w9WgXcQ", title: "Standard Track" },
+          streamingData: {
+            adaptiveFormats: [
+              {
+                itag: 249,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 52000,
+                audioQuality: "AUDIO_QUALITY_LOW",
+                audioSampleRate: "48000",
+              },
+              {
+                itag: 140,
+                mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+                bitrate: 129000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "44100",
+              },
+              {
+                itag: 251,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 160000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "48000",
+              },
+            ],
+          },
+        }),
+      ) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+
+      // Keeps best available non-lossless streams (Opus 160k + AAC 129k) instead of failing
+      expect(parsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([251, 140]);
+
+      video.dispatchEvent(new Event("loadedmetadata"));
+      const last = win.__TAURI_INTERNALS__!.invoke.mock.calls.at(-1)![1] as {
+        state: { audioInfo?: { bitrateKbps?: number; effectiveQuality?: string; fallbackUsed?: boolean; fallbackReason?: string } };
+      };
+      expect(last.state.audioInfo).toMatchObject({
+        bitrateKbps: 160,
+        effectiveQuality: "high",
+        fallbackUsed: true,
+      });
+      expect(last.state.audioInfo?.fallbackReason).toContain("best available");
+    });
+
+    it("recovers playback from current time without stopping when a lossless stream stalls or errors", () => {
+      const { video, player } = setupPage({ ad: false });
+      const playerWithLoad = player as HTMLElement & { loadVideoById: ReturnType<typeof vi.fn> };
+      playerWithLoad.loadVideoById = vi.fn();
+
+      const bridge = loadBridge();
+      bridge.exec("audioConfig", { quality: "lossless", profile: "off", normalizeVolume: true } as unknown as number);
+
+      const twoTierPayload = () =>
+        JSON.stringify({
+          videoDetails: { videoId: "dQw4w9WgXcQ", title: "Track" },
+          streamingData: {
+            adaptiveFormats: [
+              {
+                itag: 251,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 160000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+                audioSampleRate: "48000",
+              },
+              {
+                itag: 774,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 256000,
+                audioQuality: "AUDIO_QUALITY_HIGH",
+                audioSampleRate: "48000",
+              },
+            ],
+          },
+        });
+
+      const initial = JSON.parse(twoTierPayload()) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+      expect(initial.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([774]);
+
+      // Simulate active playback at 42s, then a stall for >4s
+      Object.defineProperty(video, "paused", { value: false, configurable: true });
+      video.currentTime = 42;
+      video.dispatchEvent(new Event("waiting"));
+      vi.advanceTimersByTime(4100);
+
+      expect(playerWithLoad.loadVideoById).toHaveBeenCalledWith("dQw4w9WgXcQ", 42);
+
+      // Reloaded playerResponse now includes the fallback 160k stream
+      const recovered = JSON.parse(twoTierPayload()) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+      expect(recovered.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([251]);
+
+      const reportStates = win.__TAURI_INTERNALS__!.invoke.mock.calls.map(
+        ([, args]) => (args as { state: { reason: string; audioInfo?: { fallbackUsed?: boolean; effectiveQuality?: string } } }).state,
+      );
+      expect(reportStates.some((s) => s.reason === "audio" && s.audioInfo?.fallbackUsed && s.audioInfo.effectiveQuality === "high")).toBe(true);
+    });
   });
 });

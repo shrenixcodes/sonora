@@ -20,6 +20,8 @@
   const METADATA_SETTLE_MS = 600;
   const AUDIO_CONFIG_STORAGE_KEY = "sonora:audio_config";
   const MAX_TRACK_META_CACHE = 50;
+  const STALL_FALLBACK_MS = 4000;
+  const RECOVERY_WINDOW_MS = 8000;
 
   const QUALITY_MODES = new Set(["saver", "balanced", "high", "lossless"]);
   const ENHANCEMENT_PROFILES = new Set(["off", "clarity", "warm", "bass", "vocal"]);
@@ -37,7 +39,11 @@
   let lastAppliedGainDb = null;
   let audioGraph = null;
   let audioGraphFailed = false;
+  let stallTimer = null;
+  let recoveringTrack = null;
+  let lastProgressTime = -1;
   const trackAudioMeta = new Map();
+  const trackQualityOverride = new Map();
 
   const normalizeAudioConfig = (raw) => {
     const src = raw && typeof raw === "object" ? raw : {};
@@ -137,8 +143,15 @@
     return Array.from(best.values());
   };
 
-  const selectAudioFormats = (audioFormats, quality) => {
-    if (!Array.isArray(audioFormats) || audioFormats.length === 0) return audioFormats;
+  const selectAudioFormats = (audioFormats, requestedQuality) => {
+    if (!Array.isArray(audioFormats) || audioFormats.length === 0) {
+      return {
+        selected: audioFormats,
+        effectiveQuality: requestedQuality,
+        fallbackUsed: false,
+        fallbackReason: null,
+      };
+    }
 
     // Avoid AI auto-dubbed tracks whenever original audio exists.
     const nonDubbed = audioFormats.filter((f) => !f?.audioTrack || f.audioTrack.isAutoDubbed !== true);
@@ -149,38 +162,97 @@
     const byBestDesc = (a, b) => bitrateOf(b) - bitrateOf(a) || codecRank(b) - codecRank(a);
     const byLightest = (a, b) => bitrateOf(a) - bitrateOf(b) || codecRank(b) - codecRank(a);
 
-    if (quality === "balanced") {
-      return candidates;
+    if (requestedQuality === "balanced") {
+      const steppedDown = audioConfig.quality === "lossless" || audioConfig.quality === "high";
+      return {
+        selected: steppedDown ? candidates.slice().sort(byBestDesc) : candidates,
+        effectiveQuality: "balanced",
+        fallbackUsed: steppedDown,
+        fallbackReason: steppedDown
+          ? "Switched to best available stream without stopping playback"
+          : null,
+      };
     }
 
-    if (quality === "saver") {
+    if (requestedQuality === "saver") {
       const light = candidates.filter((f) => {
         const br = bitrateOf(f);
         return br >= 44000 && br <= 135000;
       });
-      if (light.length > 0) return light.slice().sort(byLightest);
+      if (light.length > 0) {
+        return {
+          selected: light.slice().sort(byLightest),
+          effectiveQuality: "saver",
+          fallbackUsed: false,
+          fallbackReason: null,
+        };
+      }
       const underCap = candidates.filter((f) => bitrateOf(f) > 0 && bitrateOf(f) <= 135000);
-      return (underCap.length > 0 ? underCap : candidates).slice().sort(byLightest);
+      return {
+        selected: (underCap.length > 0 ? underCap : candidates).slice().sort(byLightest),
+        effectiveQuality: "saver",
+        fallbackUsed: false,
+        fallbackReason: null,
+      };
     }
 
-    if (quality === "lossless") {
+    if (requestedQuality === "lossless") {
       const highTier = candidates.filter(
         (f) => f?.audioQuality === "AUDIO_QUALITY_HIGH" || bitrateOf(f) >= 192000,
       );
       if (highTier.length > 0) {
-        return highTier.slice().sort(byBestDesc);
+        return {
+          selected: highTier.slice().sort(byBestDesc),
+          effectiveQuality: "lossless",
+          fallbackUsed: false,
+          fallbackReason: null,
+        };
       }
       const clean = candidates.filter(
         (f) => bitrateOf(f) >= 96000 && f?.audioQuality !== "AUDIO_QUALITY_LOW",
       );
-      return (clean.length > 0 ? clean : bestPerFamily(candidates)).slice().sort(byBestDesc);
+      if (clean.length > 0) {
+        return {
+          selected: clean.slice().sort(byBestDesc),
+          effectiveQuality: "high",
+          fallbackUsed: true,
+          fallbackReason: "Lossless stream unavailable — playing best available audio",
+        };
+      }
+      return {
+        selected: bestPerFamily(candidates).slice().sort(byBestDesc),
+        effectiveQuality: "balanced",
+        fallbackUsed: true,
+        fallbackReason: "Lossless stream unavailable — playing best available stream",
+      };
     }
 
     // "high": block low-bitrate ABR downgrades whenever standard/high streams exist.
+    // When stepping down from a stalled/errored lossless stream, bypass the failing high tier if clean medium streams exist.
     const clean = candidates.filter(
       (f) => bitrateOf(f) >= 96000 && f?.audioQuality !== "AUDIO_QUALITY_LOW",
     );
-    return (clean.length > 0 ? clean : bestPerFamily(candidates)).slice().sort(byBestDesc);
+    if (clean.length > 0) {
+      const steppedFromLossless = audioConfig.quality === "lossless";
+      const fallbackClean = steppedFromLossless
+        ? clean.filter((f) => f?.audioQuality !== "AUDIO_QUALITY_HIGH" && bitrateOf(f) < 192000)
+        : [];
+      const chosen = fallbackClean.length > 0 ? fallbackClean : clean;
+      return {
+        selected: chosen.slice().sort(byBestDesc),
+        effectiveQuality: "high",
+        fallbackUsed: steppedFromLossless,
+        fallbackReason: steppedFromLossless
+          ? "Switched to best available quality without stopping playback"
+          : null,
+      };
+    }
+    return {
+      selected: bestPerFamily(candidates).slice().sort(byBestDesc),
+      effectiveQuality: "balanced",
+      fallbackUsed: true,
+      fallbackReason: "High-bitrate stream unavailable — playing best available stream",
+    };
   };
 
   const inspectAndOptimizePlayerResponse = (result, mutateFormats) => {
@@ -191,6 +263,7 @@
 
     const videoId =
       typeof playerResp?.videoDetails?.videoId === "string" ? playerResp.videoDetails.videoId : null;
+    const requestedQuality = (videoId && trackQualityOverride.get(videoId)) || audioConfig.quality;
     const audioCfg = playerResp?.playerConfig?.audioConfig;
     const rawLoudness =
       typeof audioCfg?.loudnessDb === "number" && Number.isFinite(audioCfg.loudnessDb)
@@ -202,6 +275,9 @@
     const streaming = playerResp.streamingData;
     let primaryAudio = null;
     let hasAdaptiveAudio = false;
+    let effectiveQuality = requestedQuality;
+    let fallbackUsed = false;
+    let fallbackReason = null;
 
     if (streaming && Array.isArray(streaming.adaptiveFormats)) {
       const videoFormats = [];
@@ -215,9 +291,13 @@
       }
       if (audioFormats.length > 0) {
         hasAdaptiveAudio = true;
-        const selected = selectAudioFormats(audioFormats, audioConfig.quality);
+        const selection = selectAudioFormats(audioFormats, requestedQuality);
+        const selected = selection.selected;
+        effectiveQuality = selection.effectiveQuality;
+        fallbackUsed = selection.fallbackUsed;
+        fallbackReason = selection.fallbackReason;
         primaryAudio =
-          audioConfig.quality === "saver"
+          requestedQuality === "saver"
             ? selected[selected.length - 1] ?? selected[0]
             : selected[0];
         if (mutateFormats) {
@@ -227,6 +307,10 @@
             // Frozen or read-only player response objects remain intact.
           }
         }
+      } else if (audioConfig.quality === "lossless" || audioConfig.quality === "high") {
+        effectiveQuality = "balanced";
+        fallbackUsed = true;
+        fallbackReason = "Adaptive audio unavailable — playing best muxed stream";
       }
     }
 
@@ -246,6 +330,9 @@
             ? Number(primaryAudio.audioChannels)
             : 2,
         qualityTier: typeof primaryAudio?.audioQuality === "string" ? primaryAudio.audioQuality : null,
+        effectiveQuality,
+        fallbackUsed,
+        fallbackReason,
       });
     }
 
@@ -323,13 +410,73 @@
   const applyPlayerQuality = () => {
     const p = player();
     if (!p || typeof p.setPlaybackQualityRange !== "function") return;
-    const meta = getTrackAudioMeta(currentVideoId());
+    const videoId = currentVideoId();
+    const meta = getTrackAudioMeta(videoId);
+    const activeTier = (videoId && trackQualityOverride.get(videoId)) || audioConfig.quality;
     const muxedOnly = meta && meta.hasAdaptiveAudio === false;
-    if (muxedOnly && (audioConfig.quality === "high" || audioConfig.quality === "lossless")) {
+    if (muxedOnly && (activeTier === "high" || activeTier === "lossless")) {
       p.setPlaybackQualityRange("medium", "hd720");
+    } else if (muxedOnly && trackQualityOverride.get(videoId) === "balanced") {
+      p.setPlaybackQualityRange("small", "large");
     } else {
       p.setPlaybackQualityRange("tiny", "tiny");
     }
+  };
+
+  const clearStallTimer = () => {
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    }
+  };
+
+  const nextFallbackQuality = (tier) => {
+    if (tier === "lossless") return "high";
+    if (tier === "high") return "balanced";
+    return null;
+  };
+
+  const recoverWithBestAvailableQuality = (trigger) => {
+    const videoId = currentVideoId();
+    if (!video || !videoId || isAdPlaying()) return false;
+    const currentTier = trackQualityOverride.get(videoId) || audioConfig.quality;
+    const nextTier = nextFallbackQuality(currentTier);
+    if (!nextTier) return false;
+
+    clearStallTimer();
+    trackQualityOverride.set(videoId, nextTier);
+
+    const existing = trackAudioMeta.get(videoId);
+    if (existing) {
+      trackAudioMeta.set(videoId, {
+        ...existing,
+        effectiveQuality: nextTier,
+        fallbackUsed: true,
+        fallbackReason:
+          trigger === "error"
+            ? "Lossless stream failed — switched to best available quality without stopping"
+            : "Lossless stream stalled — switched to best available quality without stopping",
+      });
+    }
+
+    const resumeAt = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+    const shouldPlay = !video.paused || trigger === "error";
+    recoveringTrack = { videoId, resumeAt, shouldPlay, until: Date.now() + RECOVERY_WINDOW_MS };
+
+    applyPlayerQuality();
+    send("audio");
+
+    const p = player();
+    if (p && typeof p.loadVideoById === "function") {
+      p.loadVideoById(videoId, resumeAt);
+    } else if (video.src) {
+      try {
+        video.load();
+        if (resumeAt > 0.5) video.currentTime = resumeAt;
+        if (shouldPlay) video.play().catch(() => {});
+      } catch {}
+    }
+    return true;
   };
 
   // ── Web Audio Mastering & Clarity Chain ────────────────────
@@ -478,6 +625,32 @@
     const meta = getTrackAudioMeta(videoId);
     const dspActive = Boolean(audioGraph && needsDsp());
     if (!meta && !dspActive) return null;
+
+    let effectiveQuality = meta ? meta.effectiveQuality : audioConfig.quality;
+    let fallbackUsed = Boolean(meta && meta.fallbackUsed);
+    let fallbackReason = meta ? meta.fallbackReason : null;
+
+    if (meta && audioConfig.quality === "lossless") {
+      const hasHigh =
+        meta.qualityTier === "AUDIO_QUALITY_HIGH" ||
+        (typeof meta.bitrateKbps === "number" && meta.bitrateKbps >= 192);
+      if (!hasHigh && meta.hasAdaptiveAudio !== false) {
+        effectiveQuality =
+          typeof meta.bitrateKbps === "number" && meta.bitrateKbps > 0 && meta.bitrateKbps < 96
+            ? "balanced"
+            : "high";
+        fallbackUsed = true;
+        fallbackReason =
+          fallbackReason || "Lossless stream unavailable — playing best available audio";
+      }
+    } else if (meta && (audioConfig.quality === "balanced" || audioConfig.quality === "saver")) {
+      if (!trackQualityOverride.has(videoId)) {
+        effectiveQuality = audioConfig.quality;
+        fallbackUsed = false;
+        fallbackReason = null;
+      }
+    }
+
     return {
       codec: meta ? meta.codec : null,
       bitrateKbps: meta ? meta.bitrateKbps : null,
@@ -488,6 +661,9 @@
       dspActive,
       dspSampleRate: audioGraph && audioGraph.ctx.sampleRate ? Math.round(audioGraph.ctx.sampleRate) : null,
       normalizedGainDb: lastAppliedGainDb,
+      effectiveQuality,
+      fallbackUsed,
+      fallbackReason,
     };
   };
 
@@ -551,19 +727,79 @@
     video = element;
     audioGraph = null;
     audioGraphFailed = false;
+    lastProgressTime = -1;
+    clearStallTimer();
     for (const type of ["play", "pause", "ended", "volumechange", "seeked"]) {
       element.addEventListener(type, () => {
-        if (type === "play") syncAudioGraph();
+        if (type === "play") {
+          syncAudioGraph();
+        } else if (type === "pause" || type === "ended" || type === "seeked") {
+          clearStallTimer();
+        }
+        if (
+          (type === "pause" || type === "ended") &&
+          recoveringTrack &&
+          Date.now() < recoveringTrack.until &&
+          recoveringTrack.videoId === currentVideoId()
+        ) {
+          return;
+        }
         send(type);
       });
     }
+    element.addEventListener("playing", () => {
+      clearStallTimer();
+      if (recoveringTrack && recoveringTrack.videoId === currentVideoId()) {
+        recoveringTrack = null;
+      }
+      send("play");
+    });
+    const scheduleStallCheck = () => {
+      if (element.paused || isAdPlaying()) return;
+      const vid = currentVideoId();
+      if (!vid || !nextFallbackQuality(trackQualityOverride.get(vid) || audioConfig.quality)) return;
+      clearStallTimer();
+      const stalledAt = element.currentTime;
+      stallTimer = setTimeout(() => {
+        stallTimer = null;
+        if (!element.paused && !isAdPlaying() && element.currentTime === stalledAt) {
+          recoverWithBestAvailableQuality("stall");
+        }
+      }, STALL_FALLBACK_MS);
+    };
+    element.addEventListener("waiting", scheduleStallCheck);
+    element.addEventListener("stalled", scheduleStallCheck);
+    element.addEventListener("error", () => {
+      if (!isAdPlaying()) {
+        recoverWithBestAvailableQuality("error");
+      }
+    });
     element.addEventListener("loadedmetadata", () => {
+      clearStallTimer();
+      if (
+        recoveringTrack &&
+        recoveringTrack.videoId === currentVideoId() &&
+        Date.now() < recoveringTrack.until
+      ) {
+        if (recoveringTrack.resumeAt > 0.5 && Math.abs(element.currentTime - recoveringTrack.resumeAt) > 1.5) {
+          try {
+            element.currentTime = recoveringTrack.resumeAt;
+          } catch {}
+        }
+        if (recoveringTrack.shouldPlay && element.paused) {
+          element.play().catch(() => {});
+        }
+      }
       applyPlayerQuality();
       syncAudioGraph();
       send("track");
       setTimeout(() => send("track"), METADATA_SETTLE_MS);
     });
     element.addEventListener("timeupdate", () => {
+      if (element.currentTime !== lastProgressTime) {
+        lastProgressTime = element.currentTime;
+        clearStallTimer();
+      }
       const now = Date.now();
       if (now - lastTimeReport >= TIME_REPORT_INTERVAL_MS) {
         lastTimeReport = now;
@@ -750,13 +986,18 @@
             if (video) video.volume = value;
           }
           break;
-        case "audioConfig":
+        case "audioConfig": {
+          const prevQuality = audioConfig.quality;
           audioConfig = normalizeAudioConfig(value);
+          if (audioConfig.quality !== prevQuality) {
+            trackQualityOverride.clear();
+          }
           saveAudioConfig(audioConfig);
           applyPlayerQuality();
           syncAudioGraph();
           send("audio");
           break;
+        }
       }
     },
   });

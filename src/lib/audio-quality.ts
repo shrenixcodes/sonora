@@ -113,8 +113,16 @@ export function formatAudioTelemetry(
   settings: Pick<UserSettings, "audioQuality" | "audioEnhancement" | "normalizeVolume">,
   info?: AudioStreamInfo | null,
 ): string {
-  const mode = audioQualityOption(sanitizeAudioQuality(settings.audioQuality));
-  const parts: string[] = [mode.badge];
+  const requested = sanitizeAudioQuality(settings.audioQuality);
+  const mode = audioQualityOption(requested);
+  const parts: string[] = [];
+
+  if (info?.fallbackUsed && info.effectiveQuality) {
+    const activeMode = audioQualityOption(info.effectiveQuality);
+    parts.push(`${mode.badge} → Best Available (${activeMode.badge})`);
+  } else {
+    parts.push(mode.badge);
+  }
 
   if (info?.codec) parts.push(info.codec);
   if (info?.bitrateKbps) parts.push(`${info.bitrateKbps} kbps`);
@@ -123,7 +131,7 @@ export function formatAudioTelemetry(
   if (info?.dspActive) {
     const rate = info.dspSampleRate ? ` (${(info.dspSampleRate / 1000).toFixed(1)} kHz)` : "";
     parts.push(`DSP Active${rate}`);
-  } else if (settings.audioQuality === "lossless" || settings.audioEnhancement !== "off" || settings.normalizeVolume) {
+  } else if (requested === "lossless" || settings.audioEnhancement !== "off" || settings.normalizeVolume) {
     parts.push("DSP Ready");
   }
 
@@ -140,9 +148,15 @@ export function formatCompactQualityBadge(
   info?: AudioStreamInfo | null,
 ): string | null {
   if (settings.audioQuality === "lossless") {
+    if (info?.fallbackUsed) {
+      return info.bitrateKbps ? `Best · ${info.bitrateKbps} kbps` : "Best Available";
+    }
     return info?.bitrateKbps ? `Lossless · ${info.bitrateKbps} kbps` : "Lossless Studio";
   }
   if (settings.audioQuality === "high") {
+    if (info?.fallbackUsed) {
+      return info.bitrateKbps ? `Best · ${info.bitrateKbps} kbps` : "Best Available";
+    }
     if (info?.bitrateKbps) return `High · ${info.bitrateKbps} kbps`;
     if (settings.audioEnhancement !== "off") return audioEnhancementOption(settings.audioEnhancement).label;
     return null;

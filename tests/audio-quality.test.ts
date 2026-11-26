@@ -58,6 +58,18 @@ describe("Audio quality, Lossless mode, and Enhancement settings", () => {
         { codec: "Opus", bitrateKbps: 256, dspActive: true },
       ),
     ).toBe("Lossless · 256 kbps");
+    expect(
+      formatCompactQualityBadge(
+        { audioQuality: "lossless", audioEnhancement: "off" },
+        { codec: "Opus", bitrateKbps: 160, dspActive: true, effectiveQuality: "high", fallbackUsed: true },
+      ),
+    ).toBe("Best · 160 kbps");
+    expect(
+      formatAudioTelemetry(
+        { audioQuality: "lossless", audioEnhancement: "off", normalizeVolume: true },
+        { codec: "Opus", bitrateKbps: 160, dspActive: true, effectiveQuality: "high", fallbackUsed: true },
+      ),
+    ).toContain("Best Available (High Quality)");
     expect(formatCompactQualityBadge({ audioQuality: "balanced", audioEnhancement: "off" }, null)).toBeNull();
   });
 

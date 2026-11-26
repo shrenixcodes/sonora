@@ -185,11 +185,16 @@ export function renderNowPlaying(container: HTMLElement): void {
 
   const updateQualityBadge = () => {
     const currentSettings = storage.getSettings();
-    const label = formatCompactQualityBadge(currentSettings, playerEngine.currentState.audioInfo);
+    const info = playerEngine.currentState.audioInfo;
+    const label = formatCompactQualityBadge(currentSettings, info);
     qualityBadgeBtn.toggleAttribute("hidden", !label);
-    qualityBadgeBtn.classList.toggle("now-playing__quality-badge--lossless", currentSettings.audioQuality === "lossless");
+    const isNativeLossless = currentSettings.audioQuality === "lossless" && !info?.fallbackUsed;
+    qualityBadgeBtn.classList.toggle("now-playing__quality-badge--lossless", isNativeLossless);
+    qualityBadgeBtn.classList.toggle("now-playing__quality-badge--fallback", Boolean(info?.fallbackUsed));
     if (label) {
       qualityBadgeBtn.textContent = label;
+      const tip = info?.fallbackReason ?? `Audio quality: ${label}. Open settings.`;
+      qualityBadgeBtn.setAttribute("title", tip);
       qualityBadgeBtn.setAttribute("aria-label", `Audio quality: ${label}. Open settings.`);
     }
   };
