@@ -4,6 +4,14 @@ All notable changes to Sonora are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Documentation and maintenance
+- Updated setup, usage, shortcuts, architecture, and design guidance for the current codebase.
+- Added the MIT license text, contribution and security guidance, issue and pull request templates, and Windows CI checks.
+
+---
+
 ## [0.7.20] – 2026-11-26
 
 ### ✨ New Features
@@ -78,7 +86,7 @@ All notable changes to Sonora are documented in this file.
 ### ✨ New Features
 
 #### YouTube Music Ad Filtering
-- **Integrated ad filtering**: Built-in native ad filtering using Brave adblock rules and player response inspection, blocking pre-roll and audio ads without interrupting music streams or breaking Google sign-in.
+- **Integrated ad filtering**: Built-in native ad filtering using Brave adblock rules and player response inspection. Filtering can miss ads and is not guaranteed to preserve playback for every upstream change.
 - Seamlessly integrated with floating window and desktop playback controls.
 
 #### Song Radio & Continuous Queue Recommendations

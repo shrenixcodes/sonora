@@ -18,8 +18,8 @@ desktop.ini
 
 # Environment
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Debug
 *.log

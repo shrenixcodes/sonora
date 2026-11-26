@@ -1,191 +1,118 @@
 <div align="center">
-  <img src="public/sonora-logo.svg" alt="Sonora Logo" width="120" height="120" />
+  <img src="public/sonora-logo.svg" alt="Sonora logo" width="120" height="120" />
   <h1>Sonora</h1>
-  <p><strong>An immersive, lightweight, and atmospheric YouTube Music desktop client for Windows</strong></p>
-  <p>Built with Tauri 2, Rust, WebGL, and TypeScript</p>
+  <p>A Windows desktop client for YouTube Music with artwork-driven visuals.</p>
+
+  [![CI](https://github.com/shrenixcodes/sonora/actions/workflows/ci.yml/badge.svg)](https://github.com/shrenixcodes/sonora/actions/workflows/ci.yml)
+  [![Latest release](https://img.shields.io/github/v/release/shrenixcodes/sonora)](https://github.com/shrenixcodes/sonora/releases/latest)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 </div>
 
----
+Sonora combines a TypeScript interface and WebGL ambience with a Tauri/Rust desktop shell. Playback and catalog requests use the YouTube Music web app in a separate WebView2 profile. Sonora is a community project and is not an official YouTube Music application.
 
-## Overview
-
-Sonora is designed to make desktop music listening visual, atmospheric, and responsive. Instead of a heavy web-wrapper, Sonora couples a lightweight native Rust core with a custom vanilla TypeScript interface and WebGL-powered ambient background shaders.
-
-### Key Pillars
-
-- **Immersion:** Artwork-driven visual atmospheres that react to current album art without degrading interface readability.
-- **Performance:** Native window chrome, low idle resource consumption, throttled 30 FPS ambient visualizer, and sub-second startup.
-- **Customization:** Comprehensive Appearance Studio supporting dark and light themes, custom accent colors, UI density options, and theme configuration export/import.
-
----
+**Platform:** Windows 10/11 x64. The frontend can run in a browser for interface development, but playback, account access, and native desktop features require the Windows application.
 
 ## Features
 
-### Music Playback & Queue
-- Integrated YouTube playback engine with official stream synchronization.
-- Windows ad filtering powered by Brave's adblock engine and EasyList/Brave rules. Lists are checked for updates at startup, at most once a day; a bundled copy is used offline. Some ads can still play, and Brave browser cosmetic filters and its full scriptlet set are not included.
-- Persistent player dock with scrubbable progress bar, volume slider, shuffle, and repeat modes.
-- Full queue management with automatic playlist continuation and song radio that queues up to 25 YouTube Music recommendations and continues with more as they run low.
-- Right-click songs to queue them, add them to Sonora playlists, copy links, or find their artist and album in search.
-- System Media Transport Controls (SMTC) integration for Windows 10 and 11 hardware media keys and lockscreen overlay.
+- Search songs, videos, artists, albums, and playlists; browse Home and Explore; and open artist and collection views.
+- Play, seek, shuffle, repeat, reorder the queue, and start song radio from a track. Radio recommendations come from YouTube Music and can vary or be unavailable.
+- Use song actions to queue tracks, add them to local Sonora playlists, copy links, and navigate to artists or albums. Local playlists are distinct from YouTube Music account playlists.
+- View synced lyrics when a provider has them, adjust lyric size, and open the Now Playing view.
+- Use Appearance Studio in Settings to customize light/dark theme, accent, density, ambient visualizer, frame rate, intensity, and theme JSON.
+- Select audio quality and enhancement settings, use Windows media controls, choose a per-app audio output, and optionally show Discord Rich Presence.
+- Check GitHub Releases for updates. Windows ad filtering uses Brave's filter engine and rule lists; it is not the full Brave browser and may not block every ad.
 
-### Immersive Now Playing
-- Prominent album artwork with adaptive dynamic color extraction.
-- Independent WebGL shader engine with multiple visualizer styles:
-  - **Aurora:** Organic flowing ribbon waves.
-  - **Fluid:** Atmospheric metaball fields.
-  - **Glow:** Gentle pulsing ambient bloom.
-  - **Cinematic:** Vignette stage backlight.
-  - **Minimal:** Soft accent gradient.
-- Synchronized line-by-line lyrics powered by open lyrics providers with click-to-seek navigation.
-- Dedicated fullscreen immersion mode.
+The **Lossless** setting requests the best available source and applies the app's processing chain. It cannot turn a compressed source into a lossless recording; actual stream availability and quality depend on YouTube Music.
 
-### Exploration & Library
-- **Home:** Quick picks, personalized daily recommendations, and recently played albums.
-- **Explore:** Mood and genre soundscapes (Chill, Focus, Energy, Synthwave, Acoustic, Rock, Classical).
-- **Search:** Real-time debounced search across songs, albums, and artists.
-- **Library:** Saved favorites, custom playlists, and local listening history.
+## Visual direction
 
-### Appearance Studio
-- **Themes:** Charcoal Dark (`#17151C`) and Bone Light (`#F0EBDD`).
-- **Accent Palettes:** Dusty Purple, Bottle Green, Electric Blue, Muted Gold, Coral Vermilion, Rose Pink, and Emerald.
-- **Visualizer Controls:** Selectable shader algorithms, frame rate throttling (15 / 30 / 60 FPS), and intensity sliders.
-- **Theme Portability:** Export and import personalized theme configurations as JSON.
+![Sonora theme and accent palette](docs/design/palette.svg)
 
----
+The palette above is a design reference drawn from the app's tokens, not an application screenshot. Aurora, Fluid, Glow, Cinematic, and Minimal are available visualizer modes; None disables the effect. A current hero recording, mode screenshot grid, and matched light/dark captures have not yet been added. See [the capture guide](docs/design/captures.md) for the required real-app capture set.
 
-## Tech Stack
+## Install
 
-| Layer | Technology |
-|---|---|
-| **Desktop Shell** | [Tauri 2](https://v2.tauri.app/) (Rust) |
-| **Frontend Runtime** | Vanilla TypeScript (ES2022) |
-| **Build Tooling** | [Vite 8](https://vitejs.dev/) |
-| **Graphics & Shaders** | WebGL / GLSL (Fragment Shaders) |
-| **Testing** | [Vitest](https://vitest.dev/) with JSDOM |
-| **Package Manager** | [pnpm](https://pnpm.io/) |
-| **Target Platform** | Windows 10 & 11 (x64) |
+Download the Windows x64 installer from [the latest release](https://github.com/shrenixcodes/sonora/releases/latest), run it, and launch Sonora. The latest release shown by GitHub may differ from the version in a development checkout.
 
----
+### Build from source
 
-## Getting Started
+Prerequisites:
 
-### Prerequisites
+- Windows 10/11 x64 and the Microsoft Edge WebView2 runtime.
+- Node.js 20.19 or later in the 20.x line, or Node.js 22.12 or later, as required by the current Vite version.
+- pnpm 12.21.0, the version pinned in `package.json`.
+- Stable Rust with the Windows MSVC toolchain and Visual Studio C++ build tools. See [Tauri's Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows).
 
-- [Node.js](https://nodejs.org/) (v20+ recommended)
-- [pnpm](https://pnpm.io/) (v10+ or v12+)
-- [Rust](https://www.rust-lang.org/) (stable toolchain)
-- Windows 10 or 11 with WebView2 runtime (pre-installed on modern Windows)
-
-### Installation
-
-Clone the repository and install dependencies:
-
-```bash
-git clone https://github.com/shreyanbag/sonora.git
+```powershell
+git clone https://github.com/shrenixcodes/sonora.git
 cd sonora
-pnpm install
-```
-
-### Development
-
-Run the frontend development server:
-
-```bash
-pnpm dev
-```
-
-Run the complete desktop application in development mode:
-
-```bash
+pnpm install --frozen-lockfile
 pnpm tauri:dev
 ```
 
-### Running Tests
+Install pnpm first if needed, for example with `npm install --global pnpm@12.21.0`. No `.env` file or API key is required for the normal setup. `TAURI_DEV_HOST` is an optional shell environment variable for remote frontend development; it is not needed on the same machine.
 
-Execute the unit test suite:
+## Quick start
 
-```bash
-pnpm test
+1. Open Sonora and use Search or Home to find a song. Sign in through **Settings** to access your YouTube Music account data.
+2. Select a song to play it. Use the player and Up next panel for playback, queue order, and volume. Right-click a song for more actions; the radio control starts recommendations based on that song.
+3. Open **Now Playing** for artwork and available lyrics. In **Settings**, choose the theme, accent, visualizer, and audio options that suit your machine.
+4. Create a local playlist in **Playlists**, then use a song's context menu to add it. These playlists are stored locally.
+
+## Configuration
+
+Settings are stored locally. Theme export creates `sonora-theme.json` with appearance settings: theme, accent, visualizer mode, FPS limit, intensity, density, and lyrics size. Import accepts those settings and applies valid values; it is not a backup of playlists, account data, audio settings, or the WebView profile. Keep account profiles and personal exports private.
+
+The visualizer supports 15, 30, and 60 FPS limits and follows reduced-motion preferences. Audio quality and output depend on the available stream and Windows device. Sign-in and account features depend on YouTube Music and a working connection.
+
+## Development and checks
+
+```powershell
+pnpm dev          # frontend only
+pnpm tauri:dev    # desktop app with native bridge
+pnpm lint
+pnpm check        # TypeScript
+pnpm test         # Vitest
+pnpm build        # production frontend
+pnpm tauri:build  # Windows executable and NSIS installer
 ```
 
-Perform TypeScript type checks:
+For Rust checks, run `cargo fmt --check` and `cargo test --locked` in `src-tauri`. The Windows installer is written under `src-tauri/target/release/bundle/nsis/` with the default Cargo target directory. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, verification, and UI guidance.
 
-```bash
-pnpm check
-```
+## Keyboard shortcuts
 
-### Production Build
+| Key | Action |
+| --- | --- |
+| Ctrl+K | Focus search |
+| Space | Play or pause |
+| Left / Right | Seek backward / forward five seconds |
+| Up / Down | Raise / lower volume by 5% |
+| M | Mute or unmute |
+| L | Toggle like on the current track |
+| F | Open or leave Now Playing |
 
-Build the production frontend bundle:
+Most playback shortcuts are ignored while typing in a text field. Sliders and menus also support keyboard navigation. F8 and F9 are manual splash and restore-animation preview shortcuts.
 
-```bash
-pnpm build
-```
-
-Compile the standalone native Windows executable and installer:
-
-```bash
-pnpm tauri:build
-```
-
----
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| <kbd>Space</kbd> | Play / Pause playback |
-| <kbd>←</kbd> | Seek backward 5 seconds |
-| <kbd>→</kbd> | Seek forward 5 seconds |
-| <kbd>↑</kbd> | Increase volume (+5%) |
-| <kbd>↓</kbd> | Decrease volume (-5%) |
-| <kbd>M</kbd> | Toggle Mute |
-| <kbd>L</kbd> | Toggle Like for current track |
-| <kbd>F</kbd> | Toggle Fullscreen / Now Playing |
-
----
-
-## Architecture
+## Repository map
 
 ```text
-sonora/
-├── index.html                   # Shell container and viewport markup
-├── package.json                 # Node dependencies and scripts
-├── tsconfig.json                # TypeScript configuration (strict mode)
-├── vite.config.ts               # Vite configuration and path resolution
-├── vitest.config.ts             # Vitest test runner configuration
-├── public/                      # Static branding assets and webview icons
-├── src-tauri/                   # Rust desktop backend
-│   ├── Cargo.toml               # Rust package manifest
-│   ├── tauri.conf.json          # Tauri application and security settings
-│   ├── capabilities/            # Window and permission capabilities
-│   ├── icons/                   # Multi-resolution Windows app icons
-│   └── src/
-│       ├── main.rs              # Desktop executable entry
-│       ├── lib.rs               # App builder and plugin registration
-│       └── commands.rs          # Native IPC command handlers
-├── src/                         # TypeScript frontend
-│   ├── components/              # Persistent UI components (titlebar, sidebar, player)
-│   ├── icons/                   # Crisp inline SVG icon suite
-│   ├── lib/
-│   │   ├── dom.ts               # DOM manipulation helpers
-│   │   ├── events.ts            # Type-safe event emitter
-│   │   ├── router.ts            # Hash-based client router
-│   │   ├── storage.ts           # Local storage persistence
-│   │   ├── theme.ts             # Dark/Light theme manager
-│   │   ├── lyrics/              # LRC parser and lyrics synchronization
-│   │   ├── playback/            # Playback engine, queue, and YouTube integration
-│   │   └── visuals/             # WebGL ambient shader engine & color extraction
-│   ├── styles/                  # Design tokens, reset, component CSS
-│   ├── types/                   # Core music and application types
-│   ├── views/                   # Application views (Home, Explore, Search, Library, Settings, Now Playing)
-│   └── main.ts                  # Application bootstrap and global shortcuts
-└── tests/                       # Unit and integration test suite
+src/components/          Shared player, navigation, queue, and dialogs
+src/views/               Home, search, library, settings, artist, and collection views
+src/lib/playback/        Playback engine, queue, and radio
+src/lib/ytm/             YouTube Music catalog and response parsing
+src/lib/visuals/         WebGL visualizers, artwork palette, and window animations
+src/styles/              Design tokens and component styles
+src-tauri/src/           Rust commands, WebView bridge, updates, and audio routing
+src-tauri/filters/       Bundled ad-filter lists and their notices
+public/                  Logo, font, and static assets
+tests/                   Vitest tests
+docs/design/             Design references and capture guidance
 ```
 
----
+## Contributing and support
 
-## License
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), and the [code of conduct](CODE_OF_CONDUCT.md). Report bugs or request features through [GitHub Issues](https://github.com/shrenixcodes/sonora/issues); use [SECURITY.md](SECURITY.md) for private vulnerability reporting. Release history is in [CHANGELOG.md](CHANGELOG.md).
 
-This project is licensed under the [MIT License](LICENSE).
+## License and acknowledgments
+
+Sonora's source is distributed under the [MIT License](LICENSE). Bundled third-party materials retain their own licenses: see [ad-filter notices](src-tauri/filters/NOTICE.txt) and the [Inter font license](public/fonts/Inter-LICENSE.txt). Sonora uses YouTube Music, Tauri, WebView2, and other open-source dependencies; their names and marks belong to their respective owners.

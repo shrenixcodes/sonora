@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 340" role="img" aria-labelledby="title desc">
+<title id="title">Sonora palette</title>
+<desc id="desc">The two theme backgrounds and eight accent colors used in Sonora Settings.</desc>
+<rect width="1000" height="340" rx="20" fill="#211E29"/>
+<text x="28" y="43" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="23" font-weight="600">SONORA / COLOR REFERENCE</text>
+<text x="28" y="68" fill="#A9A3B3" font-family="Segoe UI, sans-serif" font-size="13">Theme backgrounds and selectable accents</text>
+<rect x="28" y="90" width="178" height="64" rx="8" fill="#17151C" stroke="#736D7E"/>
+<text x="28" y="174" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Charcoal</text>
+<text x="28" y="192" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#17151C</text>
+<rect x="222" y="90" width="178" height="64" rx="8" fill="#F0EBDD" stroke="#736D7E"/>
+<text x="222" y="174" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Bone</text>
+<text x="222" y="192" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#F0EBDD</text>
+<rect x="416" y="90" width="178" height="64" rx="8" fill="#A78BFA" stroke="#736D7E"/>
+<text x="416" y="174" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Dusty Purple</text>
+<text x="416" y="192" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#A78BFA</text>
+<rect x="610" y="90" width="178" height="64" rx="8" fill="#315E48" stroke="#736D7E"/>
+<text x="610" y="174" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Bottle Green</text>
+<text x="610" y="192" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#315E48</text>
+<rect x="804" y="90" width="178" height="64" rx="8" fill="#3B82F6" stroke="#736D7E"/>
+<text x="804" y="174" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Electric Blue</text>
+<text x="804" y="192" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#3B82F6</text>
+<rect x="28" y="210" width="178" height="64" rx="8" fill="#C9A96E" stroke="#736D7E"/>
+<text x="28" y="294" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Muted Gold</text>
+<text x="28" y="312" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#C9A96E</text>
+<rect x="222" y="210" width="178" height="64" rx="8" fill="#D95342" stroke="#736D7E"/>
+<text x="222" y="294" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Coral</text>
+<text x="222" y="312" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#D95342</text>
+<rect x="416" y="210" width="178" height="64" rx="8" fill="#F472B6" stroke="#736D7E"/>
+<text x="416" y="294" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Rose Pink</text>
+<text x="416" y="312" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#F472B6</text>
+<rect x="610" y="210" width="178" height="64" rx="8" fill="#10B981" stroke="#736D7E"/>
+<text x="610" y="294" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Emerald</text>
+<text x="610" y="312" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#10B981</text>
+<rect x="804" y="210" width="178" height="64" rx="8" fill="#14B8A6" stroke="#736D7E"/>
+<text x="804" y="294" fill="#F4F0F6" font-family="Segoe UI, sans-serif" font-size="13">Teal</text>
+<text x="804" y="312" fill="#A9A3B3" font-family="Consolas, monospace" font-size="12">#14B8A6</text>
+</svg>
