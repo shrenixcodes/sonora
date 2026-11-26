@@ -23,24 +23,24 @@ Sonora combines a vanilla TypeScript interface and WebGL ambience with a Tauri 2
 
 ## Visual Direction
 
-Real desktop captures from the Windows release build (showing floating dark window framing, synced LRCLIB lyrics, and adaptive artwork palettes across **Joji — *LOVE YOU LESS*** and **The Strokes — *Ode To The Mets***):
+Real desktop captures from the Windows release build showing floating window framing, synced LRCLIB lyrics, and adaptive artwork palettes:
 
 ### Live Floating Window Previews
 
 | Fluid Visualizer (`Floating Window`) | Taskbar Restore (`Minimized → Restored`) |
 | :---: | :---: |
-| ![Sonora Fluid visualizer in floating dark mode playing The Strokes - Ode To The Mets](docs/images/hero-visualizer.gif) | ![Sonora taskbar restore animation unveiling floating Now Playing window](docs/images/splash-restore.gif) |
-| Continuous domain-warped shader ribbons behind synced lyrics (*The Strokes — Ode To The Mets*) | Vinyl artwork emerge burst restoring from minimized/taskbar state |
+| ![Sonora Fluid visualizer in floating dark mode](docs/images/hero-visualizer.gif) | ![Sonora taskbar restore animation unveiling floating Now Playing window](docs/images/splash-restore.gif) |
+| Continuous domain-warped shader ribbons behind synced lyrics | Vinyl artwork emerge burst restoring from minimized/taskbar state |
 
 ### Visualizer Modes (`Now Playing`)
 
-| Aurora (`Joji — LOVE YOU LESS`) | Fluid (`Joji — LOVE YOU LESS`) |
+| Aurora | Fluid |
 | :---: | :---: |
-| ![Sonora Aurora visualizer mode playing Joji - LOVE YOU LESS](docs/images/visualizer-aurora.png) | ![Sonora Fluid visualizer mode playing Joji - LOVE YOU LESS](docs/images/visualizer-fluid.png) |
+| ![Sonora Aurora visualizer mode in Now Playing](docs/images/visualizer-aurora.png) | ![Sonora Fluid visualizer mode in Now Playing](docs/images/visualizer-fluid.png) |
 
-| Glow (`The Strokes — Ode To The Mets`) | Cinematic (`The Strokes — Ode To The Mets`) | Minimal (`The Strokes — Ode To The Mets`) |
+| Glow | Cinematic | Minimal |
 | :---: | :---: | :---: |
-| ![Sonora Glow visualizer mode playing The Strokes - Ode To The Mets](docs/images/visualizer-glow.png) | ![Sonora Cinematic visualizer mode playing The Strokes - Ode To The Mets](docs/images/visualizer-cinematic.png) | ![Sonora Minimal visualizer mode playing The Strokes - Ode To The Mets](docs/images/visualizer-minimal.png) |
+| ![Sonora Glow visualizer mode in Now Playing](docs/images/visualizer-glow.png) | ![Sonora Cinematic visualizer mode in Now Playing](docs/images/visualizer-cinematic.png) | ![Sonora Minimal visualizer mode in Now Playing](docs/images/visualizer-minimal.png) |
 
 | Mode | Shader Effect | Behavior |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ See [the shader reference](docs/design/shaders.md) for GLSL uniform and color-ex
 
 | Dark Theme (`Charcoal`) | Light Theme (`Bone`) |
 | :---: | :---: |
-| ![Sonora Charcoal Dark theme Search view playing Ode To The Mets](docs/images/theme-dark.png) | ![Sonora Bone Light theme Search view playing Ode To The Mets](docs/images/theme-light.png) |
+| ![Sonora Charcoal Dark theme Search view](docs/images/theme-dark.png) | ![Sonora Bone Light theme Search view](docs/images/theme-light.png) |
 
 | Aspect | Dark Theme (`Charcoal`) | Light Theme (`Bone`) |
 | --- | --- | --- |
@@ -280,3 +280,5 @@ Sonora's source code is licensed under the [MIT License](LICENSE). Bundled third
 * **Ad-filter engine & rule lists:** `adblock-rust` & Brave filter lists (MPL 2.0) and EasyList (CC BY-SA 3.0) — see [src-tauri/filters/NOTICE.txt](src-tauri/filters/NOTICE.txt).
 * **Typography:** Inter Variable (SIL Open Font License 1.1) — see [public/fonts/Inter-LICENSE.txt](public/fonts/Inter-LICENSE.txt).
 * **Ecosystem & libraries:** [YouTube Music](https://music.youtube.com/), [Tauri](https://v2.tauri.app/), Microsoft Edge WebView2, [LRCLIB](https://lrclib.net/), [`discord-rich-presence`](https://crates.io/crates/discord-rich-presence), and the open-source Rust and TypeScript ecosystems. All third-party names and marks belong to their respective owners.
+
+<sub>Sample captures feature <em>Joji — LOVE YOU LESS</em> and <em>The Strokes — Ode To The Mets</em>.</sub>
