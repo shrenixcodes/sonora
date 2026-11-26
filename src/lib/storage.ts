@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   normalizeVolume: true,
   autoPlayNext: true,
   enableDiscordRpc: true,
+  audioOutputDeviceId: null,
 };
 
 class StorageService extends EventEmitter<StorageEvents> {

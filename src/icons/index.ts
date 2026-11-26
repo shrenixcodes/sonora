@@ -6,6 +6,66 @@
  * crisp and styleable with CSS currentColor.
  */
 
+export type AudioDeviceIconType =
+  | "speaker"
+  | "headphones"
+  | "headset"
+  | "earbuds"
+  | "monitor"
+  | "dac"
+  | "handset"
+  | "generic";
+
+export type AudioTransportIconType = "wired" | "wireless" | "bluetooth";
+
+const DEVICE_BODIES: Record<AudioDeviceIconType, string> = {
+  speaker: `<rect x="3" y="4" width="11" height="16" rx="2"/><circle cx="8.5" cy="14.5" r="2.8"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>`,
+  headphones: `<path d="M3 15v-2.5a6 6 0 0 1 12 0V15"/><rect x="1.5" y="13.5" width="3" height="5" rx="1.2"/><rect x="13.5" y="13.5" width="3" height="5" rx="1.2"/>`,
+  headset: `<path d="M3 14.5v-2a6 6 0 0 1 12 0v2"/><rect x="1.5" y="13" width="3" height="4.5" rx="1.2"/><rect x="13.5" y="13" width="3" height="4.5" rx="1.2"/><path d="M15 17.5c0 2-1.8 3-4.5 3"/>`,
+  earbuds: `<path d="M4.5 6.5a2.5 2.5 0 0 1 2.5 2.5v3.5a2 2 0 0 1-2 2H4a1.5 1.5 0 0 1-1.5-1.5V9a2.5 2.5 0 0 1 2-2.5z"/><path d="M12.5 6.5A2.5 2.5 0 0 1 15 9v3.5a2 2 0 0 1-2 2h-1a1.5 1.5 0 0 1-1.5-1.5V9a2.5 2.5 0 0 1 2-2.5z"/><line x1="4.8" y1="14.5" x2="4.8" y2="18.5"/><line x1="12.8" y1="14.5" x2="12.8" y2="18.5"/>`,
+  monitor: `<rect x="2" y="5" width="13.5" height="9.5" rx="1.5"/><line x1="8.75" y1="14.5" x2="8.75" y2="18.5"/><line x1="5.5" y1="18.5" x2="12" y2="18.5"/>`,
+  dac: `<rect x="2" y="8" width="13.5" height="8.5" rx="2"/><circle cx="6" cy="12.25" r="1.4"/><circle cx="11.5" cy="12.25" r="1.4"/>`,
+  handset: `<path d="M5.5 4h2.8l1.2 3.5-1.8 1.3a8.5 8.5 0 0 0 3.5 3.5l1.3-1.8L16 11.7v2.8a1.8 1.8 0 0 1-1.8 1.8A12 12 0 0 1 3.7 5.8 1.8 1.8 0 0 1 5.5 4z"/>`,
+  generic: `<polygon points="9 6 5 9.8 2 9.8 2 14.2 5 14.2 9 18 9 6"/><path d="M12.5 9.5a3.8 3.8 0 0 1 0 5"/>`,
+};
+
+const TRANSPORT_BADGES: Record<AudioTransportIconType, string> = {
+  wired: `<line x1="19.5" y1="12" x2="19.5" y2="17"/><rect x="17.8" y="17" width="3.4" height="3.2" rx="0.8"/><line x1="19.5" y1="20.2" x2="19.5" y2="22.2"/>`,
+  wireless: `<path d="M17.5 3.8a5.2 5.2 0 0 1 4.5 4.5"/><path d="M17.5 6.8a2.2 2.2 0 0 1 1.7 1.7"/>`,
+  bluetooth: `<polyline points="18.2 3.5 22.2 6.8 17.5 10.2"/><polyline points="17.5 5.8 22.2 9.2 18.2 12.5"/><line x1="19.5" y1="3" x2="19.5" y2="13"/>`,
+};
+
+function buildDeviceIcon(deviceType: AudioDeviceIconType, transport: AudioTransportIconType): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round">${DEVICE_BODIES[deviceType]}${TRANSPORT_BADGES[transport]}</svg>`;
+}
+
+export const AUDIO_DEVICE_ICONS = {
+  deviceSpeakerWired: buildDeviceIcon("speaker", "wired"),
+  deviceSpeakerWireless: buildDeviceIcon("speaker", "wireless"),
+  deviceSpeakerBluetooth: buildDeviceIcon("speaker", "bluetooth"),
+  deviceHeadphonesWired: buildDeviceIcon("headphones", "wired"),
+  deviceHeadphonesWireless: buildDeviceIcon("headphones", "wireless"),
+  deviceHeadphonesBluetooth: buildDeviceIcon("headphones", "bluetooth"),
+  deviceHeadsetWired: buildDeviceIcon("headset", "wired"),
+  deviceHeadsetWireless: buildDeviceIcon("headset", "wireless"),
+  deviceHeadsetBluetooth: buildDeviceIcon("headset", "bluetooth"),
+  deviceEarbudsWired: buildDeviceIcon("earbuds", "wired"),
+  deviceEarbudsWireless: buildDeviceIcon("earbuds", "wireless"),
+  deviceEarbudsBluetooth: buildDeviceIcon("earbuds", "bluetooth"),
+  deviceMonitorWired: buildDeviceIcon("monitor", "wired"),
+  deviceMonitorWireless: buildDeviceIcon("monitor", "wireless"),
+  deviceMonitorBluetooth: buildDeviceIcon("monitor", "bluetooth"),
+  deviceDacWired: buildDeviceIcon("dac", "wired"),
+  deviceDacWireless: buildDeviceIcon("dac", "wireless"),
+  deviceDacBluetooth: buildDeviceIcon("dac", "bluetooth"),
+  deviceHandsetWired: buildDeviceIcon("handset", "wired"),
+  deviceHandsetWireless: buildDeviceIcon("handset", "wireless"),
+  deviceHandsetBluetooth: buildDeviceIcon("handset", "bluetooth"),
+  deviceGenericWired: buildDeviceIcon("generic", "wired"),
+  deviceGenericWireless: buildDeviceIcon("generic", "wireless"),
+  deviceGenericBluetooth: buildDeviceIcon("generic", "bluetooth"),
+} as const;
+
 export const icons = {
   home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
 
@@ -53,7 +113,9 @@ export const icons = {
 
   queue: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
 
-  lyrics: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
+  microphone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
+
+  lyrics: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
 
   fullscreen: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
 
@@ -74,10 +136,64 @@ export const icons = {
   refresh: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,
 
   music: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
+
+  ...AUDIO_DEVICE_ICONS,
+
   sonoraLogo: `<svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M256.9,311.6 L247.1,302.7 L233.8,297.4 L230.2,297.4 L229.3,296.5 L205.3,296.5 L204.4,297.4 L199.1,297.4 L198.2,298.2 L195.5,298.2 L194.6,299.1 L192.0,299.1 L191.1,300.0 L188.4,300.0 L187.5,300.9 L184.9,300.9 L184.0,301.8 L176.8,303.6 L174.2,305.4 L168.0,307.1 L146.6,317.8 L142.2,321.4 L139.5,322.3 L131.5,328.5 L127.9,330.3 L123.5,334.7 L117.3,339.2 L106.6,349.8 L95.9,364.1 L89.7,376.5 L89.7,378.3 L87.9,381.8 L87.9,384.5 L87.0,385.4 L87.0,389.0 L86.1,389.9 L86.1,404.1 L87.0,405.0 L87.0,407.6 L87.9,408.5 L88.8,413.0 L91.5,418.3 L101.2,429.0 L109.3,434.3 L112.8,435.2 L115.5,437.0 L117.3,437.0 L120.8,438.8 L123.5,438.8 L124.4,439.7 L128.8,439.7 L129.7,440.5 L148.4,440.5 L149.3,439.7 L154.6,439.7 L155.5,438.8 L163.5,437.9 L164.4,437.0 L167.1,437.0 L168.0,436.1 L180.4,432.5 L202.6,421.9 L207.1,418.3 L209.8,417.4 L224.0,405.9 L224.9,405.9 L238.2,392.5 L252.4,373.0 L258.7,360.5 L258.7,358.7 L261.3,352.5 L261.3,349.8 L262.2,348.9 L262.2,345.4 L263.1,344.5 L264.0,332.9 L263.1,332.0 L262.2,323.1 L261.3,322.3 L260.4,317.8 Z" fill="currentColor" /><path d="M251.6,51.0 L251.6,226.2 L252.4,227.1 L252.4,234.2 L253.3,235.1 L253.3,238.7 L254.2,239.5 L254.2,242.2 L255.1,243.1 L256.0,247.6 L258.7,252.0 L258.7,253.8 L260.4,255.6 L264.0,262.7 L269.3,269.8 L277.3,277.8 L278.2,277.8 L289.8,287.6 L300.5,294.7 L303.1,295.6 L307.6,299.1 L312.0,300.9 L313.8,302.7 L316.5,303.6 L318.3,305.4 L320.9,306.2 L322.7,308.0 L325.4,308.9 L340.5,318.7 L347.6,324.9 L348.5,324.9 L357.4,333.8 L363.6,342.7 L369.0,356.1 L369.0,361.4 L369.8,362.3 L369.8,373.0 L369.0,373.8 L369.0,378.3 L368.1,379.2 L368.1,382.7 L367.2,383.6 L366.3,388.1 L360.9,398.7 L354.7,407.6 L341.4,421.0 L324.5,432.5 L304.0,442.3 L299.6,443.2 L296.9,445.0 L295.1,445.0 L283.6,449.4 L280.9,449.4 L280.0,450.3 L277.3,450.3 L272.9,452.1 L269.3,452.1 L268.5,453.0 L261.3,453.9 L260.4,454.8 L256.0,454.8 L255.1,455.7 L243.5,456.6 L242.7,457.4 L222.2,458.3 L221.3,459.2 L208.0,459.2 L251.6,461.0 L252.4,460.1 L267.6,460.1 L268.5,459.2 L284.5,458.3 L285.3,457.4 L296.9,456.6 L297.8,455.7 L301.4,455.7 L302.2,454.8 L305.8,454.8 L310.3,453.0 L317.4,452.1 L318.3,451.2 L323.6,450.3 L329.8,447.7 L332.5,447.7 L335.2,445.9 L342.3,444.1 L344.9,442.3 L351.2,440.5 L355.6,437.9 L357.4,437.9 L374.3,429.0 L387.6,420.1 L406.3,402.3 L413.4,392.5 L418.8,382.7 L418.8,381.0 L420.5,378.3 L420.5,376.5 L422.3,373.8 L422.3,371.2 L424.1,367.6 L425.0,356.9 L425.9,356.1 L425.9,343.6 L425.0,342.7 L425.0,336.5 L424.1,335.6 L424.1,332.0 L423.2,331.2 L420.5,321.4 L411.6,305.4 L401.0,292.9 L400.1,292.9 L393.9,286.7 L378.7,276.0 L376.1,275.1 L374.3,273.3 L369.8,271.6 L368.1,269.8 L336.9,254.7 L335.2,254.7 L320.0,246.7 L318.3,246.7 L314.7,244.0 L312.9,244.0 L311.1,242.2 L297.8,235.1 L287.1,227.1 L276.5,215.5 L270.2,204.0 L269.3,198.6 L268.5,197.7 L268.5,193.3 L267.6,192.4 L267.6,134.6 L268.5,133.7 L277.3,141.7 L285.3,147.1 L303.1,155.9 L304.9,155.9 L312.0,159.5 L313.8,159.5 L314.7,160.4 L316.5,160.4 L317.4,161.3 L319.1,161.3 L320.0,162.2 L321.8,162.2 L322.7,163.1 L324.5,163.1 L325.4,164.0 L327.1,164.0 L328.0,164.8 L359.2,174.6 L361.8,176.4 L363.6,176.4 L369.8,180.0 L371.6,180.0 L380.5,184.4 L382.3,186.2 L385.0,187.1 L393.0,192.4 L397.4,196.9 L398.3,196.9 L409.0,208.4 L416.1,220.9 L416.1,222.6 L418.8,228.9 L418.8,231.5 L419.6,232.4 L419.6,236.0 L420.5,236.9 L420.5,248.4 L421.4,244.0 L422.3,243.1 L422.3,240.4 L423.2,239.5 L423.2,236.9 L424.1,236.0 L424.1,231.5 L425.0,230.7 L425.0,224.4 L425.9,223.5 L425.9,210.2 L425.0,209.3 L424.1,196.9 L421.4,189.7 L421.4,187.1 L412.5,167.5 L402.7,153.3 L385.0,136.4 L381.4,134.6 L373.4,128.4 L360.9,122.1 L359.2,120.4 L352.1,116.8 L350.3,116.8 L340.5,111.5 L338.7,111.5 L332.5,107.9 L330.7,107.9 L320.9,102.6 L319.1,102.6 L288.9,86.6 L277.3,78.6 L267.6,69.7 L266.7,69.7 L256.0,58.1 Z" fill="currentColor" /></svg>`,
 } as const;
 
 export type IconName = keyof typeof icons;
+
+const DEVICE_ICON_MATRIX: Record<AudioDeviceIconType, Record<AudioTransportIconType, IconName>> = {
+  speaker: {
+    wired: "deviceSpeakerWired",
+    wireless: "deviceSpeakerWireless",
+    bluetooth: "deviceSpeakerBluetooth",
+  },
+  headphones: {
+    wired: "deviceHeadphonesWired",
+    wireless: "deviceHeadphonesWireless",
+    bluetooth: "deviceHeadphonesBluetooth",
+  },
+  headset: {
+    wired: "deviceHeadsetWired",
+    wireless: "deviceHeadsetWireless",
+    bluetooth: "deviceHeadsetBluetooth",
+  },
+  earbuds: {
+    wired: "deviceEarbudsWired",
+    wireless: "deviceEarbudsWireless",
+    bluetooth: "deviceEarbudsBluetooth",
+  },
+  monitor: {
+    wired: "deviceMonitorWired",
+    wireless: "deviceMonitorWireless",
+    bluetooth: "deviceMonitorBluetooth",
+  },
+  dac: {
+    wired: "deviceDacWired",
+    wireless: "deviceDacWireless",
+    bluetooth: "deviceDacBluetooth",
+  },
+  handset: {
+    wired: "deviceHandsetWired",
+    wireless: "deviceHandsetWireless",
+    bluetooth: "deviceHandsetBluetooth",
+  },
+  generic: {
+    wired: "deviceGenericWired",
+    wireless: "deviceGenericWireless",
+    bluetooth: "deviceGenericBluetooth",
+  },
+};
+
+/** Resolve the exact device + transport icon for any playback device. */
+export function audioDeviceIconName(
+  deviceType: AudioDeviceIconType,
+  transport: AudioTransportIconType,
+): IconName {
+  return DEVICE_ICON_MATRIX[deviceType]?.[transport] ?? "deviceGenericWired";
+}
 
 /** Render an icon SVG string by name. */
 export function icon(name: IconName): string {

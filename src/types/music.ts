@@ -104,4 +104,5 @@ export interface UserSettings {
   normalizeVolume: boolean;
   autoPlayNext: boolean;
   enableDiscordRpc: boolean;
+  audioOutputDeviceId?: string | null;
 }

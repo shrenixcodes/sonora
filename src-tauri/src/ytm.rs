@@ -188,11 +188,16 @@ pub fn ytm_report<R: Runtime>(
     webview: Webview<R>,
     state: YtmState,
     account: tauri::State<'_, AccountState>,
+    audio_output: tauri::State<'_, crate::audio_devices::AudioOutputState>,
 ) -> Result<(), String> {
     if webview.label() != YTM_LABEL {
         return Err("playback state can only come from the YouTube Music window".into());
     }
     log::debug!("ytm state: {state:?}");
+
+    if !state.paused {
+        audio_output.ensure_process_tree_routed();
+    }
 
     let was_signed_in = account.0.swap(state.signed_in, Ordering::SeqCst);
     if sign_in_completed(was_signed_in, &state) {
