@@ -1,0 +1,9 @@
+{
+  "theme": "dark",
+  "accentColor": "#C9A96E",
+  "ambientMode": "glow",
+  "ambientFpsLimit": 30,
+  "ambientIntensity": 0.6,
+  "density": "comfortable",
+  "lyricsFontSize": "md"
+}

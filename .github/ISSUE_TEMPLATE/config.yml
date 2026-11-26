@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security Vulnerability Report
+    url: https://github.com/shrenixcodes/sonora/security
+    about: Report vulnerabilities privately instead of opening a public issue.
+  - name: Documentation & Contributing Guide
+    url: https://github.com/shrenixcodes/sonora/blob/main/CONTRIBUTING.md
+    about: Setup prerequisites, checks, and UI capture guidelines before opening an issue.

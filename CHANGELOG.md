@@ -7,8 +7,10 @@ All notable changes to Sonora are documented in this file.
 ## [Unreleased]
 
 ### Documentation and maintenance
-- Updated setup, usage, shortcuts, architecture, and design guidance for the current codebase.
-- Added the MIT license text, contribution and security guidance, issue and pull request templates, and Windows CI checks.
+- Expanded `README.md` with Tech Stack, IPC architecture overview, full keyboard shortcuts table, exact `sonora-theme.json` schema, audio quality/DSP/per-app routing details, and visual mode / theme comparisons (fixing the inaccurate Settings intensity-slider reference).
+- Expanded `DESIGN.md` with complete Dark (`Charcoal`) and Light (`Bone`) token palettes, WCAG AA `4.5:1` adaptive artwork accents, full typography scale, motion curves, glass blur tiers, and icon stroke conventions.
+- Added `docs/architecture.md`, `docs/audio-and-configuration.md`, `docs/design/shaders.md`, machine-readable `docs/design/palette.json`, importable mood preset JSONs (`docs/design/presets/`), `.env.example`, `.github/ISSUE_TEMPLATE/config.yml`, `.github/CODEOWNERS`, and `package.json` repository metadata.
+- Added the MIT `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue/PR templates, and Windows CI checks (`ci.yml`).
 
 ---
 

@@ -21,6 +21,14 @@
   ],
   "author": "Shreyan Bag",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shrenixcodes/sonora.git"
+  },
+  "homepage": "https://github.com/shrenixcodes/sonora#readme",
+  "bugs": {
+    "url": "https://github.com/shrenixcodes/sonora/issues"
+  },
   "packageManager": "pnpm@12.21.0",
   "devDependencies": {
     "@babel/core": "^7.29.13",

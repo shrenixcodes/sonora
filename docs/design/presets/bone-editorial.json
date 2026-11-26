@@ -1,0 +1,9 @@
+{
+  "theme": "light",
+  "accentColor": "#315E48",
+  "ambientMode": "cinematic",
+  "ambientFpsLimit": 30,
+  "ambientIntensity": 0.4,
+  "density": "comfortable",
+  "lyricsFontSize": "md"
+}
