@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   normalizeVolume: true,
   autoPlayNext: true,
   enableDiscordRpc: true,
+  audioOutputDeviceId: null,
 };
 
 const VALID_REPEAT_MODES = new Set<RepeatMode>(["off", "all", "one"]);

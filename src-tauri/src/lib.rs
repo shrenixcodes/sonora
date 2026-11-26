@@ -1,5 +1,6 @@
 use tauri::{Emitter, Manager, WindowEvent};
 
+mod audio_devices;
 mod commands;
 mod discord;
 mod updater;
@@ -12,6 +13,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .manage(audio_devices::AudioOutputState::default())
         .manage(window_mode::FloatingRegions::default())
         .manage(ytm::AccountState::default())
         .manage(discord::DiscordRpcState::default())
@@ -20,6 +22,8 @@ pub fn run() {
             commands::get_platform_info,
             updater::check_for_updates,
             updater::install_update,
+            audio_devices::get_audio_output_devices,
+            audio_devices::set_audio_output_device,
             discord::discord_set_activity,
             discord::discord_clear_activity,
             ytm::ytm_report,

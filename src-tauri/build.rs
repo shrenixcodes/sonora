@@ -9,6 +9,8 @@ const APP_COMMANDS: &[&str] = &[
     "get_platform_info",
     "check_for_updates",
     "install_update",
+    "get_audio_output_devices",
+    "set_audio_output_device",
     "discord_set_activity",
     "discord_clear_activity",
     "ytm_report",

@@ -15,6 +15,8 @@
     "allow-get-platform-info",
     "allow-check-for-updates",
     "allow-install-update",
+    "allow-get-audio-output-devices",
+    "allow-set-audio-output-device",
     "allow-discord-set-activity",
     "allow-discord-clear-activity",
     "allow-ytm-control",

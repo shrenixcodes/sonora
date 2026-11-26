@@ -7,6 +7,7 @@
 import { el, formatTime } from "@/lib/dom";
 import { attachSlider, type Slider } from "@/lib/slider";
 import { icon } from "@/icons";
+import { audioDevices, formatDeviceKind, iconNameForDevice, transportBadgeText } from "@/lib/audio-devices";
 import { openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
@@ -39,11 +40,13 @@ class PlayerBar {
     volumeFill: HTMLElement;
     volumeBtn: HTMLElement;
     lyricsBtn: HTMLElement;
-    nowPlayingBtn: HTMLElement;
+    deviceBtn: HTMLElement;
   } | null = null;
 
   private progressSlider: Slider | null = null;
   private volumeSlider: Slider | null = null;
+  private stopAudioDevices: (() => void) | null = null;
+  private closeDeviceMenu: (() => void) | null = null;
 
   render(): HTMLElement {
     // ── Controls ──────────────────────────────────────────
@@ -196,20 +199,23 @@ class PlayerBar {
       },
     });
 
-    const nowPlayingBtn = el("button", {
-      className: "player__extra-btn",
-      html: icon("fullscreen"),
-      attrs: { "aria-label": "Now Playing", title: "Now Playing" },
-      onClick: () => {
-        if (router.current === "/now-playing") {
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
-            router.navigate("/");
-          }
-        } else {
-          router.navigate("/now-playing");
+    const deviceBtn = el("button", {
+      className: "player__extra-btn player__device-btn",
+      html: icon(audioDevices.activeIcon),
+      attrs: {
+        type: "button",
+        "aria-label": `Audio output: ${audioDevices.activeDevice.name}`,
+        title: `Audio output: ${audioDevices.activeDevice.name} (${formatDeviceKind(audioDevices.activeDevice)})`,
+        "aria-haspopup": "menu",
+        "aria-expanded": "false",
+      },
+      onClick: (e) => {
+        e.stopPropagation();
+        if (this.closeDeviceMenu) {
+          this.closeDeviceMenu();
+          return;
         }
+        this.openAudioDeviceMenu();
       },
     });
 
@@ -251,7 +257,7 @@ class PlayerBar {
             }),
             queueBtn,
             lyricsBtn,
-            nowPlayingBtn,
+            deviceBtn,
           ],
         }),
       ],
@@ -276,12 +282,13 @@ class PlayerBar {
       volumeFill,
       volumeBtn,
       lyricsBtn,
-      nowPlayingBtn,
+      deviceBtn,
     };
 
     this.setupInteractivity();
     this.subscribeToEngine();
     this.subscribeToRouter();
+    this.subscribeToAudioDevices();
     this.updateArtistControl(
       playerEngine.currentTrack,
       playerEngine.currentState,
@@ -462,19 +469,192 @@ class PlayerBar {
     const updateRoute = (path: string) => {
       if (!this.elements) return;
       const isNowPlaying = path === "/now-playing";
-      this.elements.nowPlayingBtn.innerHTML = icon(isNowPlaying ? "minimize" : "fullscreen");
-      const npLabel = isNowPlaying ? "Minimize Now Playing" : "Now Playing";
-      this.elements.nowPlayingBtn.setAttribute("aria-label", npLabel);
-      this.elements.nowPlayingBtn.setAttribute("title", npLabel);
-      this.elements.nowPlayingBtn.setAttribute("aria-pressed", String(isNowPlaying));
-      this.elements.nowPlayingBtn.classList.toggle("player__extra-btn--active", isNowPlaying);
-
+      const label = isNowPlaying ? "Close Lyrics" : "Lyrics";
+      this.elements.lyricsBtn.setAttribute("aria-label", label);
+      this.elements.lyricsBtn.setAttribute("title", label);
       this.elements.lyricsBtn.setAttribute("aria-pressed", String(isNowPlaying));
       this.elements.lyricsBtn.classList.toggle("player__extra-btn--active", isNowPlaying);
     };
 
     router.onNavigate(updateRoute);
     requestAnimationFrame(() => updateRoute(router.current));
+  }
+
+  private subscribeToAudioDevices(): void {
+    this.closeDeviceMenu?.();
+    this.stopAudioDevices?.();
+
+    const syncDeviceButton = () => {
+      if (!this.elements) return;
+      const active = audioDevices.activeDevice;
+      const snap = audioDevices.snapshot;
+      const isCustom = snap.selectedDeviceId !== null;
+      const kind = formatDeviceKind(active);
+      const label = isCustom
+        ? `Audio output: ${active.name} (${kind})`
+        : `Audio output: System Default — ${active.name} (${kind})`;
+      this.elements.deviceBtn.innerHTML = icon(audioDevices.activeIcon);
+      this.elements.deviceBtn.setAttribute("aria-label", label);
+      this.elements.deviceBtn.setAttribute("title", label);
+      this.elements.deviceBtn.classList.toggle("player__extra-btn--active", isCustom);
+    };
+
+    syncDeviceButton();
+    this.stopAudioDevices = audioDevices.on("change", syncDeviceButton);
+    void audioDevices.init();
+  }
+
+  private openAudioDeviceMenu(): void {
+    if (!this.elements) return;
+    const anchor = this.elements.deviceBtn;
+    this.closeDeviceMenu?.();
+
+    const menu = el("div", {
+      className: "audio-device-menu",
+      attrs: { role: "menu", "aria-label": "Sonora audio output device" },
+    });
+
+    const renderItems = () => {
+      const snap = audioDevices.snapshot;
+      const def = audioDevices.defaultDevice;
+      const status = snap.error
+        ? [el("p", { className: "audio-device-menu__error", text: snap.error, attrs: { role: "alert" } })]
+        : [];
+
+      const defaultActive = snap.selectedDeviceId === null;
+      const defaultItem = el("button", {
+        className: `audio-device-menu__item${defaultActive ? " is-active" : ""}`,
+        attrs: {
+          type: "button",
+          role: "menuitemradio",
+          "aria-checked": String(defaultActive),
+          "data-device-id": "default",
+        },
+        children: [
+          el("span", { className: "audio-device-menu__icon", html: icon(iconNameForDevice(def)) }),
+          el("span", {
+            className: "audio-device-menu__info",
+            children: [
+              el("span", { className: "audio-device-menu__name truncate", text: "System Default" }),
+              el("span", { className: "audio-device-menu__sub truncate", text: def.name }),
+            ],
+          }),
+          el("span", { className: "audio-device-menu__tag", text: defaultActive ? "Active" : "Auto" }),
+        ],
+        onClick: async () => {
+          const ok = await audioDevices.select(null);
+          if (ok) dismiss();
+          else renderItems();
+        },
+      });
+
+      const deviceItems = snap.devices.map((device) => {
+        const selected = snap.selectedDeviceId === device.id;
+        return el("button", {
+          className: `audio-device-menu__item${selected ? " is-active" : ""}`,
+          attrs: {
+            type: "button",
+            role: "menuitemradio",
+            "aria-checked": String(selected),
+            "data-device-id": device.id,
+          },
+          children: [
+            el("span", { className: "audio-device-menu__icon", html: icon(iconNameForDevice(device)) }),
+            el("span", {
+              className: "audio-device-menu__info",
+              children: [
+                el("span", { className: "audio-device-menu__name truncate", text: device.name }),
+                el("span", {
+                  className: "audio-device-menu__sub truncate",
+                  text: formatDeviceKind(device) + (device.isDefault ? " · Default" : ""),
+                }),
+              ],
+            }),
+            el("span", {
+              className: "audio-device-menu__tag",
+              text: selected ? "Active" : transportBadgeText(device.transport),
+            }),
+          ],
+          onClick: async () => {
+            const ok = await audioDevices.select(device.id);
+            if (ok) dismiss();
+            else renderItems();
+          },
+        });
+      });
+
+      menu.replaceChildren(
+        el("div", {
+          className: "audio-device-menu__header",
+          children: [
+            el("span", { className: "audio-device-menu__title", text: "Audio Output" }),
+            el("span", { className: "audio-device-menu__scope", text: "Sonora app only" }),
+          ],
+        }),
+        el("div", { className: "audio-device-menu__list", children: [defaultItem, ...deviceItems] }),
+        ...status,
+      );
+    };
+
+    const outside = (event: Event) => {
+      const target = event.target as Node | null;
+      if (target && !menu.contains(target) && !anchor.contains(target)) dismiss();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        dismiss();
+        anchor.focus();
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const items = Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+      if (items.length === 0) return;
+      const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+      const next =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? items.length - 1
+            : (idx + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+    };
+
+    const stopDeviceRefresh = audioDevices.on("change", () => {
+      if (menu.isConnected) renderItems();
+    });
+
+    const dismiss = () => {
+      if (this.closeDeviceMenu !== dismiss) return;
+      this.closeDeviceMenu = null;
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("resize", dismiss);
+      stopDeviceRefresh();
+      anchor.setAttribute("aria-expanded", "false");
+      menu.remove();
+    };
+
+    this.closeDeviceMenu = dismiss;
+    renderItems();
+    anchor.setAttribute("aria-expanded", "true");
+    document.body.appendChild(menu);
+
+    const rect = anchor.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      menu.style.right = `${Math.max(12, Math.round(window.innerWidth - rect.right))}px`;
+      menu.style.bottom = `${Math.round(window.innerHeight - rect.top + 10)}px`;
+    }
+
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("resize", dismiss);
+    menu.querySelector<HTMLButtonElement>(".audio-device-menu__item.is-active, .audio-device-menu__item")?.focus();
+    void audioDevices.refresh();
   }
 }
 
