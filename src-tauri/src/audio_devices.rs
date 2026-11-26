@@ -451,6 +451,17 @@ mod win_impl {
         None
     }
 
+    const DEVINTERFACE_AUDIO_RENDER_GUID: &str = "{e6327cad-dcec-4949-ae8a-991e976a79d2}";
+
+    pub fn to_winrt_render_device_id(mmdevice_id: &str) -> String {
+        let trimmed = mmdevice_id.trim();
+        if trimmed.starts_with(r"\\?\SWD#MMDEVAPI#") {
+            trimmed.to_string()
+        } else {
+            format!(r"\\?\SWD#MMDEVAPI#{trimmed}#{DEVINTERFACE_AUDIO_RENDER_GUID}")
+        }
+    }
+
     pub fn apply_endpoint(pids: &[u32], device_id: Option<&str>) -> Result<(), String> {
         let _com = ComGuard::init()?;
         let policy = acquire_audio_policy_factory()
@@ -463,8 +474,11 @@ mod win_impl {
         let set_endpoint: SetPersistedEndpointFn =
             unsafe { std::mem::transmute(*vtable_ptr.add(SET_PERSISTED_ENDPOINT_SLOT)) };
 
-        // In WinRT ABI, HSTRING is a single pointer handle (null when empty).
-        let device_hstring = device_id.map(HSTRING::from).unwrap_or_default();
+        // In WinRT ABI, HSTRING is a single pointer handle (null clears the persisted app route).
+        let device_hstring = device_id
+            .map(to_winrt_render_device_id)
+            .map(HSTRING::from)
+            .unwrap_or_default();
         let raw_hstring: *mut c_void = unsafe { std::mem::transmute_copy(&device_hstring) };
 
         let mut last_err: Option<HRESULT> = None;
@@ -716,8 +730,15 @@ mod tests {
     fn windows_audio_enumeration_and_process_tree_work_without_crashing() {
         let pids = sonora_process_tree_pids();
         assert!(pids.contains(&std::process::id()));
-        // Exercise MMDeviceEnumerator + AudioPolicyConfig activation cleanly without mutating defaults.
-        let _ = list_render_devices();
-        let _ = can_route_per_app();
+        let devices = list_render_devices().expect("enumerate Windows playback endpoints");
+        let can_route = can_route_per_app();
+        if can_route && let Some(first) = devices.first() {
+            let swd = win_impl::to_winrt_render_device_id(&first.id);
+            assert!(swd.starts_with(r"\\?\SWD#MMDEVAPI#"));
+            apply_endpoint_to_pids(&[std::process::id()], Some(&first.id))
+                .expect("SetPersistedDefaultAudioEndpoint should accept WinRT SWD render device ID");
+            apply_endpoint_to_pids(&[std::process::id()], None)
+                .expect("SetPersistedDefaultAudioEndpoint should clear override back to system default");
+        }
     }
 }

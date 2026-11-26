@@ -123,7 +123,7 @@ export async function showAboutPopup(): Promise<void> {
     attrs: { type: "button", title: "Replay launch splash screen" },
     children: [
       el("span", { html: icon("refresh") }),
-      el("span", { text: "Replay Splash" }),
+      el("span", { text: "Relaunch" }),
     ],
     onClick: () => {
       closeDialog();
