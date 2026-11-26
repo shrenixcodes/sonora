@@ -90,7 +90,11 @@ impl AudioOutputState {
         applied.retain(|pid, _| live_pids.contains(pid));
         let pending: Vec<u32> = pids
             .into_iter()
-            .filter(|pid| applied.get(pid).is_none_or(|prev| prev.as_deref() != Some(&target_clone)))
+            .filter(|pid| {
+                applied
+                    .get(pid)
+                    .is_none_or(|prev| prev.as_deref() != Some(&target_clone))
+            })
             .collect();
         if pending.is_empty() {
             return;
@@ -172,9 +176,16 @@ fn infer_device_type(text: &str, form_factor: Option<u32>) -> AudioDeviceType {
                 AudioDeviceType::Headset
             } else if text.contains("headphone") || text.contains("earphone") {
                 AudioDeviceType::Headphones
-            } else if text.contains("hdmi") || text.contains("displayport") || text.contains("monitor") {
+            } else if text.contains("hdmi")
+                || text.contains("displayport")
+                || text.contains("monitor")
+            {
                 AudioDeviceType::Monitor
-            } else if text.contains("dac") || text.contains("s/pdif") || text.contains("spdif") || text.contains("optical") {
+            } else if text.contains("dac")
+                || text.contains("s/pdif")
+                || text.contains("spdif")
+                || text.contains("optical")
+            {
                 AudioDeviceType::Dac
             } else {
                 AudioDeviceType::Speaker
@@ -201,7 +212,10 @@ fn infer_device_type(text: &str, form_factor: Option<u32>) -> AudioDeviceType {
                 AudioDeviceType::Dac
             } else if text.contains("handset") {
                 AudioDeviceType::Handset
-            } else if text.contains("speaker") || text.contains("soundbar") || text.contains("realtek") {
+            } else if text.contains("speaker")
+                || text.contains("soundbar")
+                || text.contains("realtek")
+            {
                 AudioDeviceType::Speaker
             } else {
                 AudioDeviceType::Generic
@@ -218,8 +232,8 @@ mod win_impl {
     use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
     use windows::Win32::Foundation::{CloseHandle, HANDLE, PROPERTYKEY, RPC_E_CHANGED_MODE};
     use windows::Win32::Media::Audio::{
-        DEVICE_STATE_ACTIVE, IMMDeviceEnumerator, MMDeviceEnumerator, PKEY_AudioEndpoint_FormFactor,
-        eMultimedia, eRender,
+        DEVICE_STATE_ACTIVE, IMMDeviceEnumerator, MMDeviceEnumerator,
+        PKEY_AudioEndpoint_FormFactor, eMultimedia, eRender,
     };
     use windows::Win32::System::Com::{
         CLSCTX_ALL, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
@@ -306,7 +320,9 @@ mod win_impl {
     fn read_prop_u32(store: &IPropertyStore, key: &PROPERTYKEY) -> Option<u32> {
         unsafe {
             let pv = store.GetValue(key).ok()?;
-            u32::try_from(&pv).ok().or_else(|| pv.to_string().trim().parse::<u32>().ok())
+            u32::try_from(&pv)
+                .ok()
+                .or_else(|| pv.to_string().trim().parse::<u32>().ok())
         }
     }
 
@@ -344,7 +360,13 @@ mod win_impl {
                         read_prop_string(&store, &PKEY_DEVICE_ENUMERATOR_NAME),
                         read_prop_u32(&store, &PKEY_AudioEndpoint_FormFactor),
                     ),
-                    Err(_) => (String::new(), String::new(), String::new(), String::new(), None),
+                    Err(_) => (
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        None,
+                    ),
                 };
 
             let name = if !friendly_name.trim().is_empty() {
@@ -480,8 +502,9 @@ mod win_impl {
 
     pub fn apply_endpoint(pids: &[u32], device_id: Option<&str>) -> Result<(), String> {
         let _com = ComGuard::init()?;
-        let policy = acquire_audio_policy_factory()
-            .ok_or_else(|| "Per-app audio device routing is unavailable on this Windows version.".to_string())?;
+        let policy = acquire_audio_policy_factory().ok_or_else(|| {
+            "Per-app audio device routing is unavailable on this Windows version.".to_string()
+        })?;
 
         type SetPersistedEndpointFn =
             unsafe extern "system" fn(*mut c_void, u32, u32, u32, *mut c_void) -> HRESULT;
@@ -574,7 +597,10 @@ fn apply_endpoint_to_pids(pids: &[u32], device_id: Option<&str>) -> Result<(), S
     }
 }
 
-fn build_snapshot(devices: Vec<AudioOutputDevice>, selected: Option<String>) -> AudioOutputSnapshot {
+fn build_snapshot(
+    devices: Vec<AudioOutputDevice>,
+    selected: Option<String>,
+) -> AudioOutputSnapshot {
     let selected_valid = selected.filter(|id| devices.iter().any(|d| d.id == *id));
     let default_id = devices.iter().find(|d| d.is_default).map(|d| d.id.clone());
     let effective_device_id = selected_valid.clone().or(default_id);
@@ -754,10 +780,12 @@ mod tests {
         if can_route && let Some(first) = devices.first() {
             let swd = win_impl::to_winrt_render_device_id(&first.id);
             assert!(swd.starts_with(r"\\?\SWD#MMDEVAPI#"));
-            apply_endpoint_to_pids(&[std::process::id()], Some(&first.id))
-                .expect("SetPersistedDefaultAudioEndpoint should accept WinRT SWD render device ID");
-            apply_endpoint_to_pids(&[std::process::id()], None)
-                .expect("SetPersistedDefaultAudioEndpoint should clear override back to system default");
+            apply_endpoint_to_pids(&[std::process::id()], Some(&first.id)).expect(
+                "SetPersistedDefaultAudioEndpoint should accept WinRT SWD render device ID",
+            );
+            apply_endpoint_to_pids(&[std::process::id()], None).expect(
+                "SetPersistedDefaultAudioEndpoint should clear override back to system default",
+            );
         }
     }
 }

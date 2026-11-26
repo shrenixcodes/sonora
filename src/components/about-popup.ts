@@ -44,7 +44,7 @@ export async function showAboutPopup(): Promise<void> {
   // Remove any previously open about dialog
   document.querySelector(".about-popup")?.remove();
 
-  let appInfo: AppInfo = { name: "Sonora", version: "0.6.8" };
+  let appInfo: AppInfo = { name: "Sonora", version: "0.7.20" };
   let platformInfo: PlatformInfo = { os: "windows", arch: "x64" };
 
   if (isTauri()) {

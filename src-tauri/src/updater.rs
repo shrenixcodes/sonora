@@ -154,14 +154,20 @@ fn select_windows_installer(assets: &[GitHubAsset]) -> Option<&GitHubAsset> {
     exe_assets.into_iter().next()
 }
 
-pub fn parse_release_payload(current_version: &str, json_body: &str) -> Result<ReleaseCheckResult, String> {
+pub fn parse_release_payload(
+    current_version: &str,
+    json_body: &str,
+) -> Result<ReleaseCheckResult, String> {
     let release: GitHubRelease =
         serde_json::from_str(json_body).map_err(|e| format!("Invalid release metadata: {e}"))?;
 
-    let latest_clean = release.tag_name.trim().trim_start_matches(['v', 'V']).to_string();
-    let update_available = !release.draft
-        && !release.prerelease
-        && is_newer_version(current_version, &latest_clean);
+    let latest_clean = release
+        .tag_name
+        .trim()
+        .trim_start_matches(['v', 'V'])
+        .to_string();
+    let update_available =
+        !release.draft && !release.prerelease && is_newer_version(current_version, &latest_clean);
 
     let asset = select_windows_installer(&release.assets);
     let release_url = if is_trusted_release_url(&release.html_url) {
@@ -179,7 +185,10 @@ pub fn parse_release_payload(current_version: &str, json_body: &str) -> Result<R
         },
         update_available,
         release_name: release.name.filter(|s| !s.trim().is_empty()),
-        release_notes: release.body.map(|b| b.trim().to_string()).filter(|s| !s.is_empty()),
+        release_notes: release
+            .body
+            .map(|b| b.trim().to_string())
+            .filter(|s| !s.is_empty()),
         release_url,
         installer_url: asset.map(|a| a.browser_download_url.clone()),
         asset_name: asset.map(|a| a.name.clone()),
@@ -274,7 +283,10 @@ fn download_installer_blocking(installer_url: &str, version: &str) -> Result<Pat
     let mut file = File::create(&part_path)
         .map_err(|e| format!("Failed creating temporary installer file: {e}"))?;
 
-    let mut limited = response.body_mut().as_reader().take(MAX_INSTALLER_BYTES + 1);
+    let mut limited = response
+        .body_mut()
+        .as_reader()
+        .take(MAX_INSTALLER_BYTES + 1);
     let mut buffer = [0u8; 64 * 1024];
     let mut total_bytes: u64 = 0;
 
@@ -329,9 +341,10 @@ pub async fn install_update(
 ) -> Result<(), String> {
     let url = installer_url.clone();
     let ver = version.clone();
-    let path = tauri::async_runtime::spawn_blocking(move || download_installer_blocking(&url, &ver))
-        .await
-        .map_err(|e| format!("Update download task failed: {e}"))??;
+    let path =
+        tauri::async_runtime::spawn_blocking(move || download_installer_blocking(&url, &ver))
+            .await
+            .map_err(|e| format!("Update download task failed: {e}"))??;
 
     #[cfg(windows)]
     {
@@ -367,13 +380,21 @@ mod tests {
 
     #[test]
     fn trusted_url_validation_rejects_untrusted_and_insecure_urls() {
-        assert!(is_trusted_release_url("https://github.com/shrenixcodes/sonora/releases/latest"));
+        assert!(is_trusted_release_url(
+            "https://github.com/shrenixcodes/sonora/releases/latest"
+        ));
         assert!(is_trusted_release_url(
             "https://objects.githubusercontent.com/github-production-release-asset/Sonora-setup.exe"
         ));
-        assert!(!is_trusted_release_url("http://github.com/shrenixcodes/sonora/releases/latest"));
-        assert!(!is_trusted_release_url("https://evil.example.com/Sonora-setup.exe"));
-        assert!(!is_trusted_release_url("file:///C:/Windows/System32/calc.exe"));
+        assert!(!is_trusted_release_url(
+            "http://github.com/shrenixcodes/sonora/releases/latest"
+        ));
+        assert!(!is_trusted_release_url(
+            "https://evil.example.com/Sonora-setup.exe"
+        ));
+        assert!(!is_trusted_release_url(
+            "file:///C:/Windows/System32/calc.exe"
+        ));
     }
 
     #[test]
@@ -404,10 +425,15 @@ mod tests {
         assert!(parsed.update_available);
         assert_eq!(parsed.current_version, "0.6.8");
         assert_eq!(parsed.latest_version, "0.7.0");
-        assert_eq!(parsed.asset_name.as_deref(), Some("Sonora_0.7.0_x64-setup.exe"));
+        assert_eq!(
+            parsed.asset_name.as_deref(),
+            Some("Sonora_0.7.0_x64-setup.exe")
+        );
         assert_eq!(
             parsed.installer_url.as_deref(),
-            Some("https://github.com/shrenixcodes/sonora/releases/download/v0.7.0/Sonora_0.7.0_x64-setup.exe")
+            Some(
+                "https://github.com/shrenixcodes/sonora/releases/download/v0.7.0/Sonora_0.7.0_x64-setup.exe"
+            )
         );
     }
 

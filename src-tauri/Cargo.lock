@@ -3385,7 +3385,7 @@ dependencies = [
 
 [[package]]
 name = "sonora"
-version = "0.6.8"
+version = "0.7.20"
 dependencies = [
  "adblock",
  "discord-rich-presence",

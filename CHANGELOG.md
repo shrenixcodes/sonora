@@ -4,6 +4,32 @@ All notable changes to Sonora are documented in this file.
 
 ---
 
+## [0.7.20] – 2026-11-26
+
+### ✨ New Features
+
+#### Lossless Audio Quality, DSP Mastering & Telemetry
+- **Audio Quality & DSP Settings**: Added `Saver`, `Balanced`, `High`, and `Lossless` quality tiers alongside `Pure (Unaltered)`, `Studio Clarity`, `Warm & Smooth`, `Deep Bass`, and `Vocal Focus` EQ/mastering profiles, volume normalization toggle, and live stream codec/bitrate/sample-rate telemetry (`ytm_bridge.js`, `audio-quality.ts`, `settings.ts`, `now-playing.ts`).
+- **Seamless stream fallback**: Automatically falls back cleanly to the highest available YouTube Music audio stream when native lossless streams stall or are unavailable.
+
+#### Per-App Windows Audio Output Switcher
+- **Sonora-only endpoint routing**: Added a CoreAudio / `AudioPolicyConfig` per-app audio output selector to the player bar (`audio_devices.rs`, `audio-devices.ts`, `player.ts`) with 24 wired, wireless, and Bluetooth hardware icons (`icons/index.ts`), switching only Sonora's process tree (`\\?\SWD#MMDEVAPI#...`) without altering Windows' default playback device.
+
+#### GitHub Update Checker & Launch Auto-Updater
+- **In-app releases integration**: Added GitHub Releases update checking (`check_for_updates` / `install_update` in `updater.rs` & `updater.ts`), startup auto-update notification toast, and live update status controls in the About Sonora dialog.
+
+### 🛠 Fixes & Improvements
+- **Spotify-style Lyrics icon**: Updated the player bar Lyrics button from a voice-chat condenser mic to a tilted handheld stage microphone and removed the redundant maximize button.
+- **About modal & floating backdrop**: Removed the redundant `Done` button in favor of top-right `X` / click-outside dismissal, balanced footer action button widths, formatted Platform (`Windows (x64)`), updated Author to a clickable `shrenixcodes` link to `https://github.com/shrenixcodes/sonora`, and eliminated dark rectangular dialog backdrop artifacts over floating desktop gaps.
+- **Playback, Navigation & Styled Modals**: Randomized view Shuffle track selection (`playShuffled`), persisted shuffle/repeat/volume across startup without accidental mute lockups, synced unlikes with YouTube Music, routed Artist/Album context links directly without starting playback, scoped theme JSON export/import cleanly, added live version + `Ctrl + K` shortcut documentation in Settings, and replaced native `prompt`/`confirm`/`alert` popups with styled `<dialog>` modals.
+- **Resource & Animation Optimization**: Throttled per-app audio process-tree scans (20s cooldown) and window-focus device refreshes (15s cooldown), stopped static `minimal`/`cinematic` WebGL shaders once converged, removed redundant `backdrop-filter` passes on grid panels, fast-pathed `<video>` polling in `ytm_bridge.js`, bounded LRU caches (`BoundedCache`) and cached liked-track lookups, switched `GooRenderer` to low-power WebGL2 with pre-warmed shaders and fewer per-frame allocations, and added a 210ms GPU-composited morph transition across maximize/restore switches.
+
+### 📦 Build & Installer
+- Version bumped to `0.7.20` across all manifests (`package.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`).
+- Windows NSIS installer executable (`Sonora_0.7.20_x64-setup.exe`).
+
+---
+
 ## [0.6.8] – 2026-11-26
 
 ### 🛠 Fixes & Improvements
