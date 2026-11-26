@@ -6,6 +6,14 @@
  */
 
 import { el } from "@/lib/dom";
+import {
+  AUDIO_ENHANCEMENT_OPTIONS,
+  AUDIO_QUALITY_OPTIONS,
+  audioEnhancementOption,
+  audioQualityOption,
+  formatAudioTelemetry,
+} from "@/lib/audio-quality";
+import { playerEngine } from "@/lib/playback/engine";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
 import { ytmBridge } from "@/lib/playback/ytm-bridge";
@@ -14,7 +22,7 @@ import { router } from "@/lib/router";
 import { storage } from "@/lib/storage";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
 import { triggerRestoreAnimation } from "@/lib/visuals/symbiote";
-import type { UserSettings, AmbientVisualMode } from "@/types/music";
+import type { UserSettings, AmbientVisualMode, AudioEnhancementProfile, AudioQualityMode, PlaybackState } from "@/types/music";
 
 const ACCENT_COLORS = [
   { name: "Dusty Purple", hex: "#A78BFA" },
@@ -108,13 +116,16 @@ export function renderSettings(container: HTMLElement): void {
 
       // ── Playback & Sound ─────────────────────────────────
       createSettingsSection("Playback & Sound", [
+        createAudioQualityRow(currentSettings.audioQuality),
+        createAudioEnhancementRow(currentSettings.audioEnhancement),
         createSettingRow(
           "Normalize Volume",
-          "Maintain consistent audio loudness across different tracks",
+          "Keep loudness consistent across quiet and loud songs using track gain leveling and peak protection",
           createToggle(currentSettings.normalizeVolume, (val) => {
             storage.saveSettings({ normalizeVolume: val });
           }),
         ),
+        createAudioStatusRow(),
         createSettingRow(
           "Autoplay Next",
           "Continue playing recommended music when queue reaches the end",
@@ -413,6 +424,105 @@ function createLyricsSizeSelector(currentSize: UserSettings["lyricsFontSize"] = 
   });
 
   return container;
+}
+
+function createAudioQualityRow(currentQuality: AudioQualityMode): HTMLElement {
+  const row = createSettingRow(
+    "Audio Quality",
+    audioQualityOption(currentQuality).description,
+    el("div", { className: "settings__segmented settings__segmented--quality" }),
+  );
+  const description = row.querySelector<HTMLElement>(".settings__row-description")!;
+  const container = row.querySelector<HTMLElement>(".settings__segmented")!;
+  container.setAttribute("role", "radiogroup");
+  container.setAttribute("aria-label", "Audio Quality");
+
+  const buttons = new Map<AudioQualityMode, HTMLElement>();
+  for (const option of AUDIO_QUALITY_OPTIONS) {
+    const isActive = option.id === currentQuality;
+    const isLossless = option.id === "lossless";
+    const btn = el("button", {
+      className: `settings__seg-btn${isLossless ? " settings__seg-btn--lossless" : ""}${isActive ? " settings__seg-btn--active" : ""}`,
+      text: option.label,
+      attrs: {
+        type: "button",
+        role: "radio",
+        "aria-checked": String(isActive),
+        "data-audio-quality": option.id,
+        title: option.description,
+      },
+      onClick: () => {
+        storage.saveSettings({ audioQuality: option.id });
+        description.textContent = option.description;
+        for (const [id, item] of buttons) {
+          const active = id === option.id;
+          item.classList.toggle("settings__seg-btn--active", active);
+          item.setAttribute("aria-checked", String(active));
+        }
+      },
+    });
+    buttons.set(option.id, btn);
+    container.appendChild(btn);
+  }
+
+  return row;
+}
+
+function createAudioEnhancementRow(currentProfile: AudioEnhancementProfile): HTMLElement {
+  const select = el("select", {
+    className: "settings__select",
+    attrs: { "aria-label": "Audio Enhancement Profile" },
+  }) as HTMLSelectElement;
+
+  for (const option of AUDIO_ENHANCEMENT_OPTIONS) {
+    const opt = document.createElement("option");
+    opt.value = option.id;
+    opt.textContent = option.label;
+    if (option.id === currentProfile) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  const row = createSettingRow(
+    "Audio Enhancement",
+    audioEnhancementOption(currentProfile).description,
+    select,
+  );
+  const description = row.querySelector<HTMLElement>(".settings__row-description")!;
+
+  select.addEventListener("change", () => {
+    const next = select.value as AudioEnhancementProfile;
+    storage.saveSettings({ audioEnhancement: next });
+    description.textContent = audioEnhancementOption(next).description;
+  });
+
+  return row;
+}
+
+function createAudioStatusRow(): HTMLElement {
+  const tag = el("span", { className: "settings__tag" });
+  const row = createSettingRow("Audio Engine & Stream", "", tag);
+  const description = row.querySelector<HTMLElement>(".settings__row-description")!;
+
+  const update = (nextState?: PlaybackState) => {
+    const settings = storage.getSettings();
+    const state = nextState ?? playerEngine.currentState;
+    const isLossless = settings.audioQuality === "lossless";
+    tag.classList.toggle("settings__tag--lossless", isLossless);
+    tag.textContent = audioQualityOption(settings.audioQuality).badge;
+    description.textContent = formatAudioTelemetry(settings, state.audioInfo);
+  };
+
+  update();
+  const stopEngine = playerEngine.on("stateChange", (state) => update(state));
+  const stopStorage = storage.on("settingsChange", () => update());
+  const stopNav = router.onNavigate((path) => {
+    if (path === "/settings") return;
+    stopEngine();
+    stopStorage();
+    stopNav();
+  });
+
+  return row;
 }
 
 function createVisualModeSelector(currentMode: AmbientVisualMode): HTMLElement {

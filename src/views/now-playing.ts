@@ -8,6 +8,7 @@
 
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
+import { formatCompactQualityBadge } from "@/lib/audio-quality";
 import { openAlbum, openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { LyricsController } from "@/lib/lyrics/synced-lyrics";
@@ -168,13 +169,39 @@ export function renderNowPlaying(container: HTMLElement): void {
     },
   });
 
+  const qualityBadgeBtn = el("button", {
+    className: "now-playing__quality-badge",
+    attrs: {
+      type: "button",
+      title: "Open audio quality settings",
+      "aria-label": "Audio quality settings",
+      hidden: "",
+    },
+    onClick: () => {
+      if (immersive) void setImmersive(false);
+      router.navigate("/settings");
+    },
+  });
+
+  const updateQualityBadge = () => {
+    const currentSettings = storage.getSettings();
+    const label = formatCompactQualityBadge(currentSettings, playerEngine.currentState.audioInfo);
+    qualityBadgeBtn.toggleAttribute("hidden", !label);
+    qualityBadgeBtn.classList.toggle("now-playing__quality-badge--lossless", currentSettings.audioQuality === "lossless");
+    if (label) {
+      qualityBadgeBtn.textContent = label;
+      qualityBadgeBtn.setAttribute("aria-label", `Audio quality: ${label}. Open settings.`);
+    }
+  };
+  updateQualityBadge();
+
   const topBar = el("div", {
     className: "now-playing__topbar",
     children: [
       closeBtn,
       el("div", {
         className: "now-playing__topbar-actions",
-        children: [fontBtn, fullscreenBtn],
+        children: [qualityBadgeBtn, fontBtn, fullscreenBtn],
       }),
     ],
   });
@@ -333,6 +360,9 @@ export function renderNowPlaying(container: HTMLElement): void {
       lyricsController.setLyrics(lyrics);
     }),
   );
+
+  unsubs.push(playerEngine.on("stateChange", updateQualityBadge));
+  unsubs.push(storage.on("settingsChange", updateQualityBadge));
 
   // Clean up immediately when leaving Now Playing
   let destroyed = false;
