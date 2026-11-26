@@ -2,6 +2,9 @@ import babelParser from "@babel/eslint-parser";
 
 export default [
   {
+    ignores: ["dist/**", "src-tauri/target/**", "node_modules/**"],
+  },
+  {
     files: ["src/**/*.ts"],
     languageOptions: {
       parser: babelParser,

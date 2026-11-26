@@ -219,12 +219,12 @@ pub fn attach<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
         }) {
             log::error!("failed to access YouTube Music webview: {error}");
         }
-        if let Some(cache) = cache {
-            if refresh_lists(&cache) {
-                let replacement = build_engine(&load_lists(Some(&cache)));
-                if let Ok(mut active) = engine.write() {
-                    *active = replacement;
-                }
+        if let Some(cache) = cache
+            && refresh_lists(&cache)
+        {
+            let replacement = build_engine(&load_lists(Some(&cache)));
+            if let Ok(mut active) = engine.write() {
+                *active = replacement;
             }
         }
     });
