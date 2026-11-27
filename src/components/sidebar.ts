@@ -7,12 +7,7 @@
 
 import { el } from "@/lib/dom";
 import { icon, type IconName } from "@/icons";
-import { openCollection } from "@/lib/navigation";
 import { router } from "@/lib/router";
-import { storage } from "@/lib/storage";
-import { account } from "@/lib/ytm/account";
-import { catalog, type LibraryPlaylist } from "@/lib/ytm/catalog";
-import { catalogAvailable } from "@/lib/ytm/client";
 import { showAboutPopup } from "@/components/about-popup";
 import { shouldReduceMotion } from "@/lib/visuals/motion";
 
@@ -88,15 +83,12 @@ export function createSidebar(): HTMLElement {
     void showAboutPopup();
   });
 
-  const playlistsHost = el("div", { className: "sidebar__playlists" });
-
   const sidebar = el("aside", {
     className: "sidebar",
     children: [
       brand,
       createNavSection(null, mainNav),
       createNavSection("Library", libraryNav),
-      playlistsHost,
       createNavSection(null, bottomNav),
     ],
   });
@@ -132,81 +124,7 @@ export function createSidebar(): HTMLElement {
     }
   });
 
-  let ytmPlaylists: LibraryPlaylist[] = [];
   let activePath = window.location.hash.slice(1) || "/";
-
-  const createPlaylistLink = (opts: {
-    source: "local" | "ytm";
-    id: string;
-    title: string;
-    artworkUrl: string;
-    onOpen: () => void;
-  }): HTMLElement => {
-    const link = el("a", {
-      className: "sidebar__playlist-item",
-      attrs: {
-        href: `#/playlist?source=${encodeURIComponent(opts.source)}&id=${encodeURIComponent(opts.id)}`,
-        "data-playlist-source": opts.source,
-        "data-playlist-id": opts.id,
-        title: opts.title,
-      },
-      children: [
-        el("img", {
-          className: "sidebar__playlist-art",
-          attrs: { src: opts.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" },
-        }),
-        el("span", { className: "sidebar__playlist-title truncate", text: opts.title }),
-      ],
-    });
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      opts.onOpen();
-    });
-    return link;
-  };
-
-  const renderPlaylists = () => {
-    const local = storage.getPlaylists();
-    const items: HTMLElement[] = [
-      ...local.map((pl) =>
-        createPlaylistLink({
-          source: "local",
-          id: pl.id,
-          title: pl.title,
-          artworkUrl: pl.tracks[0]?.artworkUrl || pl.artworkUrl || "/artwork-placeholder.svg",
-          onOpen: () => openCollection({ source: "local", id: pl.id }),
-        }),
-      ),
-      ...ytmPlaylists.map((pl) =>
-        createPlaylistLink({
-          source: "ytm",
-          id: pl.id,
-          title: pl.title,
-          artworkUrl: pl.artworkUrl || "/artwork-placeholder.svg",
-          onOpen: () =>
-            openCollection({
-              source: "ytm",
-              id: pl.id,
-              kind: "playlist",
-              title: pl.title,
-              subtitle: pl.subtitle,
-              artworkUrl: pl.artworkUrl,
-            }),
-        }),
-      ),
-    ];
-
-    if (items.length === 0) {
-      playlistsHost.replaceChildren();
-      return;
-    }
-
-    playlistsHost.replaceChildren(
-      el("div", { className: "sidebar__label", text: "Playlists" }),
-      el("nav", { className: "sidebar__nav", attrs: { "aria-label": "Playlists" }, children: items }),
-    );
-    updateActive(activePath);
-  };
 
   // Track active route
   function updateActive(path: string): void {
@@ -217,21 +135,6 @@ export function createSidebar(): HTMLElement {
       link.classList.toggle("sidebar__link--active", linkPath === path);
     });
 
-    const queryIdx = path.indexOf("?");
-    const pathname = queryIdx === -1 ? path : path.slice(0, queryIdx);
-    const params = queryIdx === -1 ? null : new URLSearchParams(path.slice(queryIdx + 1));
-    const currentSource = pathname === "/playlist" ? params?.get("source") : null;
-    const currentId = pathname === "/playlist" ? params?.get("id") : null;
-
-    sidebar.querySelectorAll<HTMLElement>(".sidebar__playlist-item").forEach((item) => {
-      const isActive =
-        Boolean(currentId) &&
-        item.dataset.playlistSource === currentSource &&
-        item.dataset.playlistId === currentId;
-      item.classList.toggle("sidebar__playlist-item--active", isActive);
-      if (isActive) item.setAttribute("aria-current", "page");
-      else item.removeAttribute("aria-current");
-    });
   }
 
   let wasConnected = false;
@@ -242,42 +145,13 @@ export function createSidebar(): HTMLElement {
     }
     if (!wasConnected) return false;
     stopNav();
-    stopPlaylists();
-    stopAccount();
     return true;
-  };
-
-  const refreshYtmPlaylists = () => {
-    if (!catalogAvailable() || account.isSignedIn !== true) {
-      ytmPlaylists = [];
-      renderPlaylists();
-      return;
-    }
-    void catalog
-      .getLibraryPlaylists()
-      .then((list) => {
-        if (checkCleanup()) return;
-        ytmPlaylists = list;
-        renderPlaylists();
-      })
-      .catch(() => {});
   };
 
   const stopNav = router.onNavigate((path) => {
     if (checkCleanup()) return;
     updateActive(path);
   });
-  const stopPlaylists = storage.on("playlistChange", () => {
-    if (checkCleanup()) return;
-    renderPlaylists();
-  });
-  const stopAccount = account.on("change", () => {
-    if (checkCleanup()) return;
-    refreshYtmPlaylists();
-  });
-
-  renderPlaylists();
-  refreshYtmPlaylists();
 
   // Set initial active state after a tick (router hasn't started yet)
   requestAnimationFrame(() => {
