@@ -69,6 +69,9 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   private lastSkipAt = 0;
   private skipTimer: number | null = null;
   private lastSentAudioConfigKey: string | null = null;
+  private isRepeatingCurrent = false;
+  /** True when currentTrack was restored from storage and has not yet been loaded in the webview. */
+  private needsInitialLoad = false;
 
   constructor(private readonly bridge: PlaybackBridge = ytmBridge) {
     super();
@@ -78,6 +81,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.state.shuffle = settings.shuffle;
     this.state.repeat = settings.repeat;
     this.queue.setShuffle(settings.shuffle);
+    this.restoreSavedPlayback();
     if (bridge.available) {
       bridge.onState((s) => this.handleBridgeState(s)).catch((err) => this.fail(err));
     }
@@ -137,6 +141,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   setQueue(tracks: Track[], startTrack?: Track): void {
     this.queue.set(tracks, startTrack);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
@@ -147,6 +152,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   extendQueue(listStart: Track, more: Track[]): void {
     if (this.queue.all[0]?.id !== listStart.id) return;
     this.queue.append(more);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
@@ -156,10 +162,18 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       if (first) this.playTrack(first);
       return;
     }
+    if (this.needsInitialLoad) {
+      this.load(this.state.currentTrack);
+      return;
+    }
     this.send({ action: this.state.status === "playing" ? "pause" : "play" });
   }
 
   resume(): void {
+    if (this.needsInitialLoad && this.state.currentTrack) {
+      this.load(this.state.currentTrack);
+      return;
+    }
     this.send({ action: "play" });
   }
 
@@ -171,7 +185,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     const track = this.queue.next(this.state.repeat);
     if (track) {
       this.load(track, true);
-    } else if (this.state.currentTrack) {
+    } else if (this.state.currentTrack && storage.getSettings().autoPlayNext) {
       // Past the end of Sonora's list, let YouTube Music continue with its own radio.
       this.send({ action: "next" });
     }
@@ -232,6 +246,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.state.shuffle = !this.state.shuffle;
     this.queue.setShuffle(this.state.shuffle);
     storage.saveSettings({ shuffle: this.state.shuffle });
+    this.persistPlaybackState();
     this.emit("stateChange", this.currentState);
     this.emit("queueChange", this.queue.all);
   }
@@ -245,28 +260,33 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   moveUpcoming(fromIndex: number, toIndex: number): void {
     if (this.queue.moveUpcoming(fromIndex, toIndex)) {
+      this.persistPlaybackState();
       this.emit("queueChange", this.queue.all);
     }
   }
 
   clearQueue(): void {
     this.queue.clearUpcoming();
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
   removeUpcoming(index: number): void {
     if (this.queue.removeUpcoming(index)) {
+      this.persistPlaybackState();
       this.emit("queueChange", this.queue.all);
     }
   }
 
   playNext(track: Track): void {
     this.queue.playNext(track);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
   addToQueue(track: Track): void {
     this.queue.addToQueue(track);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
@@ -300,39 +320,60 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
     if (report.reason === "ended" && !report.ad) {
       if (this.state.repeat === "one") {
-        this.send({ action: "seek", value: 0 });
-        this.send({ action: "play" });
+        this.reloadCurrentTrack();
       } else {
         // A finished track advances straight away; nothing is waiting to settle.
         const track = this.queue.next(this.state.repeat);
-        if (track) this.load(track);
-        else this.send({ action: "next" });
+        if (track) {
+          this.load(track);
+        } else if (storage.getSettings().autoPlayNext) {
+          this.send({ action: "next" });
+        } else {
+          this.stopTicker();
+          this.state.status = "paused";
+          this.state.error = undefined;
+          if (report.duration > 0) this.state.duration = report.duration;
+          this.setTime(report.currentTime > 0 ? report.currentTime : this.state.duration);
+          this.emit("stateChange", this.currentState);
+        }
       }
       return;
     }
 
     if (this.pendingId) {
-      const isConfirmedCurrentTrack =
-        (report.videoId && report.videoId === this.pendingId) ||
-        (report.title &&
-          this.state.currentTrack &&
-          report.title.trim().toLowerCase() === this.state.currentTrack.title.trim().toLowerCase()) ||
-        (!report.videoId && !report.paused && report.currentTime > 0);
+      if (report.ad) {
+        // Pre-roll ads play before the requested track starts; suspend load timeout while the ad plays.
+        if (this.loadTimer !== null) {
+          this.clearLoadTimer();
+          this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume });
+        }
+      } else {
+        const isConfirmedCurrentTrack =
+          (report.videoId && report.videoId === this.pendingId) ||
+          (report.title &&
+            this.state.currentTrack &&
+            report.title.trim().toLowerCase() === this.state.currentTrack.title.trim().toLowerCase()) ||
+          (!report.videoId && !report.paused && report.currentTime > 0);
 
-      if (isConfirmedCurrentTrack) {
-        this.pendingId = null;
-        this.clearLoadTimer();
-        // A load can leave the page on its own saved volume; put ours back.
-        this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume });
-      } else if (!report.ad && report.title && this.pageIsOnAnotherTrack(report)) {
-        this.pendingId = null;
-        this.clearLoadTimer();
-        this.adoptTrack(report);
+        if (isConfirmedCurrentTrack) {
+          this.pendingId = null;
+          this.isRepeatingCurrent = false;
+          this.clearLoadTimer();
+          // A load can leave the page on its own saved volume; put ours back.
+          this.send({ action: "volume", value: this.state.isMuted ? 0 : this.state.volume });
+        } else if (!this.isRepeatingCurrent && report.title && this.pageIsOnAnotherTrack(report)) {
+          this.pendingId = null;
+          this.isRepeatingCurrent = false;
+          this.clearLoadTimer();
+          this.adoptTrack(report);
+        } else if (this.loadTimer === null) {
+          this.state.status = "loading";
+          this.armLoadTimer(this.pendingId);
+        }
       }
     } else if (report.videoId && !report.ad && report.title && this.pageIsOnAnotherTrack(report)) {
       if (this.state.repeat === "one") {
-        this.send({ action: "seek", value: 0 });
-        this.send({ action: "play" });
+        this.reloadCurrentTrack();
         return;
       }
       const nextInQueue = this.queue.upcoming[0];
@@ -347,8 +388,14 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
             return;
           }
         }
-      } else {
+      } else if (storage.getSettings().autoPlayNext) {
         this.adoptTrack(report);
+      } else {
+        this.stopTicker();
+        this.state.status = "paused";
+        this.send({ action: "pause" });
+        this.emit("stateChange", this.currentState);
+        return;
       }
     }
 
@@ -363,7 +410,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       });
     }
 
-    if (!this.pendingId) {
+    if (!this.pendingId || report.ad) {
       this.state.status = report.paused ? "paused" : "playing";
       this.state.error = undefined;
       if (!report.ad && report.duration > 0) this.state.duration = report.duration;
@@ -427,7 +474,8 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
    * start tracks nobody waits for. The queue and the interface move with every
    * tap, but a run of them loads once, for the track the user stops on.
    */
-  private load(track: Track, fromSkip = false): void {
+  private load(track: Track, fromSkip = false, repeatingCurrent = false): void {
+    this.needsInitialLoad = false;
     this.setCurrent(track, false);
     this.state.status = "loading";
     this.state.duration = track.duration || 0;
@@ -439,11 +487,9 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       this.fail(UNAVAILABLE_MESSAGE);
       return;
     }
+    this.isRepeatingCurrent = repeatingCurrent;
     this.pendingId = track.id;
-    this.clearLoadTimer();
-    this.loadTimer = window.setTimeout(() => {
-      if (this.pendingId === track.id) this.fail(LOAD_FAILED_MESSAGE);
-    }, LOAD_TIMEOUT_MS);
+    this.armLoadTimer(track.id);
 
     this.clearSkipTimer();
     const stillSkipping = fromSkip && Date.now() - this.lastSkipAt < SKIP_SETTLE_MS;
@@ -468,9 +514,32 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
    */
   private setCurrent(track: Track, settle = true): void {
     this.state.currentTrack = track;
+    this.persistPlaybackState();
     this.emit("trackChange", track);
     this.emit("queueChange", this.queue.all);
     if (settle) this.settleOn(track);
+  }
+
+  private persistPlaybackState(): void {
+    storage.saveQueue(this.queue.snapshot());
+    storage.saveLastTrack(this.state.currentTrack);
+  }
+
+  private restoreSavedPlayback(): void {
+    const savedQueue = storage.getSavedQueue();
+    const lastTrack = storage.getLastTrack();
+    if (savedQueue) {
+      this.queue.restore(savedQueue, lastTrack);
+    } else if (lastTrack) {
+      this.queue.set([lastTrack], lastTrack);
+    }
+    const restoredTrack = this.queue.current ?? lastTrack;
+    if (restoredTrack) {
+      this.state.currentTrack = restoredTrack;
+      this.state.status = "paused";
+      this.state.duration = restoredTrack.duration || 0;
+      this.needsInitialLoad = true;
+    }
   }
 
   /**
@@ -482,6 +551,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
    */
   private settleOn(track: Track): void {
     storage.addToHistory(track);
+    if (this.lyrics?.trackId === track.id) return;
     this.lyrics = null;
     // Both arrive late. A reply for a track that has since been left behind
     // would put the wrong words and the wrong colors on screen.
@@ -511,6 +581,18 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.bridge.control(command).catch((err) => this.fail(err));
   }
 
+  private reloadCurrentTrack(): void {
+    if (!this.state.currentTrack) return;
+    this.load(this.state.currentTrack, false, true);
+  }
+
+  private armLoadTimer(trackId: string): void {
+    this.clearLoadTimer();
+    this.loadTimer = window.setTimeout(() => {
+      if (this.pendingId === trackId) this.fail(LOAD_FAILED_MESSAGE);
+    }, LOAD_TIMEOUT_MS);
+  }
+
   private clearLoadTimer(): void {
     if (this.loadTimer !== null) {
       window.clearTimeout(this.loadTimer);
@@ -528,6 +610,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   private fail(err: unknown): void {
     console.error("[PlaybackEngine]", err);
     this.pendingId = null;
+    this.isRepeatingCurrent = false;
     this.clearLoadTimer();
     this.clearSkipTimer();
     this.stopTicker();

@@ -11,6 +11,12 @@ import type { RepeatMode, Track } from "@/types/music";
 
 export type Random = () => number;
 
+export interface QueueSnapshot {
+  tracks: Track[];
+  order: number[];
+  position: number;
+}
+
 export class PlayQueue {
   private tracks: Track[] = [];
   /** Indices into `tracks` in play order. */
@@ -45,6 +51,51 @@ export class PlayQueue {
     this.rebuildOrder(this.tracks.length > 0 ? startIndex : -1);
   }
 
+  /** Serializes the full queue state, including active order and position. */
+  snapshot(): QueueSnapshot {
+    return {
+      tracks: [...this.tracks],
+      order: [...this.order],
+      position: this.position,
+    };
+  }
+
+  /** Restores a previously saved queue snapshot, falling back to list order if invalid. */
+  restore(snapshot: { tracks: Track[]; order?: number[]; position?: number }, fallbackTrack?: Track | null): void {
+    const unique: Track[] = [];
+    const seen = new Set<string>();
+    for (const item of snapshot.tracks) {
+      if (!item?.id || seen.has(item.id)) continue;
+      seen.add(item.id);
+      unique.push(item);
+    }
+    if (unique.length === 0) {
+      this.tracks = [];
+      this.order = [];
+      this.position = -1;
+      return;
+    }
+
+    const validOrder =
+      Array.isArray(snapshot.order) &&
+      snapshot.order.length === unique.length &&
+      new Set(snapshot.order).size === unique.length &&
+      snapshot.order.every((i) => Number.isInteger(i) && i >= 0 && i < unique.length) &&
+      typeof snapshot.position === "number" &&
+      Number.isInteger(snapshot.position) &&
+      snapshot.position >= 0 &&
+      snapshot.position < snapshot.order.length;
+
+    if (validOrder) {
+      this.tracks = unique;
+      this.order = [...snapshot.order!];
+      this.position = snapshot.position!;
+      return;
+    }
+
+    this.set(unique, fallbackTrack ?? undefined);
+  }
+
   /** Adds tracks to the end (shuffled into the rest when shuffle is on), skipping ones already queued. */
   append(tracks: Track[]): void {
     const known = new Set(this.tracks.map((t) => t.id));
@@ -70,8 +121,12 @@ export class PlayQueue {
     if (existingIndex !== -1) {
       trackIndex = existingIndex;
       const orderPos = this.order.indexOf(trackIndex);
-      if (orderPos > this.position) {
+      if (orderPos === this.position) return;
+      if (orderPos !== -1) {
         this.order.splice(orderPos, 1);
+        if (orderPos < this.position) {
+          this.position -= 1;
+        }
       }
     } else {
       trackIndex = this.tracks.length;
@@ -145,6 +200,7 @@ export class PlayQueue {
   clearUpcoming(): void {
     if (this.position + 1 < this.order.length) {
       this.order = this.order.slice(0, this.position + 1);
+      this.pruneTracks();
     }
   }
 
@@ -153,7 +209,24 @@ export class PlayQueue {
     const target = this.position + 1 + index;
     if (target < this.position + 1 || target >= this.order.length) return false;
     this.order.splice(target, 1);
+    this.pruneTracks();
     return true;
+  }
+
+  /** Drops tracks no longer referenced by `order` and remaps remaining indices. */
+  private pruneTracks(): void {
+    const used = new Set(this.order);
+    if (used.size === this.tracks.length) return;
+    const nextTracks: Track[] = [];
+    const remap = new Map<number, number>();
+    for (let i = 0; i < this.tracks.length; i++) {
+      if (used.has(i)) {
+        remap.set(i, nextTracks.length);
+        nextTracks.push(this.tracks[i]);
+      }
+    }
+    this.tracks = nextTracks;
+    this.order = this.order.map((oldIndex) => remap.get(oldIndex)!);
   }
 
   /** Builds the play order with `anchor` (an index into tracks) first, or -1 for none. */

@@ -102,4 +102,23 @@ describe("StorageService", () => {
     storage.deletePlaylist("pl_sample");
     expect(storage.getPlaylists()).toHaveLength(0);
   });
+
+  it("saves and restores playback queue and last-played track", () => {
+    const t1: Track = { id: "q1", title: "One", artist: "Artist", duration: 100, artworkUrl: "" };
+    const t2: Track = { id: "q2", title: "Two", artist: "Artist", duration: 200, artworkUrl: "" };
+
+    expect(storage.getSavedQueue()).toBeNull();
+    expect(storage.getLastTrack()).toBeNull();
+
+    storage.saveQueue({ tracks: [t1, t2], order: [1, 0], position: 0 });
+    storage.saveLastTrack(t2);
+
+    expect(storage.getSavedQueue()).toEqual({ tracks: [t1, t2], order: [1, 0], position: 0 });
+    expect(storage.getLastTrack()).toEqual(t2);
+
+    storage.saveQueue({ tracks: [], order: [], position: -1 });
+    storage.saveLastTrack(null);
+    expect(storage.getSavedQueue()).toBeNull();
+    expect(storage.getLastTrack()).toBeNull();
+  });
 });

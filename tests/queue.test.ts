@@ -159,6 +159,55 @@ describe("PlayQueue shuffled", () => {
 
     expect(ids(q.upcoming)).toEqual(["b", "z"]);
   });
+
+  it("moves an already-played track without duplicating it and ignores playNext on current track", () => {
+    const q = new PlayQueue();
+    q.set(tracks, tracks[2]); // current is 'c', played ['a', 'b'], upcoming ['d', 'e']
+
+    // Calling playNext on the current track must not duplicate it in order
+    q.playNext(tracks[2]);
+    expect(q.current?.id).toBe("c");
+    expect(ids(q.upcoming)).toEqual(["d", "e"]);
+
+    // Moving an already-played track moves it to upcoming[0] without leaving a duplicate earlier
+    q.playNext(tracks[0]);
+    expect(q.current?.id).toBe("c");
+    expect(ids(q.upcoming)).toEqual(["a", "d", "e"]);
+    expect(q.previous("off")?.id).toBe("b");
+
+    // jumpTo lands on the single upcoming instance of 'a' rather than an earlier stale slot
+    expect(q.jumpTo("a")).toBe(true);
+    expect(q.current?.id).toBe("a");
+    expect(ids(q.upcoming)).toEqual(["d", "e"]);
+  });
+
+  it("does not restore cleared or removed tracks when toggling shuffle", () => {
+    const q = new PlayQueue(seeded(9));
+    q.set(tracks, tracks[0]); // current 'a', upcoming ['b', 'c', 'd', 'e']
+
+    expect(q.removeUpcoming(1)).toBe(true); // removes 'c'
+    expect(ids(q.all)).toEqual(["a", "b", "d", "e"]);
+
+    q.setShuffle(true);
+    expect(q.current?.id).toBe("a");
+    expect(ids(q.upcoming).sort()).toEqual(["b", "d", "e"]);
+
+    q.setShuffle(false);
+    expect(ids(q.upcoming)).toEqual(["b", "d", "e"]);
+
+    // Removed track can be added back cleanly later
+    q.addToQueue(track("c"));
+    expect(ids(q.upcoming)).toEqual(["b", "d", "e", "c"]);
+
+    q.clearUpcoming();
+    expect(ids(q.all)).toEqual(["a"]);
+    expect(q.upcoming).toEqual([]);
+
+    q.setShuffle(true);
+    expect(q.upcoming).toEqual([]);
+    q.setShuffle(false);
+    expect(q.upcoming).toEqual([]);
+  });
 });
 
 describe("createQueuePanel", () => {
