@@ -122,4 +122,16 @@ describe("song context menu", () => {
     expect(document.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(tile);
   });
+
+  it("shows Remove from Playlist when an onRemoveFromPlaylist handler is provided", () => {
+    const onRemoveFromPlaylist = vi.fn();
+    const row = document.createElement("div");
+    attachSongContextMenu(row, song, { onRemoveFromPlaylist });
+    const menu = open(row);
+    const removeBtn = button(menu, "Remove from Playlist");
+    expect(removeBtn).toBeDefined();
+    removeBtn.click();
+    expect(onRemoveFromPlaylist).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".song-context-menu")).toBeNull();
+  });
 });

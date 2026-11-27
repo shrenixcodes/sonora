@@ -236,6 +236,44 @@ class StorageService extends EventEmitter<StorageEvents> {
       console.error("[Storage] Failed to delete playlist:", err);
     }
   }
+
+  renamePlaylist(playlistId: string, nextTitle: string): boolean {
+    const title = nextTitle.trim();
+    if (!title) return false;
+    const playlists = this.getPlaylists();
+    const playlist = playlists.find((p) => p.id === playlistId);
+    if (!playlist) return false;
+    if (playlist.title === title) return true;
+    playlist.title = title;
+    playlist.updatedAt = Date.now();
+    try {
+      localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+      this.emit("playlistChange", undefined);
+      return true;
+    } catch (err) {
+      console.error("[Storage] Failed to rename playlist:", err);
+      return false;
+    }
+  }
+
+  removeTrackFromPlaylist(playlistId: string, trackId: string): boolean {
+    const playlists = this.getPlaylists();
+    const playlist = playlists.find((p) => p.id === playlistId);
+    if (!playlist) return false;
+    const nextTracks = playlist.tracks.filter((item) => item.id !== trackId);
+    if (nextTracks.length === playlist.tracks.length) return false;
+    playlist.tracks = nextTracks;
+    playlist.trackCount = nextTracks.length;
+    playlist.updatedAt = Date.now();
+    try {
+      localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+      this.emit("playlistChange", undefined);
+      return true;
+    } catch (err) {
+      console.error("[Storage] Failed to remove track from playlist:", err);
+      return false;
+    }
+  }
 }
 
 export const storage = new StorageService();

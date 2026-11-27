@@ -271,6 +271,20 @@
   background: var(--color-surface-secondary);
 }
 
+.btn--danger {
+  color: var(--color-danger);
+  border-color: color-mix(in oklab, var(--color-danger) 40%, transparent);
+}
+
+.btn--danger:hover {
+  background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+
+.btn--danger-solid {
+  background: var(--color-danger);
+  color: #ffffff;
+}
+
 .btn__icon svg {
   width: 16px;
   height: 16px;
@@ -301,6 +315,10 @@
   cursor: pointer;
   contain: layout style;
   transition: background var(--duration-fast) var(--ease-out);
+}
+
+.track-row--removable {
+  grid-template-columns: 32px 40px 1fr 1fr 28px 36px 28px 48px;
 }
 
 .track-row:hover,
@@ -407,6 +425,29 @@
 .track-row__like-btn svg {
   width: 16px;
   height: 16px;
+}
+
+.track-row__remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.track-row__remove-btn:hover,
+.track-row__remove-btn:focus-visible {
+  color: var(--color-danger);
+  background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+
+.track-row__remove-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .track-row__duration {

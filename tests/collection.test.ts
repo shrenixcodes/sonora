@@ -130,4 +130,53 @@ describe("Collection cards and playlist detail view", () => {
     expect(host.querySelector(".collection__title")?.textContent).toBe("Late Night");
     expect(host.querySelectorAll(".track-row")).toHaveLength(2);
   });
+
+  it("supports renaming, removing tracks from, and deleting local playlists", () => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); this.dispatchEvent(new Event("close")); };
+
+    const songs = [track("loc1", "Local One"), track("loc2", "Local Two")];
+    storage.savePlaylist({
+      id: "pl_manage",
+      title: "Original Name",
+      trackCount: 2,
+      tracks: songs,
+      isCustom: true,
+    });
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    window.location.hash = "#/playlist?source=local&id=pl_manage";
+    router.route("/playlists", renderLibrary);
+    router.route("/playlist", renderCollection);
+    router.start(host);
+
+    // Remove first song via row remove button
+    host.querySelector<HTMLButtonElement>('.track-row[data-track-id="loc1"] .track-row__remove-btn')!.click();
+    expect(storage.getPlaylists()[0].tracks.map((t) => t.id)).toEqual(["loc2"]);
+    expect(host.querySelectorAll(".track-row")).toHaveLength(1);
+
+    // Rename playlist via Rename button modal
+    const renameBtn = Array.from(host.querySelectorAll<HTMLButtonElement>(".page-header__actions button"))
+      .find((b) => b.textContent === "Rename")!;
+    renameBtn.click();
+    const renameDialog = document.querySelector<HTMLDialogElement>("dialog.sonora-dialog")!;
+    const input = renameDialog.querySelector<HTMLInputElement>("input")!;
+    input.value = "Renamed Mix";
+    renameDialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(storage.getPlaylists()[0].title).toBe("Renamed Mix");
+    expect(host.querySelector(".collection__title")?.textContent).toBe("Renamed Mix");
+
+    // Delete playlist via Delete button confirmation modal
+    const deleteBtn = Array.from(host.querySelectorAll<HTMLButtonElement>(".page-header__actions button"))
+      .find((b) => b.textContent === "Delete")!;
+    deleteBtn.click();
+    const confirmDialog = document.querySelector<HTMLDialogElement>("dialog.sonora-dialog")!;
+    const confirmDeleteBtn = Array.from(confirmDialog.querySelectorAll<HTMLButtonElement>("button"))
+      .find((b) => b.textContent === "Delete")!;
+    confirmDeleteBtn.click();
+
+    expect(storage.getPlaylists()).toHaveLength(0);
+    expect(window.location.hash).toBe("#/playlists");
+  });
 });
