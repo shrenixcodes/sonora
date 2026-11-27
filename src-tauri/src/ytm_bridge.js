@@ -883,6 +883,9 @@
       } else if (request.kind === "history") {
         body = { browseId: "FEmusic_history" };
       } else if (request.kind === "rate") {
+        if (request.rating !== "LIKE" && request.rating !== "INDIFFERENT") {
+          return reply(false, "unknown-request");
+        }
         endpoint = request.rating === "LIKE" ? "like/like" : "like/removelike";
         body = { target: { videoId: String(request.videoId) } };
       } else if (request.kind === "libraryPlaylists") {

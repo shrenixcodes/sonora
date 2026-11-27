@@ -192,6 +192,40 @@ describe("YouTube Music bridge script", () => {
     }
   });
 
+  it("handles history and rate catalog requests with expected YouTube Music endpoints", async () => {
+    setupPage({ ad: false });
+    (window as unknown as { ytcfg: { get: (k: string) => unknown } }).ytcfg = {
+      get: (key) => (key === "INNERTUBE_CONTEXT" ? { client: { clientName: "WEB_REMIX" } } : undefined),
+    };
+    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => "{}" }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const bridge = loadBridge();
+      bridge.request(10, { kind: "history" });
+      bridge.request(11, { kind: "rate", videoId: "dQw4w9WgXcQ", rating: "LIKE" });
+      bridge.request(12, { kind: "rate", videoId: "dQw4w9WgXcQ", rating: "INDIFFERENT" });
+
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+      expect(fetchMock.mock.calls[0][0]).toContain("/youtubei/v1/browse?");
+      expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
+        browseId: "FEmusic_history",
+      });
+
+      expect(fetchMock.mock.calls[1][0]).toContain("/youtubei/v1/like/like?");
+      expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toMatchObject({
+        target: { videoId: "dQw4w9WgXcQ" },
+      });
+
+      expect(fetchMock.mock.calls[2][0]).toContain("/youtubei/v1/like/removelike?");
+      expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toMatchObject({
+        target: { videoId: "dQw4w9WgXcQ" },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      delete (window as unknown as { ytcfg?: unknown }).ytcfg;
+    }
+  });
+
   it("does nothing outside music.youtube.com", () => {
     setupPage({ ad: false });
     delete win.__sonoraBridge;

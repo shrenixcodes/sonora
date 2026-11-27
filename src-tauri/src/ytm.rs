@@ -344,6 +344,15 @@ pub fn ytm_sign_out<R: Runtime>(
     Ok(())
 }
 
+/// Track rating actions accepted by YouTube Music's like endpoint.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TrackRating {
+    #[serde(rename = "LIKE")]
+    Like,
+    #[serde(rename = "INDIFFERENT")]
+    Indifferent,
+}
+
 /// Catalog requests the main window may ask the YouTube Music page to make.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -359,6 +368,12 @@ pub enum YtmRequest {
         params: Option<String>,
     },
     LikedSongs,
+    History,
+    Rate {
+        #[serde(rename = "videoId")]
+        video_id: String,
+        rating: TrackRating,
+    },
     LibraryPlaylists,
     LibraryAlbums,
     LibraryArtists,
@@ -393,11 +408,19 @@ impl YtmRequest {
         match self {
             YtmRequest::Home { params: None }
             | YtmRequest::LikedSongs
+            | YtmRequest::History
             | YtmRequest::LibraryPlaylists
             | YtmRequest::LibraryAlbums
             | YtmRequest::LibraryArtists
             | YtmRequest::AccountInfo
             | YtmRequest::Explore => Ok(()),
+            YtmRequest::Rate { video_id, .. } => {
+                if is_valid_video_id(video_id) {
+                    Ok(())
+                } else {
+                    Err("invalid video id".into())
+                }
+            }
             YtmRequest::Home {
                 params: Some(params),
             } => {
@@ -793,10 +816,68 @@ mod tests {
         );
         let parsed: YtmRequest = serde_json::from_str(r#"{"kind":"likedSongs"}"#).unwrap();
         assert_eq!(parsed, YtmRequest::LikedSongs);
+
+        let history: YtmRequest = serde_json::from_str(r#"{"kind":"history"}"#).unwrap();
+        assert_eq!(history, YtmRequest::History);
+        assert!(history.validate().is_ok());
+
+        let like: YtmRequest =
+            serde_json::from_str(r#"{"kind":"rate","videoId":"dQw4w9WgXcQ","rating":"LIKE"}"#)
+                .unwrap();
+        assert_eq!(
+            like,
+            YtmRequest::Rate {
+                video_id: "dQw4w9WgXcQ".into(),
+                rating: TrackRating::Like,
+            }
+        );
+        assert!(like.validate().is_ok());
+
+        let unlike: YtmRequest = serde_json::from_str(
+            r#"{"kind":"rate","videoId":"dQw4w9WgXcQ","rating":"INDIFFERENT"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            unlike,
+            YtmRequest::Rate {
+                video_id: "dQw4w9WgXcQ".into(),
+                rating: TrackRating::Indifferent,
+            }
+        );
+        assert!(unlike.validate().is_ok());
+
+        assert!(
+            YtmRequest::Rate {
+                video_id: "bad".into(),
+                rating: TrackRating::Like,
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<YtmRequest>(
+                r#"{"kind":"rate","videoId":"dQw4w9WgXcQ","rating":"DISLIKE"}"#
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn embeds_requests_as_json_so_text_cannot_escape() {
+        let rate_script = request_script(
+            6,
+            &YtmRequest::Rate {
+                video_id: "dQw4w9WgXcQ".into(),
+                rating: TrackRating::Like,
+            },
+        )
+        .unwrap();
+        assert!(rate_script.contains(
+            r#"window.__sonoraBridge.request(6, {"kind":"rate","videoId":"dQw4w9WgXcQ","rating":"LIKE"});"#
+        ));
+
+        let history_script = request_script(5, &YtmRequest::History).unwrap();
+        assert!(history_script.contains(r#"window.__sonoraBridge.request(5, {"kind":"history"});"#));
         let script = request_script(
             7,
             &YtmRequest::Search {
