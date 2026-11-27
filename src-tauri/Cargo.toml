@@ -1,6 +1,6 @@
 [package]
 name = "sonora"
-version = "0.7.20"
+version = "0.7.53"
 description = "An immersive YouTube Music desktop client"
 authors = ["Shreyan Bag"]
 repository = "https://github.com/shrenixcodes/sonora"
