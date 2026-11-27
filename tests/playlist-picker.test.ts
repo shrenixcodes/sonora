@@ -37,5 +37,6 @@ describe("adding songs to playlists", () => {
     card.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find((item) => item.textContent === "Add to Playlist")!.click();
     expect(document.querySelector(".playlist-picker")?.textContent).toContain("Create a Sonora playlist first.");
+    expect(document.querySelector(".playlist-picker")?.textContent).toContain("YouTube Music playlists are read-only");
   });
 });

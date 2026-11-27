@@ -35,8 +35,8 @@ export function showPlaylistPicker(track: Track): void {
     attrs: { "aria-labelledby": "playlist-picker-title" },
     children: [
       el("h2", { className: "playlist-picker__title", text: "Add to Playlist", attrs: { id: "playlist-picker-title" } }),
-      el("p", { className: "playlist-picker__subtitle", text: track.title }),
-      ...(entries.length ? [el("div", { className: "playlist-picker__list", children: entries })] : [el("p", { className: "playlist-picker__empty", text: "Create a Sonora playlist first." })]),
+      el("p", { className: "playlist-picker__subtitle", text: `${track.title} · Local Sonora playlists (YouTube Music playlists are read-only)` }),
+      ...(entries.length ? [el("div", { className: "playlist-picker__list", children: entries })] : [el("p", { className: "playlist-picker__empty", text: "Create a Sonora playlist first. YouTube Music playlists are read-only." })]),
       status,
       el("div", { className: "playlist-picker__actions", children: entries.length ? [done] : [create, done] }),
     ],

@@ -14,6 +14,7 @@ import { createTrackAlbumControl, createTrackArtistControl, syncTrackRowLikeButt
 import { icon } from "@/icons";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
+import { ytmBridge } from "@/lib/playback/ytm-bridge";
 import { catalog, CatalogError, type LibraryArtist, type LibraryPlaylist } from "@/lib/ytm/catalog";
 import { openArtist } from "@/lib/navigation";
 import { router } from "@/lib/router";
@@ -28,22 +29,6 @@ export function renderLibrary(container: HTMLElement): void {
   const content = el("div", { className: "main__content" });
   let handleLikeChange: ((trackId: string, isLiked: boolean) => void) | null = null;
 
-  if (hash === "/history") {
-    renderHistory(content);
-  } else if (hash === "/playlists") {
-    renderPlaylists(content);
-  } else if (hash === "/albums") {
-    renderAlbums(content);
-  } else if (hash === "/artists") {
-    renderArtists(content);
-  } else {
-    renderLikedSongs(content, (handler) => {
-      handleLikeChange = handler;
-    });
-  }
-
-  container.appendChild(content);
-
   const markPlaying = (track: Track | null) => {
     content.querySelectorAll<HTMLElement>("[data-track-id]").forEach((node) => {
       const isCurrent = node.dataset.trackId === track?.id;
@@ -52,7 +37,28 @@ export function renderLibrary(container: HTMLElement): void {
       else node.removeAttribute("aria-current");
     });
   };
-  markPlaying(playerEngine.currentTrack);
+
+  const renderActiveTab = () => {
+    handleLikeChange = null;
+    content.replaceChildren();
+    if (hash === "/history") {
+      renderHistory(content);
+    } else if (hash === "/playlists") {
+      renderPlaylists(content);
+    } else if (hash === "/albums") {
+      renderAlbums(content);
+    } else if (hash === "/artists") {
+      renderArtists(content);
+    } else {
+      renderLikedSongs(content, (handler) => {
+        handleLikeChange = handler;
+      });
+    }
+    markPlaying(playerEngine.currentTrack);
+  };
+  renderActiveTab();
+  container.appendChild(content);
+
   const stopTrack = playerEngine.on("trackChange", markPlaying);
   const currentHash = hash;
   const stopLike = storage.on("likeChange", ({ trackId, isLiked }) => {
@@ -68,11 +74,16 @@ export function renderLibrary(container: HTMLElement): void {
     content.replaceChildren();
     renderPlaylists(content);
   });
+  const stopAccount = account.on("change", () => {
+    if (currentHash === "/playlists" && !catalogAvailable()) return;
+    renderActiveTab();
+  });
   const stopNav = router.onNavigate((path) => {
     if (path === currentHash) return;
     stopTrack();
     stopLike();
     stopPlaylist();
+    stopAccount();
     stopNav();
   });
 }
@@ -83,9 +94,33 @@ function libraryNotice(err: unknown, what: string): HTMLElement {
 }
 
 function signInHint(what: string): HTMLElement {
-  return el("p", {
-    className: "home__hint",
-    text: `Sign in to YouTube Music from Settings to see your ${what} here.`,
+  return el("div", {
+    className: "home__notice",
+    children: [
+      el("p", {
+        className: "home__hint",
+        text: `Sign in to YouTube Music to see your ${what} here.`,
+      }),
+      el("button", {
+        className: "btn btn--primary",
+        text: "Sign in",
+        attrs: { type: "button" },
+        onClick: () => {
+          if (!ytmBridge.available) {
+            router.navigate("/settings");
+            return;
+          }
+          account.beginSignIn();
+          void ytmBridge.setSignInVisible(true).catch(() => router.navigate("/settings"));
+        },
+      }),
+      el("button", {
+        className: "btn btn--secondary",
+        text: "Open Settings",
+        attrs: { type: "button" },
+        onClick: () => router.navigate("/settings"),
+      }),
+    ],
   });
 }
 
@@ -264,6 +299,10 @@ function showHistory(container: HTMLElement, remote: Track[] | null, notice?: HT
   const clearBtn = el("button", {
     className: "btn btn--secondary",
     text: "Clear local history",
+    attrs: {
+      type: "button",
+      title: "Clears songs played in Sonora locally; YouTube Music account history is read-only",
+    },
     onClick: () => {
       storage.clearHistory();
       container.replaceChildren();
@@ -290,6 +329,14 @@ function showHistory(container: HTMLElement, remote: Track[] | null, notice?: HT
 
   container.appendChild(header);
   if (notice) container.appendChild(notice);
+  if (remote && remote.length > 0) {
+    container.appendChild(
+      el("p", {
+        className: "home__hint",
+        text: "YouTube Music account history is read-only; clearing removes local Sonora history only.",
+      }),
+    );
+  }
 
   if (historyTracks.length === 0) {
     container.appendChild(
@@ -370,20 +417,18 @@ function renderPlaylists(container: HTMLElement): void {
 
   container.appendChild(header);
 
-  if (catalogAvailable()) {
-    const ytmSection = el("div", { className: "section", attrs: { "aria-live": "polite" } });
-    container.appendChild(ytmSection);
-    loadYtmPlaylists(ytmSection);
-    container.appendChild(
-      el("div", {
-        className: "section__header",
-        children: [el("h2", { className: "section__title", text: "Made in Sonora" })],
-      }),
-    );
-  }
-
-  if (playlists.length === 0) {
-    container.appendChild(
+  const localHost = el("div", { className: "section" });
+  const renderLocalEmpty = (compact: boolean) => {
+    if (compact) {
+      localHost.replaceChildren(
+        el("p", {
+          className: "home__hint",
+          text: "No local Sonora playlists yet. Use New Playlist above to create one.",
+        }),
+      );
+      return;
+    }
+    localHost.replaceChildren(
       el("div", {
         className: "empty-state",
         children: [
@@ -399,6 +444,32 @@ function renderPlaylists(container: HTMLElement): void {
         ],
       }),
     );
+  };
+
+  if (catalogAvailable()) {
+    const ytmSection = el("div", { className: "section", attrs: { "aria-live": "polite" } });
+    container.appendChild(ytmSection);
+    container.appendChild(
+      el("div", {
+        className: "section__header",
+        children: [el("h2", { className: "section__title", text: "Made in Sonora" })],
+      }),
+    );
+    container.appendChild(localHost);
+    if (playlists.length === 0) {
+      renderLocalEmpty(account.isSignedIn !== false);
+    }
+    loadYtmPlaylists(ytmSection, (hasYtmPlaylists) => {
+      if (playlists.length === 0 && localHost.isConnected) {
+        renderLocalEmpty(hasYtmPlaylists);
+      }
+    });
+  } else {
+    container.appendChild(localHost);
+  }
+
+  if (playlists.length === 0) {
+    if (!catalogAvailable()) renderLocalEmpty(false);
     return;
   }
 
@@ -456,12 +527,17 @@ function renderPlaylists(container: HTMLElement): void {
     }),
   });
 
-  container.appendChild(grid);
+  localHost.replaceChildren(grid);
 }
 
-function loadYtmPlaylists(host: HTMLElement): void {
-  loadYtmCards(host, "playlists", "From YouTube Music", () => catalog.getLibraryPlaylists(), (item) =>
-    createYtmPlaylistCard(item, "playlist"),
+function loadYtmPlaylists(host: HTMLElement, onResolved?: (hasItems: boolean) => void): void {
+  loadYtmCards(
+    host,
+    "playlists",
+    "From YouTube Music",
+    () => catalog.getLibraryPlaylists(),
+    (item) => createYtmPlaylistCard(item, "playlist"),
+    onResolved,
   );
 }
 
@@ -472,6 +548,7 @@ function loadYtmCards<T>(
   heading: string | null,
   load: () => Promise<T[]>,
   card: (item: T) => HTMLElement,
+  onResolved?: (hasItems: boolean) => void,
 ): void {
   const title = heading
     ? [el("div", { className: "section__header", children: [el("h2", { className: "section__title", text: heading })] })]
@@ -481,10 +558,12 @@ function loadYtmCards<T>(
       ...title,
       el("p", { className: "home__hint", text: `Your ${what} show up in the Sonora desktop app.` }),
     );
+    onResolved?.(false);
     return;
   }
   if (account.isSignedIn === false) {
     host.replaceChildren(...title, signInHint(what));
+    onResolved?.(false);
     return;
   }
 
@@ -499,8 +578,13 @@ function loadYtmCards<T>(
           ? el("div", { className: "card-grid", children: items.map(card) })
           : el("p", { className: "home__hint", text: `No ${what} saved in your YouTube Music library yet.` }),
       );
+      onResolved?.(items.length > 0);
     })
-    .catch((err) => host.isConnected && host.replaceChildren(...title, libraryNotice(err, what)))
+    .catch((err) => {
+      if (!host.isConnected) return;
+      host.replaceChildren(...title, libraryNotice(err, what));
+      onResolved?.(false);
+    })
     .finally(() => host.removeAttribute("aria-busy"));
 }
 

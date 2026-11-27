@@ -60,52 +60,7 @@ export function createTitlebar(): HTMLElement {
             attrs: { "data-tauri-drag-region": "", title: "Drag to move", "aria-hidden": "true" },
             html: GRIP_ICON,
           }),
-          el("div", {
-            className: "titlebar__nav",
-            children: [
-              el("button", {
-                className: "titlebar__nav-btn",
-                html: icon("chevronLeft"),
-                attrs: {
-                  "aria-label": "Go back",
-                  title: "Go back",
-                },
-                onClick: () => window.history.back(),
-              }),
-              el("button", {
-                className: "titlebar__nav-btn",
-                html: icon("chevronRight"),
-                attrs: {
-                  "aria-label": "Go forward",
-                  title: "Go forward",
-                },
-                onClick: () => window.history.forward(),
-              }),
-              el("button", {
-                className: "titlebar__nav-btn titlebar__nav-btn--refresh",
-                html: icon("refresh"),
-                attrs: {
-                  "aria-label": "Refresh",
-                  title: "Refresh from YouTube Music",
-                },
-                onClick: (e) => {
-                  const btn = e.currentTarget as HTMLElement;
-                  const anims = typeof btn.getAnimations === "function" ? btn.getAnimations() : [];
-                  if (btn.classList.contains("is-spinning") && anims.length > 0) {
-                    anims.forEach((anim) => {
-                      anim.currentTime = 0;
-                      anim.play();
-                    });
-                  } else {
-                    btn.classList.remove("is-spinning");
-                    requestAnimationFrame(() => btn.classList.add("is-spinning"));
-                  }
-                  catalog.clearCache();
-                  router.refresh();
-                },
-              }),
-            ],
-          }),
+          createNavControls(),
         ],
       }),
 
@@ -190,6 +145,78 @@ function createMaximizeButton(appWindow: WindowHandle | null): HTMLElement {
   return btn;
 }
 
+/** Back, forward, and refresh buttons wired to router history state. */
+function createNavControls(): HTMLElement {
+  const backBtn = el("button", {
+    className: "titlebar__nav-btn",
+    html: icon("chevronLeft"),
+    attrs: {
+      type: "button",
+      "aria-label": "Go back",
+      title: "Go back",
+    },
+    onClick: () => router.back(),
+  }) as HTMLButtonElement;
+
+  const forwardBtn = el("button", {
+    className: "titlebar__nav-btn",
+    html: icon("chevronRight"),
+    attrs: {
+      type: "button",
+      "aria-label": "Go forward",
+      title: "Go forward",
+    },
+    onClick: () => router.forward(),
+  }) as HTMLButtonElement;
+
+  const refreshBtn = el("button", {
+    className: "titlebar__nav-btn titlebar__nav-btn--refresh",
+    html: icon("refresh"),
+    attrs: {
+      type: "button",
+      "aria-label": "Refresh",
+      title: "Refresh from YouTube Music",
+    },
+    onClick: (e) => {
+      const btn = e.currentTarget as HTMLElement;
+      const anims = typeof btn.getAnimations === "function" ? btn.getAnimations() : [];
+      if (btn.classList.contains("is-spinning") && anims.length > 0) {
+        anims.forEach((anim) => {
+          anim.currentTime = 0;
+          anim.play();
+        });
+      } else {
+        btn.classList.remove("is-spinning");
+        requestAnimationFrame(() => btn.classList.add("is-spinning"));
+      }
+      catalog.clearCache();
+      router.refresh();
+    },
+  });
+
+  const nav = el("div", {
+    className: "titlebar__nav",
+    children: [backBtn, forwardBtn, refreshBtn],
+  });
+
+  let wasConnected = false;
+  let unsubNav: (() => void) | null = null;
+  const syncNavButtons = () => {
+    if (wasConnected && !nav.isConnected) {
+      unsubNav?.();
+      unsubNav = null;
+      return;
+    }
+    if (nav.isConnected) wasConnected = true;
+    backBtn.disabled = !router.canGoBack;
+    forwardBtn.disabled = !router.canGoForward;
+  };
+
+  syncNavButtons();
+  unsubNav = router.onNavigate(syncNavButtons);
+  return nav;
+}
+
 /** The app's single search field; typing opens the search view with live results. */
 function createSearchField(): HTMLElement {
   const input = el("input", {
@@ -202,8 +229,37 @@ function createSearchField(): HTMLElement {
       spellcheck: "false",
     },
   }) as HTMLInputElement;
+  input.value = searchQuery.value;
+
+  const clearBtn = el("button", {
+    className: "titlebar__search-clear",
+    html: icon("close"),
+    attrs: {
+      type: "button",
+      "aria-label": "Clear search",
+      title: "Clear search",
+    },
+  }) as HTMLButtonElement;
+
+  const container = el("label", {
+    className: "titlebar__search",
+    children: [
+      el("span", { className: "titlebar__search-icon", html: icon("search") }),
+      input,
+      clearBtn,
+      el("kbd", { className: "titlebar__search-hint", text: "Ctrl K", attrs: { "aria-hidden": "true" } }),
+    ],
+  });
+
+  const syncClearState = () => {
+    const hasValue = input.value.length > 0;
+    clearBtn.hidden = !hasValue;
+    container.classList.toggle("titlebar__search--has-value", hasValue);
+  };
+  syncClearState();
 
   input.addEventListener("input", () => {
+    syncClearState();
     searchQuery.set(input.value.trim());
     if (router.current !== "/search") router.navigate("/search");
   });
@@ -217,22 +273,43 @@ function createSearchField(): HTMLElement {
     if (e.key === "Enter" && router.current !== "/search") router.navigate("/search");
   });
 
-  // Reflect queries set elsewhere (e.g. Explore's mood cards)
-  searchQuery.on("change", (query) => {
-    if (input.value.trim() !== query) input.value = query;
+  clearBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    input.value = "";
+    syncClearState();
+    searchQuery.set("");
+    input.focus();
   });
 
-  searchQuery.on("focusRequest", () => {
+  let wasConnected = false;
+  let unsubChange: (() => void) | null = null;
+  let unsubFocus: (() => void) | null = null;
+
+  const cleanupIfDetached = (): boolean => {
+    if (wasConnected && !container.isConnected) {
+      unsubChange?.();
+      unsubFocus?.();
+      unsubChange = null;
+      unsubFocus = null;
+      return true;
+    }
+    if (container.isConnected) wasConnected = true;
+    return false;
+  };
+
+  // Reflect queries set elsewhere (e.g. Explore's mood cards)
+  unsubChange = searchQuery.on("change", (query) => {
+    if (cleanupIfDetached()) return;
+    if (input.value.trim() !== query) input.value = query;
+    syncClearState();
+  });
+
+  unsubFocus = searchQuery.on("focusRequest", () => {
+    if (cleanupIfDetached()) return;
     input.focus();
     input.select();
   });
 
-  return el("label", {
-    className: "titlebar__search",
-    children: [
-      el("span", { className: "titlebar__search-icon", html: icon("search") }),
-      input,
-      el("kbd", { className: "titlebar__search-hint", text: "Ctrl K", attrs: { "aria-hidden": "true" } }),
-    ],
-  });
+  return container;
 }

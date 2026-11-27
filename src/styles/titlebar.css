@@ -154,9 +154,37 @@
   color: var(--color-text-secondary);
 }
 
-/* The pill already offers a way out (Escape); hide the native clear button. */
+/* The pill renders its own theme-aware clear button; hide the native one. */
 .titlebar__search-input::-webkit-search-cancel-button {
   display: none;
+}
+
+.titlebar__search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.titlebar__search-clear[hidden] {
+  display: none;
+}
+
+.titlebar__search-clear:hover {
+  background: color-mix(in oklab, var(--color-text) 10%, transparent);
+  color: var(--color-text);
+}
+
+.titlebar__search-clear svg {
+  width: 12px;
+  height: 12px;
 }
 
 .titlebar__search-hint {
@@ -173,6 +201,10 @@
 
 .titlebar__search:focus-within .titlebar__search-hint {
   opacity: 0;
+}
+
+.titlebar__search--has-value .titlebar__search-hint {
+  display: none;
 }
 
 .titlebar__right {
