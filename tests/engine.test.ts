@@ -368,4 +368,106 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     storage.saveSettings({ theme: "light" });
     expect(sent).toHaveLength(beforeCount);
   });
+
+  it("respects autoPlayNext=false at queue end on next(), track end, and unexpected page advance", () => {
+    storage.saveSettings({ autoPlayNext: false });
+    const { engine, sent } = setup();
+    engine.playTrack(list[2], list);
+    engine.handleBridgeState(report({ reason: "play", videoId: "ccccccccccc" }));
+
+    const beforeNext = sent.length;
+    engine.next();
+    expect(sent.slice(beforeNext)).toEqual([]);
+
+    engine.handleBridgeState(report({ reason: "ended", videoId: "ccccccccccc", paused: true, currentTime: 200 }));
+    expect(sent.some((c) => c.action === "next")).toBe(false);
+    expect(engine.currentState.status).toBe("paused");
+    expect(engine.currentTrack?.id).toBe("ccccccccccc");
+
+    // If the page tries to play a recommendation on its own while autoPlayNext is off, pause it
+    engine.handleBridgeState(
+      report({ reason: "track", videoId: "zzzzzzzzzzz", title: "Unwanted radio", artist: "Someone" }),
+    );
+    expect(engine.currentTrack?.id).toBe("ccccccccccc");
+    expect(sent.at(-1)).toEqual({ action: "pause" });
+  });
+
+  it("reloads currentTrack instead of seeking to 0 when repeat is set to one", () => {
+    const { engine, sent } = setup();
+    engine.playTrack(list[0], list);
+    engine.handleBridgeState(report({ reason: "play", videoId: "aaaaaaaaaaa" }));
+    engine.cycleRepeat(); // off -> all
+    engine.cycleRepeat(); // all -> one
+    expect(engine.currentState.repeat).toBe("one");
+
+    const beforeEnded = sent.length;
+    engine.handleBridgeState(report({ reason: "ended", videoId: "aaaaaaaaaaa", paused: true }));
+    expect(sent.slice(beforeEnded)).toEqual([{ action: "load", value: "aaaaaaaaaaa" }]);
+    expect(engine.currentTrack?.id).toBe("aaaaaaaaaaa");
+
+    engine.handleBridgeState(report({ reason: "play", videoId: "aaaaaaaaaaa" }));
+
+    // Embedded player already moved on to another video: reload currentTrack.id and ignore stale track report
+    const beforeOther = sent.length;
+    engine.handleBridgeState(
+      report({ reason: "track", videoId: "zzzzzzzzzzz", title: "Next video", artist: "Other" }),
+    );
+    expect(sent.slice(beforeOther)).toEqual([{ action: "load", value: "aaaaaaaaaaa" }]);
+    expect(engine.currentTrack?.id).toBe("aaaaaaaaaaa");
+
+    // A delayed "track" report for the skipped-past video while reloading must not hijack currentTrack
+    engine.handleBridgeState(
+      report({ reason: "track", videoId: "zzzzzzzzzzz", title: "Next video", artist: "Other" }),
+    );
+    expect(engine.currentTrack?.id).toBe("aaaaaaaaaaa");
+
+    engine.handleBridgeState(report({ reason: "play", videoId: "aaaaaaaaaaa" }));
+    expect(engine.currentState.status).toBe("playing");
+  });
+
+  it("does not time out during pre-roll ads longer than 15 seconds and times out if target stalls afterwards", () => {
+    vi.useFakeTimers();
+    try {
+      const { engine } = setup();
+      engine.playTrack(list[1], list);
+      expect(engine.currentState.status).toBe("loading");
+
+      // Ad plays with its own videoId and title for 25 seconds
+      engine.handleBridgeState(
+        report({ reason: "play", videoId: "adVideo1234", title: "Long Pre-roll Ad", ad: true, paused: false, duration: 25 }),
+      );
+      expect(engine.currentState.isAd).toBe(true);
+      expect(engine.currentState.status).toBe("playing");
+      expect(engine.currentTrack?.id).toBe("bbbbbbbbbbb");
+
+      vi.advanceTimersByTime(25_000);
+      expect(engine.currentState.status).toBe("playing");
+      expect(engine.currentState.error).toBeUndefined();
+
+      // Real track confirms after the ad finishes
+      engine.handleBridgeState(
+        report({ reason: "track", videoId: "bbbbbbbbbbb", title: "Song bbbbbbbbbbb", ad: false, currentTime: 0.2 }),
+      );
+      expect(engine.currentState.isAd).toBe(false);
+      expect(engine.currentState.status).toBe("playing");
+
+      // If ad ends without target confirming, load timeout resumes for the target track
+      engine.playTrack(list[2], list);
+      engine.handleBridgeState(
+        report({ reason: "play", videoId: "adVideo9999", title: "Another Ad", ad: true, paused: false }),
+      );
+      vi.advanceTimersByTime(20_000);
+      expect(engine.currentState.status).toBe("playing");
+
+      engine.handleBridgeState(
+        report({ reason: "time", videoId: "adVideo9999", title: "Another Ad", ad: false, currentTime: 0 }),
+      );
+      expect(engine.currentState.status).toBe("loading");
+      vi.advanceTimersByTime(16_000);
+      expect(engine.currentState.status).toBe("error");
+      expect(engine.currentState.error).toMatch(/couldn't play/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
