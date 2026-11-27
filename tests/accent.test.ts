@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyAccent, contrastRatio, readableAccent } from "../src/lib/accent";
+import { applyAccent, contrastRatio, onAccentColor, readableAccent } from "../src/lib/accent";
 
 const BONE = "#F0EBDD";
 const CHARCOAL = "#17151C";
@@ -39,5 +39,18 @@ describe("applyAccent", () => {
     const root = document.createElement("div");
     applyAccent("red; background: url(x)", "dark", root);
     expect(root.style.getPropertyValue("--color-accent")).toBe("");
+  });
+
+  it("sets readable foreground ink on bright and dark accents via --color-on-accent", () => {
+    const root = document.createElement("div");
+    applyAccent("#A78BFA", "dark", root);
+    expect(root.style.getPropertyValue("--color-on-accent")).toBe("#17151C");
+
+    applyAccent("#315E48", "light", root);
+    expect(root.style.getPropertyValue("--color-on-accent")).toBe("#FFFFFF");
+    expect(onAccentColor("#3B82F6")).toBe("#17151C");
+
+    applyAccent(null, "dark", root);
+    expect(root.style.getPropertyValue("--color-on-accent")).toBe("");
   });
 });

@@ -482,8 +482,8 @@
   padding: 6px 8px;
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
-  color: var(--color-error, #ef4444);
-  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
+  background: color-mix(in oklab, var(--color-danger) 12%, transparent);
 }
 
 /* Ads play out in full: the progress bar can't be dragged and skip buttons are off. */

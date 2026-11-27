@@ -7,6 +7,8 @@ import * as ytmClient from "../src/lib/ytm/client";
 import { renderArtist } from "../src/views/artist";
 import { renderCollection } from "../src/views/collection";
 import { renderLibrary } from "../src/views/library";
+import { renderSearch } from "../src/views/search";
+import { searchQuery } from "../src/lib/search-query";
 import type { Track } from "../src/types/music";
 
 const tracks: Track[] = [
@@ -168,5 +170,32 @@ describe("Playback startup state, shuffle randomization, and account likes", () 
     expect(storage.isLiked("t1")).toBe(false);
     expect(host.querySelectorAll(".track-row")).toHaveLength(1);
     expect(host.querySelector('.track-row[data-track-id="t2"]')).not.toBeNull();
+  });
+
+  it("keeps track-row heart buttons synced when like state changes from elsewhere", async () => {
+    vi.spyOn(catalog, "search").mockResolvedValue({ filter: "songs", tracks: [tracks[0]] });
+    searchQuery.set("track one");
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    window.location.hash = "#/search";
+    renderSearch(host);
+
+    await vi.waitFor(() => {
+      expect(host.querySelector('.track-row[data-track-id="t1"]')).not.toBeNull();
+    });
+
+    const btn = host.querySelector<HTMLButtonElement>('.track-row[data-track-id="t1"] .track-row__like-btn')!;
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+
+    // External toggle (e.g. bottom player bar or L shortcut)
+    storage.toggleLike(tracks[0]);
+    expect(btn.classList.contains("track-row__like-btn--active")).toBe(true);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+
+    storage.toggleLike(tracks[0]);
+    expect(btn.classList.contains("track-row__like-btn--active")).toBe(false);
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    searchQuery.set("");
   });
 });

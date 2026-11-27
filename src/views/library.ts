@@ -10,7 +10,7 @@ import { el, formatTime } from "@/lib/dom";
 import { showPromptDialog } from "@/components/modal-dialog";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
-import { createTrackAlbumControl, createTrackArtistControl } from "@/components/track-links";
+import { createTrackAlbumControl, createTrackArtistControl, syncTrackRowLikeButtons } from "@/components/track-links";
 import { icon } from "@/icons";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
@@ -26,6 +26,7 @@ import type { Track, Playlist } from "@/types/music";
 export function renderLibrary(container: HTMLElement): void {
   const hash = window.location.hash.slice(1);
   const content = el("div", { className: "main__content" });
+  let handleLikeChange: ((trackId: string, isLiked: boolean) => void) | null = null;
 
   if (hash === "/history") {
     renderHistory(content);
@@ -36,7 +37,9 @@ export function renderLibrary(container: HTMLElement): void {
   } else if (hash === "/artists") {
     renderArtists(content);
   } else {
-    renderLikedSongs(content);
+    renderLikedSongs(content, (handler) => {
+      handleLikeChange = handler;
+    });
   }
 
   container.appendChild(content);
@@ -52,6 +55,14 @@ export function renderLibrary(container: HTMLElement): void {
   markPlaying(playerEngine.currentTrack);
   const stopTrack = playerEngine.on("trackChange", markPlaying);
   const currentHash = hash;
+  const stopLike = storage.on("likeChange", ({ trackId, isLiked }) => {
+    if (handleLikeChange) {
+      handleLikeChange(trackId, isLiked);
+      markPlaying(playerEngine.currentTrack);
+      return;
+    }
+    syncTrackRowLikeButtons(content, trackId, isLiked);
+  });
   const stopPlaylist = storage.on("playlistChange", () => {
     if (currentHash !== "/playlists") return;
     content.replaceChildren();
@@ -60,6 +71,7 @@ export function renderLibrary(container: HTMLElement): void {
   const stopNav = router.onNavigate((path) => {
     if (path === currentHash) return;
     stopTrack();
+    stopLike();
     stopPlaylist();
     stopNav();
   });
@@ -77,13 +89,16 @@ function signInHint(what: string): HTMLElement {
   });
 }
 
-function renderLikedSongs(container: HTMLElement): void {
+function renderLikedSongs(
+  container: HTMLElement,
+  registerLikeHandler: (handler: (trackId: string, isLiked: boolean) => void) => void,
+): void {
   if (!catalogAvailable()) {
-    showLikedSongs(container, null);
+    showLikedSongs(container, null, undefined, registerLikeHandler);
     return;
   }
   if (account.isSignedIn === false) {
-    showLikedSongs(container, null, signInHint("liked songs"));
+    showLikedSongs(container, null, signInHint("liked songs"), registerLikeHandler);
     return;
   }
 
@@ -101,12 +116,12 @@ function renderLikedSongs(container: HTMLElement): void {
     .then((remote) => {
       if (!container.isConnected) return;
       container.replaceChildren();
-      showLikedSongs(container, remote);
+      showLikedSongs(container, remote, undefined, registerLikeHandler);
     })
     .catch((err) => {
       if (!container.isConnected) return;
       container.replaceChildren();
-      showLikedSongs(container, null, libraryNotice(err, "liked songs"));
+      showLikedSongs(container, null, libraryNotice(err, "liked songs"), registerLikeHandler);
     });
 }
 
@@ -114,18 +129,27 @@ function renderLikedSongs(container: HTMLElement): void {
  * Songs liked in Sonora come first, then the YouTube Music likes.
  * `remote` is null when the account's likes aren't available.
  */
-function showLikedSongs(container: HTMLElement, remote: Track[] | null, notice?: HTMLElement): void {
+function showLikedSongs(
+  container: HTMLElement,
+  remote: Track[] | null,
+  notice?: HTMLElement,
+  registerLikeHandler?: (handler: (trackId: string, isLiked: boolean) => void) => void,
+): void {
   const remoteTracks = remote ? [...remote] : null;
   const remoteIds = new Set((remoteTracks ?? []).map((t) => t.id));
   const likedTracks = dedupeById([...storage.getLikedTracks(), ...(remoteTracks ?? [])]);
+  let active = true;
   const rerender = (changedId?: string, isNowLiked?: boolean) => {
+    if (!active) return;
+    active = false;
     if (changedId && isNowLiked === false && remoteTracks) {
       const idx = remoteTracks.findIndex((item) => item.id === changedId);
       if (idx !== -1) remoteTracks.splice(idx, 1);
     }
     container.replaceChildren();
-    showLikedSongs(container, remoteTracks, notice);
+    showLikedSongs(container, remoteTracks, notice, registerLikeHandler);
   };
+  registerLikeHandler?.(rerender);
 
   const playAllBtn = el("button", {
     className: "btn btn--primary",
@@ -651,18 +675,16 @@ function createTrackRow(
         },
         onClick: (e) => {
           e.stopPropagation();
-          let liked: boolean;
           if (likedOnYtm) {
-            liked = false;
             void catalog.rateTrack(track.id, false);
-          } else {
-            liked = storage.toggleLike(track);
+            const btn = e.currentTarget as HTMLElement;
+            btn.classList.remove("track-row__like-btn--active");
+            btn.setAttribute("aria-pressed", "false");
+            btn.setAttribute("aria-label", `Like ${track.title}`);
+            onToggleLike?.(track.id, false);
+            return;
           }
-          const btn = e.currentTarget as HTMLElement;
-          btn.classList.toggle("track-row__like-btn--active", liked);
-          btn.setAttribute("aria-pressed", String(liked));
-          btn.setAttribute("aria-label", liked ? `Unlike ${track.title}` : `Like ${track.title}`);
-          if (onToggleLike) onToggleLike(track.id, liked);
+          storage.toggleLike(track);
         },
       }),
       el("span", {

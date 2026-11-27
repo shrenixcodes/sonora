@@ -8,6 +8,7 @@ vi.hoisted(() => {
 
 import { renderNowPlaying } from "../src/views/now-playing";
 import { renderSettings } from "../src/views/settings";
+import { AmbientVisualRenderer } from "../src/lib/visuals/ambient-renderer";
 import { storage } from "../src/lib/storage";
 import { router } from "../src/lib/router";
 
@@ -124,5 +125,37 @@ describe("Now Playing fullscreen presentation", () => {
     expect(css).toContain("justify-items: center;");
     expect(css).toContain('.now-playing[data-lyrics-size="off"] .now-playing__art-wrapper');
     expect(css).toContain('html[data-immersive] .now-playing[data-lyrics-size="off"] .now-playing__art-wrapper');
+  });
+
+  it("live-updates ambient renderer mode, fps, intensity, and lyrics size on settingsChange", () => {
+    const setMode = vi.spyOn(AmbientVisualRenderer.prototype, "setMode");
+    const setFpsLimit = vi.spyOn(AmbientVisualRenderer.prototype, "setFpsLimit");
+    const setIntensity = vi.spyOn(AmbientVisualRenderer.prototype, "setIntensity");
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    window.location.hash = "#/now-playing";
+    router.route("/now-playing", renderNowPlaying);
+    router.route("/", () => {});
+    router.start(host);
+
+    expect(setMode).toHaveBeenCalledTimes(1);
+    expect(setFpsLimit).toHaveBeenCalledTimes(1);
+    expect(setIntensity).toHaveBeenCalledTimes(1);
+
+    // Changing only FPS/intensity must not recompile shaders via setMode
+    storage.saveSettings({ ambientFpsLimit: 60, ambientIntensity: 0.4 });
+    expect(setMode).toHaveBeenCalledTimes(1);
+    expect(setFpsLimit).toHaveBeenLastCalledWith(60);
+    expect(setIntensity).toHaveBeenLastCalledWith(0.4);
+
+    // Changing ambientMode and lyricsFontSize updates both immediately
+    storage.saveSettings({ ambientMode: "minimal", lyricsFontSize: "lg" });
+    expect(setMode).toHaveBeenCalledTimes(2);
+    expect(setMode).toHaveBeenLastCalledWith("minimal");
+    expect(host.querySelector<HTMLElement>(".now-playing")?.dataset.lyricsSize).toBe("lg");
+
+    router.navigate("/");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
   });
 });

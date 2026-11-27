@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { AmbientArtwork, applyAmbience, applyArtworkAccent } from "../src/lib/ambience";
+import { AmbientArtwork, applyAmbience, applyArtworkAccent, syncShellAccent } from "../src/lib/ambience";
 import type { ArtworkPalette } from "../src/lib/visuals/color-extractor";
 
 const palette: ArtworkPalette = {
@@ -66,6 +66,22 @@ describe("applyArtworkAccent", () => {
 
     applyArtworkAccent(null, "dark", shell);
     expect(shell.style.getPropertyValue("--color-accent")).toBe("");
+    expect(shell.style.getPropertyValue("--color-on-accent")).toBe("");
     expect(shell.style.getPropertyValue("--color-hover")).toBe("");
+  });
+
+  it("clears shell overrides when a custom accent color is chosen and restores them on default", () => {
+    const shell = document.createElement("div");
+    syncShellAccent(palette, "dark", shell, null);
+    expect(shell.style.getPropertyValue("--color-accent")).toMatch(/^#[0-9A-F]{6}$/);
+    expect(shell.style.getPropertyValue("--color-on-accent")).toMatch(/^#(17151C|FFFFFF)$/);
+
+    syncShellAccent(palette, "dark", shell, "#3B82F6");
+    expect(shell.style.getPropertyValue("--color-accent")).toBe("");
+    expect(shell.style.getPropertyValue("--color-on-accent")).toBe("");
+    expect(shell.style.getPropertyValue("--color-hover")).toBe("");
+
+    syncShellAccent(palette, "dark", shell, null);
+    expect(shell.style.getPropertyValue("--color-accent")).toMatch(/^#[0-9A-F]{6}$/);
   });
 });

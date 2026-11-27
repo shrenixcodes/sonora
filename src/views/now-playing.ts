@@ -33,9 +33,12 @@ export function renderNowPlaying(container: HTMLElement): void {
 
   // Visual engine instance
   const visualEngine = new AmbientVisualRenderer(canvas);
-  visualEngine.setMode(settings.ambientMode);
-  visualEngine.setFpsLimit(settings.ambientFpsLimit);
-  visualEngine.setIntensity(settings.ambientIntensity);
+  let appliedMode = settings.ambientMode;
+  let appliedFps = settings.ambientFpsLimit;
+  let appliedIntensity = settings.ambientIntensity;
+  visualEngine.setMode(appliedMode);
+  visualEngine.setFpsLimit(appliedFps);
+  visualEngine.setIntensity(appliedIntensity);
 
   // Synchronized lyrics controller
   const lyricsController = new LyricsController({
@@ -147,6 +150,16 @@ export function renderNowPlaying(container: HTMLElement): void {
   const formatLyricsLabel = (size: LyricsSizeOption): string =>
     size === "off" ? "Lyrics: Off" : `Lyrics text size: ${sizeLabels[size]}`;
 
+  const applyLyricsSize = (nextSize: LyricsSizeOption) => {
+    lyricsSize = nextSize;
+    nowPlayingRoot.dataset.lyricsSize = lyricsSize;
+    const label = formatLyricsLabel(lyricsSize);
+    fontBtn.setAttribute("aria-label", label);
+    fontBtn.setAttribute("title", label);
+    fontBtn.setAttribute("aria-pressed", String(lyricsSize === "off"));
+    fontBtn.classList.toggle("now-playing__mode-btn--off", lyricsSize === "off");
+  };
+
   const fontBtn = el("button", {
     className: `now-playing__mode-btn${lyricsSize === "off" ? " now-playing__mode-btn--off" : ""}`,
     text: "Aa",
@@ -158,14 +171,9 @@ export function renderNowPlaying(container: HTMLElement): void {
     },
     onClick: () => {
       const nextIdx = (sizeCycle.indexOf(lyricsSize) + 1) % sizeCycle.length;
-      lyricsSize = sizeCycle[nextIdx];
-      storage.saveSettings({ lyricsFontSize: lyricsSize });
-      nowPlayingRoot.dataset.lyricsSize = lyricsSize;
-      const label = formatLyricsLabel(lyricsSize);
-      fontBtn.setAttribute("aria-label", label);
-      fontBtn.setAttribute("title", label);
-      fontBtn.setAttribute("aria-pressed", String(lyricsSize === "off"));
-      fontBtn.classList.toggle("now-playing__mode-btn--off", lyricsSize === "off");
+      const nextSize = sizeCycle[nextIdx];
+      applyLyricsSize(nextSize);
+      storage.saveSettings({ lyricsFontSize: nextSize });
     },
   });
 
@@ -302,6 +310,7 @@ export function renderNowPlaying(container: HTMLElement): void {
   });
 
   container.appendChild(nowPlayingRoot);
+  const wasConnected = nowPlayingRoot.isConnected;
 
   // ── Subscriptions ───────────────────────────────────────
   const unsubs: Array<() => void> = [];
@@ -367,7 +376,30 @@ export function renderNowPlaying(container: HTMLElement): void {
   );
 
   unsubs.push(playerEngine.on("stateChange", updateQualityBadge));
-  unsubs.push(storage.on("settingsChange", updateQualityBadge));
+  unsubs.push(
+    storage.on("settingsChange", (next) => {
+      if (wasConnected && !nowPlayingRoot.isConnected) {
+        destroy();
+        return;
+      }
+      updateQualityBadge();
+      if (next.ambientMode !== appliedMode) {
+        appliedMode = next.ambientMode;
+        visualEngine.setMode(appliedMode);
+      }
+      if (next.ambientFpsLimit !== appliedFps) {
+        appliedFps = next.ambientFpsLimit;
+        visualEngine.setFpsLimit(appliedFps);
+      }
+      if (next.ambientIntensity !== appliedIntensity) {
+        appliedIntensity = next.ambientIntensity;
+        visualEngine.setIntensity(appliedIntensity);
+      }
+      if (next.lyricsFontSize && sizeCycle.includes(next.lyricsFontSize) && next.lyricsFontSize !== lyricsSize) {
+        applyLyricsSize(next.lyricsFontSize);
+      }
+    }),
+  );
 
   // Clean up immediately when leaving Now Playing
   let destroyed = false;

@@ -13,7 +13,7 @@ import { router } from "@/lib/router";
 import { el } from "@/lib/dom";
 import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
-import { AmbientArtwork, applyAmbience, applyArtworkAccent } from "@/lib/ambience";
+import { AmbientArtwork, applyAmbience, syncShellAccent } from "@/lib/ambience";
 import { initWindowMode } from "@/lib/window-mode";
 import { discordRpc } from "@/lib/discord-rpc";
 import { searchQuery } from "@/lib/search-query";
@@ -49,7 +49,6 @@ function init(): void {
   // Apply saved appearance preferences
   const settings = storage.getSettings();
   applyAccent(settings.accentColor, themeManager.theme);
-  themeManager.onChange((theme) => applyAccent(storage.getSettings().accentColor, theme));
   if (settings.density === "compact") {
     document.body.classList.add("density-compact");
   }
@@ -123,14 +122,20 @@ function init(): void {
   // Tint the shell with the current artwork
   // The shell, its buttons and floating pieces all adapt to the artwork's colors
   let palette: ArtworkPalette | null = playerEngine.currentPalette;
+  const syncThemeAccent = (nextSettings = storage.getSettings()) => {
+    applyAccent(nextSettings.accentColor, themeManager.theme);
+    syncShellAccent(palette, themeManager.theme, app, nextSettings.accentColor);
+  };
   setLiquidPalette(palette);
+  syncThemeAccent(settings);
   playerEngine.on("paletteChange", (next) => {
     palette = next;
     setLiquidPalette(next);
     applyAmbience(next);
-    applyArtworkAccent(next, themeManager.theme, app);
+    syncShellAccent(next, themeManager.theme, app, storage.getSettings().accentColor);
   });
-  themeManager.onChange((theme) => applyArtworkAccent(palette, theme, app));
+  themeManager.onChange(() => syncThemeAccent());
+  storage.on("settingsChange", (nextSettings) => syncThemeAccent(nextSettings));
   playerEngine.on("trackChange", (track) => ambientArtwork.set(track?.artworkUrl || null));
   ambientArtwork.set(playerEngine.currentTrack?.artworkUrl || null);
 

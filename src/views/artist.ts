@@ -5,7 +5,7 @@
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
-import { createTrackAlbumControl } from "@/components/track-links";
+import { createTrackAlbumControl, syncTrackRowLikeButtons } from "@/components/track-links";
 import { renderShelves } from "@/components/shelves";
 import { icon } from "@/icons";
 import { openArtist, openCollection } from "@/lib/navigation";
@@ -101,13 +101,10 @@ function createArtistTrackRow(track: Track, index: number, getQueue: () => Track
       el("button", {
         className: `track-row__like-btn${liked ? " track-row__like-btn--active" : ""}`,
         html: icon("heart"),
-        attrs: { type: "button", "aria-label": `Like ${track.title}`, "aria-pressed": String(liked) },
+        attrs: { type: "button", "aria-label": liked ? `Unlike ${track.title}` : `Like ${track.title}`, "aria-pressed": String(liked) },
         onClick: (e) => {
           e.stopPropagation();
-          const nowLiked = storage.toggleLike(track);
-          const btn = e.currentTarget as HTMLElement;
-          btn.classList.toggle("track-row__like-btn--active", nowLiked);
-          btn.setAttribute("aria-pressed", String(nowLiked));
+          storage.toggleLike(track);
         },
       }),
       el("span", {
@@ -143,6 +140,11 @@ export function renderArtist(container: HTMLElement): void {
     });
   };
   cleanupFns.push(playerEngine.on("trackChange", markPlaying));
+  cleanupFns.push(
+    storage.on("likeChange", ({ trackId, isLiked }) => {
+      syncTrackRowLikeButtons(content, trackId, isLiked);
+    }),
+  );
   const stopNav = router.onNavigate((path) => {
     if (path === activeHash) return;
     cleanupFns.forEach((fn) => fn());

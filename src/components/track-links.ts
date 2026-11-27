@@ -6,6 +6,24 @@ import { el } from "@/lib/dom";
 import { openAlbum, openArtist } from "@/lib/navigation";
 import type { Track } from "@/types/music";
 
+/** Updates rendered track-row heart buttons matching `trackId` when like state changes elsewhere. */
+export function syncTrackRowLikeButtons(root: ParentNode, trackId: string, isLiked: boolean): void {
+  root.querySelectorAll<HTMLElement>("[data-track-id]").forEach((row) => {
+    if (row.dataset.trackId !== trackId) return;
+    const btn = row.querySelector<HTMLElement>(".track-row__like-btn");
+    if (!btn) return;
+    btn.classList.toggle("track-row__like-btn--active", isLiked);
+    btn.setAttribute("aria-pressed", String(isLiked));
+    const title = row.querySelector<HTMLElement>(".track-row__title")?.textContent?.trim();
+    if (title) {
+      btn.setAttribute("aria-label", isLiked ? `Unlike ${title}` : `Like ${title}`);
+    }
+    if (btn.hasAttribute("title")) {
+      btn.setAttribute("title", isLiked ? "Unlike track" : "Like track");
+    }
+  });
+}
+
 /** Renders a track's artist name as an interactive button that opens the artist page without playing the row. */
 export function createTrackArtistControl(track: Track): HTMLElement {
   const artistName = track.artist?.trim();

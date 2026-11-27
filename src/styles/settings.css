@@ -114,7 +114,7 @@
 
 .settings__seg-btn--lossless.settings__seg-btn--active {
   background: var(--color-accent);
-  color: #FFFFFF;
+  color: var(--color-on-accent);
 }
 
 /* ── Accent Palette Swatches ─────────────────────────────── */
