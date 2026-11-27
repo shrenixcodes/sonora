@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { showAboutPopup } from "../src/components/about-popup";
 import { createSidebar } from "../src/components/sidebar";
 
@@ -103,5 +105,15 @@ describe("About Sonora Pop-up and centered brand logo", () => {
 
     vi.advanceTimersByTime(250);
     expect(document.querySelector("dialog.about-popup")).toBeNull();
+  });
+
+  it("uses theme CSS variables instead of dark-only hardcoded colors in about-popup styles", () => {
+    const css = readFileSync(path.resolve(import.meta.dirname, "../src/styles/sidebar.css"), "utf8");
+    const popupSection = css.slice(css.indexOf(".about-popup {"));
+    expect(popupSection).toContain("color: var(--color-text);");
+    expect(popupSection).toContain("color: var(--color-accent);");
+    expect(popupSection).toContain("background: var(--color-surface-secondary);");
+    expect(popupSection).not.toContain("#ffffff");
+    expect(popupSection).not.toContain("#38bdf8");
   });
 });

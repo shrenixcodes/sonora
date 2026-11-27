@@ -22,6 +22,15 @@ describe("StorageService", () => {
     expect(reloaded.accentColor).toBe("#315E48");
   });
 
+  it("preserves explicit enableDiscordRpc opt-out across reloads without migration override", () => {
+    localStorage.setItem("sonora:settings", JSON.stringify({ enableDiscordRpc: false }));
+    expect(storage.getSettings().enableDiscordRpc).toBe(false);
+
+    // Omitted field still defaults to true
+    localStorage.setItem("sonora:settings", JSON.stringify({ theme: "light" }));
+    expect(storage.getSettings().enableDiscordRpc).toBe(true);
+  });
+
   it("toggles liked tracks accurately", () => {
     const sampleTrack: Track = {
       id: "track_test_123",

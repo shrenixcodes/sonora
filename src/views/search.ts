@@ -8,7 +8,7 @@
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
-import { createTrackAlbumControl, createTrackArtistControl } from "@/components/track-links";
+import { createTrackAlbumControl, createTrackArtistControl, syncTrackRowLikeButtons } from "@/components/track-links";
 import { icon } from "@/icons";
 import { catalog, CatalogError, type SearchFilter } from "@/lib/ytm/catalog";
 import { playerEngine } from "@/lib/playback/engine";
@@ -195,12 +195,16 @@ export function renderSearch(container: HTMLElement): void {
     });
   };
   const stopTrackListener = playerEngine.on("trackChange", markPlaying);
+  const stopLikeListener = storage.on("likeChange", ({ trackId, isLiked }) => {
+    syncTrackRowLikeButtons(results, trackId, isLiked);
+  });
 
   const stopListening = searchQuery.on("change", runQuery);
   const stopNavListener = router.onNavigate((path) => {
     if (path === "/search") return;
     stopListening();
     stopTrackListener();
+    stopLikeListener();
     stopNavListener();
     if (debounceTimer !== null) window.clearTimeout(debounceTimer);
   });
@@ -268,13 +272,10 @@ function createTrackRow(track: Track, index: number): HTMLElement {
       el("button", {
         className: `track-row__like-btn${liked ? " track-row__like-btn--active" : ""}`,
         html: icon("heart"),
-        attrs: { type: "button", "aria-label": `Like ${track.title}`, "aria-pressed": String(liked) },
+        attrs: { type: "button", "aria-label": liked ? `Unlike ${track.title}` : `Like ${track.title}`, "aria-pressed": String(liked) },
         onClick: (e) => {
           e.stopPropagation();
-          const nowLiked = storage.toggleLike(track);
-          const btn = e.currentTarget as HTMLElement;
-          btn.classList.toggle("track-row__like-btn--active", nowLiked);
-          btn.setAttribute("aria-pressed", String(nowLiked));
+          storage.toggleLike(track);
         },
       }),
       el("span", { className: "track-row__duration", text: track.duration ? formatTime(track.duration) : "" }),
