@@ -190,4 +190,20 @@ describe("Player responsive CSS & metadata marquee", () => {
     expect(artistViewport.classList.contains("is-scrolling")).toBe(false);
     expect(artistViewport.style.getPropertyValue("--marquee-shift")).toBe("");
   });
+
+  it("populates artwork, duration, and like state when a restored track is already loaded on mount", () => {
+    const track = sampleTrack({ id: "restored-1", duration: 248, artworkUrl: "https://example.com/restored.jpg" });
+    vi.spyOn(playerEngine, "currentTrack", "get").mockReturnValue(track);
+    vi.spyOn(playerEngine, "currentState", "get").mockReturnValue(sampleState(track, { status: "paused" }));
+    vi.spyOn(storage, "isLiked").mockReturnValue(true);
+
+    const bar = createPlayer();
+    document.body.appendChild(bar);
+
+    expect(bar.querySelector(".player__title")?.textContent).toBe("Short Title");
+    expect(bar.querySelector(".player__artist")?.textContent).toBe("Short Artist");
+    expect(bar.querySelectorAll(".player__time")[1]?.textContent).toBe("4:08");
+    expect(bar.querySelector<HTMLImageElement>(".player__artwork-img")?.src).toBe("https://example.com/restored.jpg");
+    expect(bar.querySelector<HTMLButtonElement>(".player__like-btn")?.getAttribute("aria-pressed")).toBe("true");
+  });
 });

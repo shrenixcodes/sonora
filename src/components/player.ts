@@ -345,12 +345,7 @@ class PlayerBar {
     this.subscribeToEngine();
     this.subscribeToRouter();
     this.subscribeToAudioDevices();
-    this.updateTitleControl(initialTitle);
-    this.updateArtistControl(
-      playerEngine.currentTrack,
-      playerEngine.currentState,
-      initialArtist,
-    );
+    this.applyTrackDisplay(playerEngine.currentTrack, false);
     requestAnimationFrame(() => this.syncMetadataMarquees());
 
     return root;
@@ -466,6 +461,33 @@ class PlayerBar {
     }
   }
 
+  private applyTrackDisplay(track: Track | null, resetMarquee: boolean): void {
+    if (!this.elements) return;
+
+    if (track) {
+      this.updateTitleControl(track.title, resetMarquee);
+      this.updateArtistControl(track, playerEngine.currentState, track.artist, resetMarquee);
+      this.elements.duration.textContent = formatTime(track.duration || 0);
+
+      // Update artwork
+      this.elements.artwork.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = track.artworkUrl || "/artwork-placeholder.svg";
+      img.alt = track.title;
+      img.className = "player__artwork-img";
+      this.elements.artwork.appendChild(img);
+
+      // Check liked state
+      this.updateLikeButton(storage.isLiked(track.id));
+    } else {
+      this.updateTitleControl("Nothing playing", resetMarquee);
+      this.updateArtistControl(null, playerEngine.currentState, "Select a song to start listening", resetMarquee);
+      this.elements.duration.textContent = formatTime(0);
+      this.elements.artwork.innerHTML = "";
+      this.updateLikeButton(false);
+    }
+  }
+
   private subscribeToEngine(): void {
     playerEngine.on("stateChange", (state: PlaybackState) => {
       if (!this.elements) return;
@@ -528,30 +550,7 @@ class PlayerBar {
     });
 
     playerEngine.on("trackChange", (track: Track | null) => {
-      if (!this.elements) return;
-
-      if (track) {
-        this.updateTitleControl(track.title, true);
-        this.updateArtistControl(track, playerEngine.currentState, track.artist, true);
-        this.elements.duration.textContent = formatTime(track.duration || 0);
-
-        // Update artwork
-        this.elements.artwork.innerHTML = "";
-        const img = document.createElement("img");
-        img.src = track.artworkUrl || "/artwork-placeholder.svg";
-        img.alt = track.title;
-        img.className = "player__artwork-img";
-        this.elements.artwork.appendChild(img);
-
-        // Check liked state
-        this.updateLikeButton(storage.isLiked(track.id));
-      } else {
-        this.updateTitleControl("Nothing playing", true);
-        this.updateArtistControl(null, playerEngine.currentState, "Select a song to start listening", true);
-        this.elements.duration.textContent = formatTime(0);
-        this.elements.artwork.innerHTML = "";
-        this.updateLikeButton(false);
-      }
+      this.applyTrackDisplay(track, true);
     });
 
     storage.on("likeChange", ({ trackId, isLiked }) => {
