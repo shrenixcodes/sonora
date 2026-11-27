@@ -413,7 +413,21 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     if (!this.pendingId || report.ad) {
       this.state.status = report.paused ? "paused" : "playing";
       this.state.error = undefined;
-      if (!report.ad && report.duration > 0) this.state.duration = report.duration;
+      if (!report.ad && report.duration > 0) {
+        // Guard against duration jumps caused by YTM's crossfade preloading the
+        // next track: its video.duration briefly pollutes live time reports.
+        // "track" reason (loadedmetadata) always wins — it carries the freshly
+        // confirmed duration for the current video. Live "time" reports that
+        // arrive once playback is past 90 % of the established duration are only
+        // accepted when the change is tiny (< 3 s), which covers normal stream
+        // metadata refinement but rejects a crossfade song swap.
+        const established = this.state.duration;
+        const delta = Math.abs(report.duration - established);
+        const nearEnd = established > 0 && this.state.currentTime / established > 0.9;
+        if (!nearEnd || report.reason === "track" || delta < 3) {
+          this.state.duration = report.duration;
+        }
+      }
       this.setTime(report.ad ? 0 : report.currentTime);
       if (report.paused) this.stopTicker();
       else this.startTicker();
@@ -620,9 +634,14 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   }
 
   private setTime(seconds: number): void {
-    this.state.currentTime = seconds;
-    this.lastReport = { time: seconds, at: performance.now() };
-    this.emit("timeUpdate", { currentTime: seconds, duration: this.state.duration });
+    // Cap to the established duration so the timer never visually exceeds it.
+    // Without this, bridge reports from a crossfade or a stream whose metadata
+    // duration is slightly under the actual video length cause the current-time
+    // display to run past the total-duration label.
+    const time = this.state.duration > 0 ? Math.min(seconds, this.state.duration) : seconds;
+    this.state.currentTime = time;
+    this.lastReport = { time, at: performance.now() };
+    this.emit("timeUpdate", { currentTime: time, duration: this.state.duration });
   }
 
   /** The page reports about once a second; fill in between so the progress bar moves smoothly. */
