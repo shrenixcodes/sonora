@@ -42,6 +42,12 @@
   let stallTimer = null;
   let recoveringTrack = null;
   let lastProgressTime = -1;
+  /**
+   * The volume Sonora last commanded. Used to detect and cancel YTM's
+   * crossfade, which ramps video.volume down in the last few seconds of
+   * a track without Sonora's knowledge.
+   */
+  let lastSonoraVolume = 1.0;
   const trackAudioMeta = new Map();
   const trackQualityOverride = new Map();
 
@@ -729,15 +735,15 @@
     audioGraphFailed = false;
     lastProgressTime = -1;
     clearStallTimer();
-    for (const type of ["play", "pause", "ended", "volumechange", "seeked"]) {
+    for (const type of ["play", "pause", "seeked"]) {
       element.addEventListener(type, () => {
         if (type === "play") {
           syncAudioGraph();
-        } else if (type === "pause" || type === "ended" || type === "seeked") {
+        } else if (type === "pause" || type === "seeked") {
           clearStallTimer();
         }
         if (
-          (type === "pause" || type === "ended") &&
+          type === "pause" &&
           recoveringTrack &&
           Date.now() < recoveringTrack.until &&
           recoveringTrack.videoId === currentVideoId()
@@ -747,6 +753,36 @@
         send(type);
       });
     }
+
+    // Handled separately: silence the element immediately so YTM's autoplay
+    // cannot be heard during the IPC round-trip before Sonora loads its own
+    // next track. The "load" command restores mute state.
+    element.addEventListener("ended", () => {
+      clearStallTimer();
+      if (
+        recoveringTrack &&
+        Date.now() < recoveringTrack.until &&
+        recoveringTrack.videoId === currentVideoId()
+      ) {
+        return;
+      }
+      if (video) {
+        video.muted = true;
+        video.pause();
+      }
+      send("ended");
+    });
+
+    // Handled separately: YTM's crossfade ramps video.volume down in the last
+    // few seconds of a track. Whenever the page changes volume to something
+    // other than what Sonora last set, restore it so the fade-out is never heard.
+    element.addEventListener("volumechange", () => {
+      if (!isAdPlaying() && video && Math.abs(video.volume - lastSonoraVolume) > 0.015) {
+        video.volume = lastSonoraVolume;
+        return; // don't report the spurious change
+      }
+      send("volumechange");
+    });
     element.addEventListener("playing", () => {
       clearStallTimer();
       if (recoveringTrack && recoveringTrack.videoId === currentVideoId()) {
@@ -961,6 +997,9 @@
           }
           break;
         case "load":
+          // Restore mute state before loading: the "ended" handler muted the
+          // element to silence YTM's autoplay while the IPC round-trip ran.
+          if (video) video.muted = false;
           // Swapping the track inside the running page skips reloading the
           // whole YouTube Music app, which took seconds and dropped the audio.
           if (typeof value === "string") {
@@ -985,6 +1024,7 @@
           break;
         case "volume":
           if (typeof value === "number") {
+            lastSonoraVolume = value;
             // Keep the page's own volume slider in sync with the element.
             if (p && typeof p.setVolume === "function") p.setVolume(Math.round(value * 100));
             if (video) video.volume = value;
