@@ -11,6 +11,12 @@ import type { RepeatMode, Track } from "@/types/music";
 
 export type Random = () => number;
 
+export interface QueueSnapshot {
+  tracks: Track[];
+  order: number[];
+  position: number;
+}
+
 export class PlayQueue {
   private tracks: Track[] = [];
   /** Indices into `tracks` in play order. */
@@ -43,6 +49,51 @@ export class PlayQueue {
     this.tracks = [...tracks];
     const startIndex = start ? Math.max(0, this.tracks.findIndex((t) => t.id === start.id)) : 0;
     this.rebuildOrder(this.tracks.length > 0 ? startIndex : -1);
+  }
+
+  /** Serializes the full queue state, including active order and position. */
+  snapshot(): QueueSnapshot {
+    return {
+      tracks: [...this.tracks],
+      order: [...this.order],
+      position: this.position,
+    };
+  }
+
+  /** Restores a previously saved queue snapshot, falling back to list order if invalid. */
+  restore(snapshot: { tracks: Track[]; order?: number[]; position?: number }, fallbackTrack?: Track | null): void {
+    const unique: Track[] = [];
+    const seen = new Set<string>();
+    for (const item of snapshot.tracks) {
+      if (!item?.id || seen.has(item.id)) continue;
+      seen.add(item.id);
+      unique.push(item);
+    }
+    if (unique.length === 0) {
+      this.tracks = [];
+      this.order = [];
+      this.position = -1;
+      return;
+    }
+
+    const validOrder =
+      Array.isArray(snapshot.order) &&
+      snapshot.order.length === unique.length &&
+      new Set(snapshot.order).size === unique.length &&
+      snapshot.order.every((i) => Number.isInteger(i) && i >= 0 && i < unique.length) &&
+      typeof snapshot.position === "number" &&
+      Number.isInteger(snapshot.position) &&
+      snapshot.position >= 0 &&
+      snapshot.position < snapshot.order.length;
+
+    if (validOrder) {
+      this.tracks = unique;
+      this.order = [...snapshot.order!];
+      this.position = snapshot.position!;
+      return;
+    }
+
+    this.set(unique, fallbackTrack ?? undefined);
   }
 
   /** Adds tracks to the end (shuffled into the rest when shuffle is on), skipping ones already queued. */

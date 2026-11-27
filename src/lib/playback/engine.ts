@@ -70,6 +70,8 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   private skipTimer: number | null = null;
   private lastSentAudioConfigKey: string | null = null;
   private isRepeatingCurrent = false;
+  /** True when currentTrack was restored from storage and has not yet been loaded in the webview. */
+  private needsInitialLoad = false;
 
   constructor(private readonly bridge: PlaybackBridge = ytmBridge) {
     super();
@@ -79,6 +81,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.state.shuffle = settings.shuffle;
     this.state.repeat = settings.repeat;
     this.queue.setShuffle(settings.shuffle);
+    this.restoreSavedPlayback();
     if (bridge.available) {
       bridge.onState((s) => this.handleBridgeState(s)).catch((err) => this.fail(err));
     }
@@ -138,6 +141,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   setQueue(tracks: Track[], startTrack?: Track): void {
     this.queue.set(tracks, startTrack);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
@@ -148,6 +152,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   extendQueue(listStart: Track, more: Track[]): void {
     if (this.queue.all[0]?.id !== listStart.id) return;
     this.queue.append(more);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
@@ -157,10 +162,18 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       if (first) this.playTrack(first);
       return;
     }
+    if (this.needsInitialLoad) {
+      this.load(this.state.currentTrack);
+      return;
+    }
     this.send({ action: this.state.status === "playing" ? "pause" : "play" });
   }
 
   resume(): void {
+    if (this.needsInitialLoad && this.state.currentTrack) {
+      this.load(this.state.currentTrack);
+      return;
+    }
     this.send({ action: "play" });
   }
 
@@ -233,6 +246,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.state.shuffle = !this.state.shuffle;
     this.queue.setShuffle(this.state.shuffle);
     storage.saveSettings({ shuffle: this.state.shuffle });
+    this.persistPlaybackState();
     this.emit("stateChange", this.currentState);
     this.emit("queueChange", this.queue.all);
   }
@@ -246,28 +260,33 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   moveUpcoming(fromIndex: number, toIndex: number): void {
     if (this.queue.moveUpcoming(fromIndex, toIndex)) {
+      this.persistPlaybackState();
       this.emit("queueChange", this.queue.all);
     }
   }
 
   clearQueue(): void {
     this.queue.clearUpcoming();
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
   removeUpcoming(index: number): void {
     if (this.queue.removeUpcoming(index)) {
+      this.persistPlaybackState();
       this.emit("queueChange", this.queue.all);
     }
   }
 
   playNext(track: Track): void {
     this.queue.playNext(track);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
   addToQueue(track: Track): void {
     this.queue.addToQueue(track);
+    this.persistPlaybackState();
     this.emit("queueChange", this.queue.all);
   }
 
@@ -456,6 +475,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
    * tap, but a run of them loads once, for the track the user stops on.
    */
   private load(track: Track, fromSkip = false, repeatingCurrent = false): void {
+    this.needsInitialLoad = false;
     this.setCurrent(track, false);
     this.state.status = "loading";
     this.state.duration = track.duration || 0;
@@ -494,9 +514,32 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
    */
   private setCurrent(track: Track, settle = true): void {
     this.state.currentTrack = track;
+    this.persistPlaybackState();
     this.emit("trackChange", track);
     this.emit("queueChange", this.queue.all);
     if (settle) this.settleOn(track);
+  }
+
+  private persistPlaybackState(): void {
+    storage.saveQueue(this.queue.snapshot());
+    storage.saveLastTrack(this.state.currentTrack);
+  }
+
+  private restoreSavedPlayback(): void {
+    const savedQueue = storage.getSavedQueue();
+    const lastTrack = storage.getLastTrack();
+    if (savedQueue) {
+      this.queue.restore(savedQueue, lastTrack);
+    } else if (lastTrack) {
+      this.queue.set([lastTrack], lastTrack);
+    }
+    const restoredTrack = this.queue.current ?? lastTrack;
+    if (restoredTrack) {
+      this.state.currentTrack = restoredTrack;
+      this.state.status = "paused";
+      this.state.duration = restoredTrack.duration || 0;
+      this.needsInitialLoad = true;
+    }
   }
 
   /**

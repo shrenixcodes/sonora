@@ -470,4 +470,23 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
       vi.useRealTimers();
     }
   });
+
+  it("persists queue and current track and restores them on startup without auto-playing", () => {
+    const first = setup();
+    first.engine.playTrack(list[1], list);
+    first.engine.handleBridgeState(report({ reason: "play", videoId: "bbbbbbbbbbb" }));
+    first.engine.playNext(list[0]);
+
+    const second = setup();
+    expect(second.sent).toEqual([]);
+    expect(second.engine.currentTrack?.id).toBe("bbbbbbbbbbb");
+    expect(second.engine.currentState.status).toBe("paused");
+    expect(second.engine.upcoming.map((t) => t.id)).toEqual(["aaaaaaaaaaa", "ccccccccccc"]);
+    expect(storage.getHistory()).toHaveLength(1); // restoring did not record a duplicate play
+
+    // Pressing Play loads the restored track cleanly into the webview
+    second.engine.togglePlay();
+    expect(second.sent).toEqual([{ action: "load", value: "bbbbbbbbbbb" }]);
+    expect(second.engine.currentState.status).toBe("loading");
+  });
 });

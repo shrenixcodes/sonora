@@ -21,6 +21,25 @@ const STORAGE_KEYS = {
   LAST_TRACK: "sonora:last_track",
 } as const;
 
+const MAX_SAVED_QUEUE_TRACKS = 500;
+
+function isValidTrack(value: unknown): value is Track {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    candidate.id.length > 0 &&
+    typeof candidate.title === "string" &&
+    typeof candidate.artist === "string"
+  );
+}
+
+export interface SavedQueueState {
+  tracks: Track[];
+  order?: number[];
+  position?: number;
+}
+
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: "dark",
   accentColor: null,
@@ -234,6 +253,70 @@ class StorageService extends EventEmitter<StorageEvents> {
       this.emit("playlistChange", undefined);
     } catch (err) {
       console.error("[Storage] Failed to delete playlist:", err);
+    }
+  }
+
+  getSavedQueue(): SavedQueueState | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.QUEUE);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const tracks = parsed.filter(isValidTrack);
+        return tracks.length > 0 ? { tracks } : null;
+      }
+      if (!parsed || typeof parsed !== "object") return null;
+      const candidate = parsed as Record<string, unknown>;
+      if (!Array.isArray(candidate.tracks)) return null;
+      const tracks = candidate.tracks.filter(isValidTrack);
+      if (tracks.length === 0) return null;
+      const order = Array.isArray(candidate.order) && candidate.order.every((n) => typeof n === "number")
+        ? (candidate.order as number[])
+        : undefined;
+      const position = typeof candidate.position === "number" ? candidate.position : undefined;
+      return { tracks, order, position };
+    } catch {
+      return null;
+    }
+  }
+
+  saveQueue(state: SavedQueueState): void {
+    try {
+      if (state.tracks.length === 0) {
+        localStorage.removeItem(STORAGE_KEYS.QUEUE);
+        return;
+      }
+      const tracks = state.tracks.slice(0, MAX_SAVED_QUEUE_TRACKS);
+      const payload: SavedQueueState =
+        state.tracks.length <= MAX_SAVED_QUEUE_TRACKS
+          ? { tracks, order: state.order, position: state.position }
+          : { tracks };
+      localStorage.setItem(STORAGE_KEYS.QUEUE, JSON.stringify(payload));
+    } catch (err) {
+      console.error("[Storage] Failed to save queue:", err);
+    }
+  }
+
+  getLastTrack(): Track | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.LAST_TRACK);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as unknown;
+      return isValidTrack(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  saveLastTrack(track: Track | null): void {
+    try {
+      if (!track) {
+        localStorage.removeItem(STORAGE_KEYS.LAST_TRACK);
+        return;
+      }
+      localStorage.setItem(STORAGE_KEYS.LAST_TRACK, JSON.stringify(track));
+    } catch (err) {
+      console.error("[Storage] Failed to save last track:", err);
     }
   }
 }
