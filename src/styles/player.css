@@ -8,7 +8,7 @@
   container-name: player;
   grid-area: player;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) auto minmax(0, 0.85fr);
+  grid-template-columns: minmax(0, 1.15fr) auto minmax(max-content, 0.85fr);
   align-items: center;
   gap: var(--space-3);
   height: var(--player-height);
@@ -18,7 +18,7 @@
 
 @container player (min-width: 1080px) {
   .player {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
   }
 }
 
@@ -397,6 +397,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
   transition: color var(--duration-fast) var(--ease-out),
@@ -418,6 +419,7 @@
 
 .player__volume-slider {
   width: 80px;
+  flex-shrink: 0;
 }
 
 .player__extra-btn {
@@ -426,6 +428,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
   color: var(--color-text-secondary);
   border-radius: var(--radius-full);
   transition: color var(--duration-fast) var(--ease-out),

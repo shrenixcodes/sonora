@@ -90,7 +90,7 @@ describe("Player responsive CSS & metadata marquee", () => {
     const floatingCss = fs.readFileSync(path.resolve("src/styles/floating.css"), "utf8");
 
     expect(playerCss).not.toContain("min-width: 400px");
-    expect(playerCss).toContain("minmax(0, 1.15fr) auto minmax(0, 0.85fr)");
+    expect(playerCss).toContain("minmax(0, 1.15fr) auto minmax(max-content, 0.85fr)");
     expect(playerCss).toMatch(/\.player__controls\s*\{[^}]*min-width:\s*0;[^}]*clamp\(/s);
     expect(playerCss).toContain("@media (max-width: 820px)");
     expect(playerCss).toContain("@container player (max-width: 780px)");
