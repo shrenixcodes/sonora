@@ -20,6 +20,7 @@ vi.mock("@tauri-apps/api/core", async (importOriginal) => {
 import { createPlayer } from "../src/components/player";
 import { router } from "../src/lib/router";
 import { DEFAULT_SETTINGS, storage } from "../src/lib/storage";
+import { updater } from "../src/lib/updater";
 import { renderLibrary } from "../src/views/library";
 import { parseThemeImport, pickThemeSettings, renderSettings } from "../src/views/settings";
 
@@ -27,6 +28,7 @@ describe("UI navigation, dialogs, theme scoping, and player keyboard accessibili
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("sonora:discord_rpc_migrated", "true");
+    updater.resetForTest();
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {} }));
     HTMLDialogElement.prototype.showModal = function () {
       this.setAttribute("open", "");
@@ -47,11 +49,19 @@ describe("UI navigation, dialogs, theme scoping, and player keyboard accessibili
     vi.restoreAllMocks();
   });
 
-  it("shows live app version from Tauri and lists Ctrl+K in Settings", async () => {
+  it("shows live app version from Tauri and lists accurate shortcuts and update controls in Settings", async () => {
     isTauriMock.mockReturnValue(true);
     invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "get_app_info") return { name: "Sonora", version: "0.7.1" };
       if (cmd === "get_platform_info") return { os: "windows", arch: "x64" };
+      if (cmd === "check_for_updates") {
+        return {
+          currentVersion: "0.7.1",
+          latestVersion: "0.7.1",
+          updateAvailable: false,
+          releaseUrl: "https://github.com/shrenixcodes/sonora/releases/latest",
+        };
+      }
       return null;
     });
 
@@ -61,11 +71,31 @@ describe("UI navigation, dialogs, theme scoping, and player keyboard accessibili
 
     expect(host.textContent).toContain("Ctrl + K");
     expect(host.textContent).toContain("Focus search");
+    expect(host.textContent).toContain("Open / Close Now Playing");
+    expect(host.textContent).toContain("Exit fullscreen lyrics");
+    expect(host.textContent).toContain("F8");
+    expect(host.textContent).toContain("F9");
+    expect(host.textContent).not.toContain("Toggle fullscreen Now Playing");
 
     await vi.waitFor(() => {
       expect(host.textContent).toContain("Version 0.7.1 (Windows x64 Native)");
     });
     expect(host.textContent).not.toContain("Version 0.1.0");
+
+    const checkBtn = Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "Check for Updates")!;
+    expect(checkBtn).toBeDefined();
+    checkBtn.click();
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("check_for_updates");
+      expect(host.textContent).toContain("Up to date");
+    });
+
+    const openAboutBtn = Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "Open About")!;
+    expect(openAboutBtn).toBeDefined();
+    openAboutBtn.click();
+    await vi.waitFor(() => {
+      expect(document.querySelector("dialog.about-popup")).not.toBeNull();
+    });
   });
 
   it("scopes Export Theme JSON and Import Theme to appearance settings only", () => {

@@ -14,6 +14,7 @@ import {
   formatAudioTelemetry,
 } from "@/lib/audio-quality";
 import { FALLBACK_APP_INFO, FALLBACK_PLATFORM_INFO, formatVersionSummary, getAppRuntimeInfo } from "@/lib/app-info";
+import { showAboutPopup } from "@/components/about-popup";
 import { showNoticeDialog } from "@/components/modal-dialog";
 import { playerEngine } from "@/lib/playback/engine";
 import { themeManager } from "@/lib/theme";
@@ -23,6 +24,7 @@ import { ytmBridge } from "@/lib/playback/ytm-bridge";
 import { account } from "@/lib/ytm/account";
 import { router } from "@/lib/router";
 import { storage } from "@/lib/storage";
+import { describeUpdateSnapshot, updater } from "@/lib/updater";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
 import { triggerRestoreAnimation } from "@/lib/visuals/symbiote";
 import type { UserSettings, AmbientVisualMode, AudioEnhancementProfile, AudioQualityMode, PlaybackState } from "@/types/music";
@@ -160,7 +162,7 @@ export function renderSettings(container: HTMLElement): void {
         // Fluid Animations & Launch Splash
         createSettingRow(
           "Interface Animations",
-          "Preview the launch splash and the liquid taskbar restore animation (F8 / F9)",
+          "Preview the launch splash and the liquid taskbar restore animation",
           createAnimationTester(),
         ),
 
@@ -209,12 +211,16 @@ export function renderSettings(container: HTMLElement): void {
         createShortcutRow("↑ / ↓", "Adjust volume up / down"),
         createShortcutRow("M", "Mute / Unmute audio"),
         createShortcutRow("L", "Toggle like for current track"),
-        createShortcutRow("F", "Toggle fullscreen Now Playing"),
+        createShortcutRow("F", "Open / Close Now Playing"),
+        createShortcutRow("Esc", "Exit fullscreen lyrics"),
+        createShortcutRow("F8", "Preview launch splash animation"),
+        createShortcutRow("F9", "Preview taskbar restore animation"),
       ]),
 
       // ── About ────────────────────────────────────────────
       createSettingsSection("About Sonora", [
         createVersionRow(),
+        createAboutUpdatesRow(),
         createSettingRow(
           "Architecture",
           "Tauri 2 • Rust Backend • WebGL Ambient Shaders • Vite",
@@ -705,6 +711,68 @@ function createVersionRow(): HTMLElement {
       description.textContent = formatVersionSummary(app, platform);
     }
   });
+  return row;
+}
+
+function createAboutUpdatesRow(): HTMLElement {
+  const updateBtn = el("button", {
+    className: "settings__btn",
+    text: "Check for Updates",
+    attrs: { type: "button" },
+    onClick: () => {
+      if (updater.state.status === "available") {
+        void updater.installUpdate();
+      } else {
+        void updater.checkForUpdates({ force: true });
+      }
+    },
+  }) as HTMLButtonElement;
+
+  const openAboutBtn = el("button", {
+    className: "settings__btn",
+    text: "Open About",
+    attrs: { type: "button" },
+    onClick: () => {
+      void showAboutPopup();
+    },
+  });
+
+  const controls = el("div", {
+    className: "settings__actions-group",
+    children: [updateBtn, openAboutBtn],
+  });
+  const row = createSettingRow("Updates & About", "", controls);
+  const description = row.querySelector<HTMLElement>(".settings__row-description")!;
+
+  const sync = () => {
+    const snap = updater.state;
+    const summary = describeUpdateSnapshot(snap);
+    description.textContent = `${summary.label} · ${summary.detail}`;
+    const busy = snap.status === "checking" || snap.status === "downloading" || snap.status === "installing";
+    updateBtn.disabled = busy;
+    if (snap.status === "available") {
+      updateBtn.textContent = snap.info?.installerUrl
+        ? `Update to v${snap.info.latestVersion}`
+        : `Download v${snap.info?.latestVersion ?? ""}`;
+    } else if (snap.status === "checking") {
+      updateBtn.textContent = "Checking…";
+    } else if (snap.status === "downloading" || snap.status === "installing") {
+      updateBtn.textContent = "Updating…";
+    } else if (snap.status === "error") {
+      updateBtn.textContent = "Retry Check";
+    } else {
+      updateBtn.textContent = "Check for Updates";
+    }
+  };
+
+  sync();
+  const stopUpdater = updater.on("change", sync);
+  const stopNav = router.onNavigate((path) => {
+    if (path === "/settings") return;
+    stopUpdater();
+    stopNav();
+  });
+
   return row;
 }
 
