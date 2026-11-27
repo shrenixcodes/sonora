@@ -21,10 +21,22 @@ const THEME_BACKGROUND: Record<Theme, string> = {
 type Rgb = [number, number, number];
 
 function parseHex(hex: string): Rgb | null {
-  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!match) return null;
-  const n = parseInt(match[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const trimmed = hex.trim();
+  const six = /^#?([0-9a-f]{6})$/i.exec(trimmed);
+  if (six) {
+    const n = parseInt(six[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const three = /^#?([0-9a-f]{3})$/i.exec(trimmed);
+  if (three) {
+    const [r, g, b] = three[1].split("").map((ch) => parseInt(ch + ch, 16));
+    return [r, g, b];
+  }
+  return null;
+}
+
+export function isValidHexAccent(hex: string | null | undefined): boolean {
+  return Boolean(hex && parseHex(hex));
 }
 
 function toHex([r, g, b]: Rgb): string {
@@ -62,6 +74,13 @@ export function readableAccent(hex: string, theme: Theme): string {
   return toHex(target);
 }
 
+/** Picks dark or light ink with stronger contrast against an accent surface. */
+export function onAccentColor(accentHex: string): string {
+  return contrastRatio(accentHex, THEME_BACKGROUND.dark) >= contrastRatio(accentHex, "#FFFFFF")
+    ? THEME_BACKGROUND.dark
+    : "#FFFFFF";
+}
+
 /** Applies a chosen accent for the theme, or clears it so the theme's own accent shows. */
 export function applyAccent(
   hex: string | null,
@@ -71,9 +90,15 @@ export function applyAccent(
   if (!hex || !parseHex(hex)) {
     root.style.removeProperty("--color-accent");
     root.style.removeProperty("--color-accent-hover");
+    root.style.removeProperty("--color-on-accent");
+    root.style.removeProperty("--color-hover");
+    root.style.removeProperty("--color-active");
     return;
   }
   const accent = readableAccent(hex, theme);
   root.style.setProperty("--color-accent", accent);
   root.style.setProperty("--color-accent-hover", `color-mix(in oklab, ${accent} 85%, ${theme === "light" ? "black" : "white"})`);
+  root.style.setProperty("--color-on-accent", onAccentColor(accent));
+  root.style.setProperty("--color-hover", `color-mix(in oklab, ${accent} 9%, transparent)`);
+  root.style.setProperty("--color-active", `color-mix(in oklab, ${accent} 16%, transparent)`);
 }

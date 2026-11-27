@@ -7,11 +7,17 @@
  */
 
 import type { ArtworkPalette } from "@/lib/visuals/color-extractor";
-import { readableAccent } from "@/lib/accent";
+import { isValidHexAccent, onAccentColor, readableAccent } from "@/lib/accent";
 import type { Theme } from "@/lib/theme";
 
 /** Variables the artwork overrides on the app shell; removing them restores the theme's own. */
-const ADAPTIVE_VARS = ["--color-accent", "--color-accent-hover", "--color-hover", "--color-active"] as const;
+const ADAPTIVE_VARS = [
+  "--color-accent",
+  "--color-accent-hover",
+  "--color-on-accent",
+  "--color-hover",
+  "--color-active",
+] as const;
 
 /**
  * Lets the whole interface take its accent from the artwork: buttons,
@@ -29,8 +35,19 @@ export function applyArtworkAccent(palette: ArtworkPalette | null, theme: Theme,
     "--color-accent-hover",
     `color-mix(in oklab, ${accent} 85%, ${theme === "light" ? "black" : "white"})`,
   );
+  shell.style.setProperty("--color-on-accent", onAccentColor(accent));
   shell.style.setProperty("--color-hover", `color-mix(in oklab, ${accent} 9%, transparent)`);
   shell.style.setProperty("--color-active", `color-mix(in oklab, ${accent} 16%, transparent)`);
+}
+
+/** Applies artwork accent only when no explicit user accent color is selected. */
+export function syncShellAccent(
+  palette: ArtworkPalette | null,
+  theme: Theme,
+  shell: HTMLElement,
+  customAccent: string | null,
+): void {
+  applyArtworkAccent(isValidHexAccent(customAccent) ? null : palette, theme, shell);
 }
 
 export const AMBIENCE_VARS = {

@@ -18,6 +18,7 @@ import { showNoticeDialog } from "@/components/modal-dialog";
 import { playerEngine } from "@/lib/playback/engine";
 import { themeManager } from "@/lib/theme";
 import { applyAccent } from "@/lib/accent";
+import { syncShellAccent } from "@/lib/ambience";
 import { ytmBridge } from "@/lib/playback/ytm-bridge";
 import { account } from "@/lib/ytm/account";
 import { router } from "@/lib/router";
@@ -406,7 +407,9 @@ function createAccentPalette(currentAccent: string | null): HTMLElement {
         swatch.classList.add("settings__accent-swatch--active");
         swatch.setAttribute("aria-pressed", "true");
         applyAccent(hex, themeManager.theme);
-        storage.saveSettings({ accentColor: hex });
+        const updated = storage.saveSettings({ accentColor: hex });
+        const shell = document.getElementById("app");
+        if (shell) syncShellAccent(playerEngine.currentPalette, themeManager.theme, shell, updated.accentColor);
       },
     });
     if (hex) swatch.style.backgroundColor = hex;
@@ -743,6 +746,8 @@ function createThemeImportExport(): HTMLElement {
                 }
                 document.body.classList.toggle("density-compact", updated.density === "compact");
                 applyAccent(updated.accentColor, themeManager.theme);
+                const shell = document.getElementById("app");
+                if (shell) syncShellAccent(playerEngine.currentPalette, themeManager.theme, shell, updated.accentColor);
                 router.refresh();
               } catch (err) {
                 showNoticeDialog({

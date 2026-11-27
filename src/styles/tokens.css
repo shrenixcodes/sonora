@@ -128,6 +128,7 @@
   --color-text-tertiary: #736D7E;
   --color-accent: #A78BFA;
   --color-accent-hover: #B9A2FB;
+  --color-on-accent: #17151C;
   --color-accent-secondary: #C9A96E;
   --color-border: #393342;
   --color-border-subtle: #2E2938;
@@ -177,6 +178,7 @@
   --color-text-tertiary: #8E9389;
   --color-accent: #315E48;
   --color-accent-hover: #3D7459;
+  --color-on-accent: #FFFFFF;
   --color-accent-secondary: #D95342;
   --color-border: #D8D1C3;
   --color-border-subtle: #E0DBD0;
