@@ -96,7 +96,14 @@ describe("Player responsive CSS & metadata marquee", () => {
     expect(playerCss).toContain("@container player (max-width: 780px)");
     expect(playerCss).toContain(".player__volume-slider");
     expect(playerCss).toContain("@keyframes player-marquee-bounce");
-    expect(floatingCss).toContain("gap: var(--space-2)");
+    expect(floatingCss).toContain("gap: var(--space-3)");
+
+    const mainCss = fs.readFileSync(path.resolve("src/styles/main.css"), "utf8");
+    expect(mainCss).toContain("container-name: main");
+    expect(mainCss).toContain("@container main (max-width: 620px)");
+    expect(mainCss).toContain("@container main (max-width: 560px)");
+    expect(mainCss).toContain("@container main (max-width: 440px)");
+    expect(mainCss).toMatch(/\.page-header__actions\s*\{[^}]*flex-wrap:\s*wrap;/s);
   });
 
   it("keeps short metadata static and enables marquee only when overflowing", () => {

@@ -3,6 +3,8 @@
  */
 
 .main {
+  container-type: inline-size;
+  container-name: main;
   grid-area: main;
   overflow-y: auto;
   overflow-x: hidden;
@@ -292,6 +294,7 @@
 
 .page-header__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   margin-top: var(--space-4);
@@ -307,7 +310,7 @@
 
 .track-row {
   display: grid;
-  grid-template-columns: 32px 40px 1fr 1fr 28px 36px 48px;
+  grid-template-columns: 32px 40px minmax(0, 1.4fr) minmax(0, 1fr) 28px 36px 48px;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -318,7 +321,7 @@
 }
 
 .track-row--removable {
-  grid-template-columns: 32px 40px 1fr 1fr 28px 36px 28px 48px;
+  grid-template-columns: 32px 40px minmax(0, 1.4fr) minmax(0, 1fr) 28px 36px 28px 48px;
 }
 
 .track-row:hover,
@@ -1156,10 +1159,93 @@
   .collection__header {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--space-4);
   }
 
   .collection__artwork {
     width: 140px;
     height: 140px;
+  }
+
+  .collection__meta {
+    width: 100%;
+  }
+
+  .track-row__album {
+    display: none;
+  }
+
+  .track-row {
+    grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 40px;
+    gap: var(--space-2);
+  }
+
+  .track-row--removable {
+    grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 28px 40px;
+  }
+}
+
+@container main (max-width: 620px) {
+  .collection__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .collection__artwork {
+    width: 140px;
+    height: 140px;
+  }
+
+  .collection__meta {
+    width: 100%;
+  }
+
+  .collection__title {
+    font-size: var(--text-2xl);
+    overflow-wrap: anywhere;
+  }
+}
+
+@container main (max-width: 560px) {
+  .main__content {
+    padding: var(--space-4);
+  }
+
+  .track-row {
+    grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 40px;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .track-row--removable {
+    grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 28px 40px;
+  }
+
+  .track-row__art {
+    width: 36px;
+    height: 36px;
+  }
+
+  .track-row__album {
+    display: none;
+  }
+}
+
+@container main (max-width: 440px) {
+  .track-row {
+    grid-template-columns: 36px minmax(0, 1fr) 28px 28px 40px;
+  }
+
+  .track-row--removable {
+    grid-template-columns: 36px minmax(0, 1fr) 28px 28px 28px 40px;
+  }
+
+  .track-row__index,
+  .track-row__play-icon,
+  .track-row:hover .track-row__play-icon,
+  .track-row:focus-visible .track-row__play-icon {
+    display: none;
   }
 }

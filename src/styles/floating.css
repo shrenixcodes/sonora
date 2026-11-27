@@ -260,7 +260,8 @@ html[data-window="floating"] .sidebar__section {
   padding: var(--space-1) var(--space-2);
 }
 
-html[data-window="floating"] .sidebar__section + .sidebar__section {
+html[data-window="floating"] .sidebar__section + .sidebar__section,
+html[data-window="floating"] .sidebar__playlists:not(:empty) + .sidebar__section {
   border-top: 1px solid var(--color-panel-border);
 }
 
@@ -312,9 +313,16 @@ html[data-window="floating"] .player {
   justify-self: center;
   width: min(820px, 100%);
   height: 64px;
-  padding: 0 var(--space-3) 0 var(--space-2);
-  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  gap: var(--space-3);
   border-radius: var(--radius-full);
+}
+
+@media (max-width: 700px) {
+  html[data-window="floating"] .player {
+    gap: var(--space-2);
+    padding: 0 var(--space-3) 0 var(--space-2);
+  }
 }
 
 html[data-window="floating"] .player__artwork {
