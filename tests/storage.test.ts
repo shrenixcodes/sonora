@@ -108,6 +108,16 @@ describe("StorageService", () => {
     storage.savePlaylist(pl);
     expect(storage.getPlaylists()).toHaveLength(1);
 
+    expect(storage.renamePlaylist("pl_sample", "Favorites 2027")).toBe(true);
+    expect(storage.getPlaylists()[0].title).toBe("Favorites 2027");
+    expect(storage.renamePlaylist("pl_sample", "   ")).toBe(false);
+
+    const t1: Track = { id: "t_rem", title: "Removable", artist: "Artist", duration: 100, artworkUrl: "" };
+    storage.addTrackToPlaylist("pl_sample", t1);
+    expect(storage.removeTrackFromPlaylist("pl_sample", "t_rem")).toBe(true);
+    expect(storage.getPlaylists()[0].tracks).toHaveLength(0);
+    expect(storage.removeTrackFromPlaylist("pl_sample", "missing")).toBe(false);
+
     storage.deletePlaylist("pl_sample");
     expect(storage.getPlaylists()).toHaveLength(0);
   });

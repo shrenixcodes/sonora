@@ -3,6 +3,7 @@
  */
 
 import { el, formatTime } from "@/lib/dom";
+import { showConfirmDialog, showPromptDialog } from "@/components/modal-dialog";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
 import { createTrackAlbumControl, createTrackArtistControl, syncTrackRowLikeButtons } from "@/components/track-links";
@@ -163,6 +164,7 @@ function createHeroHeader(options: {
   artworkUrl: string;
   playBtn: HTMLButtonElement;
   shuffleBtn: HTMLButtonElement;
+  extraActions?: HTMLElement[];
 }): HTMLElement {
   return el("div", {
     className: "collection__header",
@@ -183,7 +185,7 @@ function createHeroHeader(options: {
           options.subtitleNode,
           el("div", {
             className: "page-header__actions",
-            children: [options.playBtn, options.shuffleBtn],
+            children: [options.playBtn, options.shuffleBtn, ...(options.extraActions ?? [])],
           }),
         ],
       }),
@@ -221,6 +223,43 @@ function renderLocalPlaylistView(
     },
   }) as HTMLButtonElement;
 
+  const renameBtn = el("button", {
+    className: "btn btn--secondary",
+    text: "Rename",
+    attrs: { type: "button", title: "Rename playlist" },
+    onClick: () => {
+      showPromptDialog({
+        title: "Rename Playlist",
+        subtitle: "Choose a new name for this Sonora playlist.",
+        placeholder: "Playlist title",
+        initialValue: playlist.title,
+        confirmLabel: "Save",
+        emptyError: "Please enter a playlist title.",
+        onConfirm: (nextTitle) => {
+          storage.renamePlaylist(playlist.id, nextTitle);
+        },
+      });
+    },
+  });
+
+  const deleteBtn = el("button", {
+    className: "btn btn--secondary btn--danger",
+    text: "Delete",
+    attrs: { type: "button", title: "Delete playlist" },
+    onClick: () => {
+      showConfirmDialog({
+        title: "Delete Playlist",
+        message: `Delete “${playlist.title}”? This removes the Sonora playlist permanently.`,
+        confirmLabel: "Delete",
+        danger: true,
+        onConfirm: () => {
+          storage.deletePlaylist(playlist.id);
+          router.navigate("/playlists");
+        },
+      });
+    },
+  });
+
   host.append(
     createBackButton(),
     createHeroHeader({
@@ -230,6 +269,7 @@ function renderLocalPlaylistView(
       artworkUrl: tracks[0]?.artworkUrl || playlist.artworkUrl || "",
       playBtn,
       shuffleBtn,
+      extraActions: [renameBtn, deleteBtn],
     }),
   );
 
@@ -252,7 +292,11 @@ function renderLocalPlaylistView(
 
   const list = el("div", {
     className: "track-list",
-    children: tracks.map((track, idx) => createCollectionTrackRow(track, idx + 1, () => tracks)),
+    children: tracks.map((track, idx) =>
+      createCollectionTrackRow(track, idx + 1, () => tracks, () => {
+        storage.removeTrackFromPlaylist(playlist.id, track.id);
+      }),
+    ),
   });
   host.appendChild(list);
   markPlaying(playerEngine.currentTrack);
@@ -498,13 +542,74 @@ function createCollectionTrackRow(
   track: Track,
   index: number,
   getQueue: () => Track[],
+  onRemove?: () => void,
 ): HTMLElement {
   const liked = storage.isLiked(track.id);
   const isPlaying = playerEngine.currentTrack?.id === track.id;
   const play = () => void playerEngine.playTrack(track, getQueue());
 
+  const children: HTMLElement[] = [
+    el("div", { className: "track-row__index", text: String(index) }),
+    el("div", {
+      className: "track-row__play-icon",
+      html: icon("play"),
+      attrs: { "aria-hidden": "true" },
+    }),
+    el("img", {
+      className: "track-row__art",
+      attrs: { src: track.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" },
+    }),
+    el("div", {
+      className: "track-row__info",
+      children: [
+        el("span", { className: "track-row__title truncate", text: track.title }),
+        createTrackArtistControl(track),
+      ],
+    }),
+    createTrackAlbumControl(track),
+    createSongRadioButton(track),
+    el("button", {
+      className: `track-row__like-btn${liked ? " track-row__like-btn--active" : ""}`,
+      html: icon("heart"),
+      attrs: {
+        type: "button",
+        "aria-label": liked ? `Unlike ${track.title}` : `Like ${track.title}`,
+        "aria-pressed": String(liked),
+      },
+      onClick: (e) => {
+        e.stopPropagation();
+        storage.toggleLike(track);
+      },
+    }),
+  ];
+
+  if (onRemove) {
+    children.push(
+      el("button", {
+        className: "track-row__remove-btn",
+        html: icon("close"),
+        attrs: {
+          type: "button",
+          "aria-label": `Remove ${track.title} from playlist`,
+          title: "Remove from playlist",
+        },
+        onClick: (e) => {
+          e.stopPropagation();
+          onRemove();
+        },
+      }),
+    );
+  }
+
+  children.push(
+    el("span", {
+      className: "track-row__duration",
+      text: track.duration ? formatTime(track.duration) : "",
+    }),
+  );
+
   const row = el("div", {
-    className: `track-row${isPlaying ? " is-playing" : ""}`,
+    className: `track-row${onRemove ? " track-row--removable" : ""}${isPlaying ? " is-playing" : ""}`,
     attrs: {
       role: "button",
       tabindex: "0",
@@ -519,42 +624,9 @@ function createCollectionTrackRow(
         play();
       }
     },
-    children: [
-      el("div", { className: "track-row__index", text: String(index) }),
-      el("div", {
-        className: "track-row__play-icon",
-        html: icon("play"),
-        attrs: { "aria-hidden": "true" },
-      }),
-      el("img", {
-        className: "track-row__art",
-        attrs: { src: track.artworkUrl || "/artwork-placeholder.svg", alt: "", loading: "lazy" },
-      }),
-      el("div", {
-        className: "track-row__info",
-        children: [
-          el("span", { className: "track-row__title truncate", text: track.title }),
-          createTrackArtistControl(track),
-        ],
-      }),
-      createTrackAlbumControl(track),
-      createSongRadioButton(track),
-      el("button", {
-        className: `track-row__like-btn${liked ? " track-row__like-btn--active" : ""}`,
-        html: icon("heart"),
-        attrs: { type: "button", "aria-label": liked ? `Unlike ${track.title}` : `Like ${track.title}`, "aria-pressed": String(liked) },
-        onClick: (e) => {
-          e.stopPropagation();
-          storage.toggleLike(track);
-        },
-      }),
-      el("span", {
-        className: "track-row__duration",
-        text: track.duration ? formatTime(track.duration) : "",
-      }),
-    ],
+    children,
   });
 
-  attachSongContextMenu(row, track);
+  attachSongContextMenu(row, track, onRemove ? { onRemoveFromPlaylist: onRemove } : undefined);
   return row;
 }

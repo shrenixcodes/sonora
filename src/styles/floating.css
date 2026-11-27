@@ -278,13 +278,33 @@ html[data-window="floating"] .sidebar__link {
 }
 
 /* Labels stay available to screen readers; the link title shows on hover. */
-html[data-window="floating"] .sidebar__link-label {
+html[data-window="floating"] .sidebar__link-label,
+html[data-window="floating"] .sidebar__playlist-title {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+html[data-window="floating"] .sidebar__playlists {
+  flex: 0 1 auto;
+  padding: var(--space-1) var(--space-2);
+  border-top-color: var(--color-panel-border);
+}
+
+html[data-window="floating"] .sidebar__playlist-item {
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+}
+
+html[data-window="floating"] .sidebar__playlist-art {
+  width: 28px;
+  height: 28px;
 }
 
 /* The player is a capsule under the stage. */

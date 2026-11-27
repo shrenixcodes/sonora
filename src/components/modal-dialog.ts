@@ -20,6 +20,15 @@ export interface NoticeDialogOptions {
   confirmLabel?: string;
 }
 
+export interface ConfirmDialogOptions {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  onConfirm: () => void;
+}
+
 function openDialog(dialog: HTMLDialogElement, initialFocus: HTMLElement): void {
   document.querySelector<HTMLDialogElement>(".sonora-dialog")?.close();
   const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -145,5 +154,37 @@ export function showNoticeDialog(options: NoticeDialogOptions): HTMLDialogElemen
   }) as HTMLDialogElement;
 
   openDialog(dialog, okBtn);
+  return dialog;
+}
+
+export function showConfirmDialog(options: ConfirmDialogOptions): HTMLDialogElement {
+  const cancelBtn = el("button", {
+    className: "btn btn--secondary",
+    text: options.cancelLabel ?? "Cancel",
+    attrs: { type: "button" },
+    onClick: () => closeDialogElement(dialog),
+  });
+
+  const confirmBtn = el("button", {
+    className: options.danger ? "btn btn--danger-solid" : "btn btn--primary",
+    text: options.confirmLabel ?? "Confirm",
+    attrs: { type: "button" },
+    onClick: () => {
+      closeDialogElement(dialog);
+      options.onConfirm();
+    },
+  });
+
+  const dialog = el("dialog", {
+    className: "sonora-dialog",
+    attrs: { "aria-labelledby": "sonora-dialog-title" },
+    children: [
+      el("h2", { className: "sonora-dialog__title", text: options.title, attrs: { id: "sonora-dialog-title" } }),
+      el("p", { className: "sonora-dialog__subtitle", text: options.message }),
+      el("div", { className: "sonora-dialog__actions", children: [cancelBtn, confirmBtn] }),
+    ],
+  }) as HTMLDialogElement;
+
+  openDialog(dialog, cancelBtn);
   return dialog;
 }

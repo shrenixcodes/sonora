@@ -30,8 +30,16 @@ async function copyLink(url: string): Promise<void> {
   }
 }
 
+export interface SongContextMenuOptions {
+  onRemoveFromPlaylist?: () => void;
+}
+
 /** Adds song actions without changing the element's normal play behavior. */
-export function attachSongContextMenu(element: HTMLElement, track: Track): void {
+export function attachSongContextMenu(
+  element: HTMLElement,
+  track: Track,
+  options?: SongContextMenuOptions,
+): void {
   const open = (x: number, y: number) => {
     closeMenu?.();
     const menu = el("div", {
@@ -57,6 +65,9 @@ export function attachSongContextMenu(element: HTMLElement, track: Track): void 
     action("Play Next", "skipForward", () => queue(true));
     action("Add to Queue", "queue", () => queue(false));
     action("Add to Playlist", "playlist", () => showPlaylistPicker(track));
+    if (options?.onRemoveFromPlaylist) {
+      action("Remove from Playlist", "close", options.onRemoveFromPlaylist);
+    }
     action("Start Song Radio", "radio", () => { void launchSongRadio(track); });
     const artistName = track.artist?.trim();
     action("Go to Artist", "artist", () => {
