@@ -70,8 +70,12 @@ export class PlayQueue {
     if (existingIndex !== -1) {
       trackIndex = existingIndex;
       const orderPos = this.order.indexOf(trackIndex);
-      if (orderPos > this.position) {
+      if (orderPos === this.position) return;
+      if (orderPos !== -1) {
         this.order.splice(orderPos, 1);
+        if (orderPos < this.position) {
+          this.position -= 1;
+        }
       }
     } else {
       trackIndex = this.tracks.length;
@@ -145,6 +149,7 @@ export class PlayQueue {
   clearUpcoming(): void {
     if (this.position + 1 < this.order.length) {
       this.order = this.order.slice(0, this.position + 1);
+      this.pruneTracks();
     }
   }
 
@@ -153,7 +158,24 @@ export class PlayQueue {
     const target = this.position + 1 + index;
     if (target < this.position + 1 || target >= this.order.length) return false;
     this.order.splice(target, 1);
+    this.pruneTracks();
     return true;
+  }
+
+  /** Drops tracks no longer referenced by `order` and remaps remaining indices. */
+  private pruneTracks(): void {
+    const used = new Set(this.order);
+    if (used.size === this.tracks.length) return;
+    const nextTracks: Track[] = [];
+    const remap = new Map<number, number>();
+    for (let i = 0; i < this.tracks.length; i++) {
+      if (used.has(i)) {
+        remap.set(i, nextTracks.length);
+        nextTracks.push(this.tracks[i]);
+      }
+    }
+    this.tracks = nextTracks;
+    this.order = this.order.map((oldIndex) => remap.get(oldIndex)!);
   }
 
   /** Builds the play order with `anchor` (an index into tracks) first, or -1 for none. */
