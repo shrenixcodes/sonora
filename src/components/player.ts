@@ -12,6 +12,7 @@ import { openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
+import { shouldReduceMotion } from "@/lib/visuals/motion";
 import { queuePanel } from "@/components/queue-panel";
 import type { Track, PlaybackState } from "@/types/music";
 
@@ -19,17 +20,62 @@ import type { Track, PlaybackState } from "@/types/music";
 const SEEK_STEP_SECONDS = 5;
 /** One wheel notch or arrow key on the volume bar. */
 const VOLUME_STEP = 0.05;
+/** Minimum pixel overflow before enabling marquee scroll on metadata lines. */
+const MARQUEE_OVERFLOW_THRESHOLD_PX = 2;
+/** Target horizontal scroll speed (px/s) used to compute marquee duration. */
+const MARQUEE_SPEED_PX_PER_SEC = 28;
+
+function createMarqueeLine(initialText: string): { viewport: HTMLElement; text: HTMLElement } {
+  const text = el("span", { className: "player__marquee-text", text: initialText });
+  const viewport = el("span", { className: "player__marquee-viewport", children: [text] });
+  return { viewport, text };
+}
+
+/** Updates marquee scroll metrics when a metadata line overflows its clipped viewport. */
+function syncMarquee(viewportEl: HTMLElement, textEl: HTMLElement, reset = false): void {
+  if (reset) {
+    viewportEl.classList.remove("is-scrolling");
+    viewportEl.style.removeProperty("--marquee-shift");
+    viewportEl.style.removeProperty("--marquee-duration");
+    void viewportEl.offsetWidth;
+  }
+
+  if (shouldReduceMotion()) {
+    viewportEl.classList.remove("is-scrolling");
+    viewportEl.style.removeProperty("--marquee-shift");
+    viewportEl.style.removeProperty("--marquee-duration");
+    return;
+  }
+
+  const overflow = textEl.scrollWidth - viewportEl.clientWidth;
+  if (viewportEl.clientWidth > 0 && overflow > MARQUEE_OVERFLOW_THRESHOLD_PX) {
+    const durationSeconds = Math.max(4, Number((overflow / MARQUEE_SPEED_PX_PER_SEC).toFixed(2)));
+    viewportEl.style.setProperty("--marquee-shift", `-${overflow}px`);
+    viewportEl.style.setProperty("--marquee-duration", `${durationSeconds}s`);
+    viewportEl.classList.add("is-scrolling");
+    return;
+  }
+
+  viewportEl.classList.remove("is-scrolling");
+  viewportEl.style.removeProperty("--marquee-shift");
+  viewportEl.style.removeProperty("--marquee-duration");
+}
 
 class PlayerBar {
   private elements: {
     root: HTMLElement;
+    meta: HTMLElement;
     playBtn: HTMLElement;
     shuffleBtn: HTMLElement;
     repeatBtn: HTMLElement;
     skipBackBtn: HTMLElement;
     skipFwdBtn: HTMLElement;
     title: HTMLElement;
+    titleViewport: HTMLElement;
+    titleText: HTMLElement;
     artist: HTMLElement;
+    artistViewport: HTMLElement;
+    artistText: HTMLElement;
     artwork: HTMLElement;
     likeBtn: HTMLElement;
     currentTime: HTMLElement;
@@ -47,6 +93,8 @@ class PlayerBar {
   private volumeSlider: Slider | null = null;
   private stopAudioDevices: (() => void) | null = null;
   private closeDeviceMenu: (() => void) | null = null;
+  private metaResizeObserver: ResizeObserver | null = null;
+  private stopMarqueeListeners: (() => void) | null = null;
 
   render(): HTMLElement {
     // ── Controls ──────────────────────────────────────────
@@ -120,17 +168,21 @@ class PlayerBar {
       onKeyDown: onActivateKey,
     });
 
+    const initialTitle = playerEngine.currentTrack?.title ?? "Nothing playing";
+    const titleMarquee = createMarqueeLine(initialTitle);
     const title = el("span", {
-      className: "player__title truncate",
-      text: "Nothing playing",
+      className: "player__title",
+      children: [titleMarquee.viewport],
       attrs: { role: "button", tabindex: "0", title: "Open Now Playing" },
       onClick: openNowPlaying,
       onKeyDown: onActivateKey,
     });
 
+    const initialArtist = playerEngine.currentTrack?.artist ?? "Select a song to start listening";
+    const artistMarquee = createMarqueeLine(initialArtist);
     const artist = el("button", {
-      className: "player__artist truncate",
-      text: "Select a song to start listening",
+      className: "player__artist",
+      children: [artistMarquee.viewport],
       attrs: { type: "button", disabled: "" },
       onClick: () => {
         const track = playerEngine.currentTrack;
@@ -219,17 +271,15 @@ class PlayerBar {
       },
     });
 
+    const meta = el("div", { className: "player__meta", children: [title, artist] });
+
     const root = el("div", {
       className: "player",
       children: [
         // Left: Track Info
         el("div", {
           className: "player__track",
-          children: [
-            artwork,
-            el("div", { className: "player__meta", children: [title, artist] }),
-            likeBtn,
-          ],
+          children: [artwork, meta, likeBtn],
         }),
 
         // Center: Controls + Progress
@@ -265,13 +315,18 @@ class PlayerBar {
 
     this.elements = {
       root,
+      meta,
       playBtn,
       shuffleBtn,
       repeatBtn,
       skipBackBtn,
       skipFwdBtn,
       title,
+      titleViewport: titleMarquee.viewport,
+      titleText: titleMarquee.text,
       artist,
+      artistViewport: artistMarquee.viewport,
+      artistText: artistMarquee.text,
       artwork,
       likeBtn,
       currentTime,
@@ -286,16 +341,48 @@ class PlayerBar {
     };
 
     this.setupInteractivity();
+    this.setupMarqueeObservers();
     this.subscribeToEngine();
     this.subscribeToRouter();
     this.subscribeToAudioDevices();
+    this.updateTitleControl(initialTitle);
     this.updateArtistControl(
       playerEngine.currentTrack,
       playerEngine.currentState,
-      playerEngine.currentTrack?.artist ?? "Select a song to start listening",
+      initialArtist,
     );
+    requestAnimationFrame(() => this.syncMetadataMarquees());
 
     return root;
+  }
+
+  private syncMetadataMarquees(reset = false): void {
+    if (!this.elements) return;
+    syncMarquee(this.elements.titleViewport, this.elements.titleText, reset);
+    syncMarquee(this.elements.artistViewport, this.elements.artistText, reset);
+  }
+
+  private setupMarqueeObservers(): void {
+    this.metaResizeObserver?.disconnect();
+    this.metaResizeObserver = null;
+    this.stopMarqueeListeners?.();
+    this.stopMarqueeListeners = null;
+
+    if (!this.elements) return;
+    if (typeof ResizeObserver !== "undefined") {
+      this.metaResizeObserver = new ResizeObserver(() => this.syncMetadataMarquees(false));
+      this.metaResizeObserver.observe(this.elements.meta);
+    }
+
+    const onMotionOrSettingChange = () => this.syncMetadataMarquees(false);
+    const stopSettings = storage.on("settingsChange", onMotionOrSettingChange);
+    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    media?.addEventListener?.("change", onMotionOrSettingChange);
+
+    this.stopMarqueeListeners = () => {
+      stopSettings();
+      media?.removeEventListener?.("change", onMotionOrSettingChange);
+    };
   }
 
   private setupInteractivity(): void {
@@ -343,10 +430,26 @@ class PlayerBar {
     this.elements.likeBtn.setAttribute("title", label);
   }
 
-  private updateArtistControl(track: Track | null, state: PlaybackState, text: string): void {
+  private updateTitleControl(text: string, forceReset = false): void {
     if (!this.elements) return;
-    const artistEl = this.elements.artist;
-    artistEl.textContent = text;
+    const { titleViewport, titleText } = this.elements;
+    const changed = titleText.textContent !== text;
+    if (changed) titleText.textContent = text;
+    if (changed || forceReset) {
+      syncMarquee(titleViewport, titleText, true);
+    }
+  }
+
+  private updateArtistControl(
+    track: Track | null,
+    state: PlaybackState,
+    text: string,
+    forceReset = false,
+  ): void {
+    if (!this.elements) return;
+    const { artist: artistEl, artistViewport, artistText } = this.elements;
+    const changed = artistText.textContent !== text;
+    if (changed) artistText.textContent = text;
     const canOpen = Boolean(
       track && !state.error && !state.isAd && state.status !== "loading" && track.artist.trim(),
     );
@@ -357,6 +460,9 @@ class PlayerBar {
     } else {
       artistEl.removeAttribute("title");
       artistEl.removeAttribute("aria-label");
+    }
+    if (changed || forceReset) {
+      syncMarquee(artistViewport, artistText, true);
     }
   }
 
@@ -425,8 +531,8 @@ class PlayerBar {
       if (!this.elements) return;
 
       if (track) {
-        this.elements.title.textContent = track.title;
-        this.updateArtistControl(track, playerEngine.currentState, track.artist);
+        this.updateTitleControl(track.title, true);
+        this.updateArtistControl(track, playerEngine.currentState, track.artist, true);
         this.elements.duration.textContent = formatTime(track.duration || 0);
 
         // Update artwork
@@ -440,8 +546,8 @@ class PlayerBar {
         // Check liked state
         this.updateLikeButton(storage.isLiked(track.id));
       } else {
-        this.elements.title.textContent = "Nothing playing";
-        this.updateArtistControl(null, playerEngine.currentState, "Select a song to start listening");
+        this.updateTitleControl("Nothing playing", true);
+        this.updateArtistControl(null, playerEngine.currentState, "Select a song to start listening", true);
         this.elements.duration.textContent = formatTime(0);
         this.elements.artwork.innerHTML = "";
         this.updateLikeButton(false);
