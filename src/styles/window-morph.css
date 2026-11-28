@@ -7,23 +7,51 @@
  * the animation, and one flat layer for the maximized window's background.
  */
 
-/* Surface morph (SurfaceMorph): flat stand-ins for the panels and the window
-   background. No images, no blur, so scaling them costs almost nothing. The
-   back layer sits under #app (inserted just before it), the front one over it. */
+/* Live morph (SurfaceMorph): the panels' fills and the window background as
+   flat stand-ins, under #app (inserted just before it), with the real panels
+   riding on top. No images, no blur, so scaling them costs almost nothing. */
 .window-morph-layer {
   position: fixed;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
 }
 
-.window-morph-layer--back { z-index: 0; }
-.window-morph-layer--front { z-index: 9000; }
+/* While the panels ride the stand-ins, the stand-ins are their only fill (a
+   panel's own would be drawn twice, or left behind where it is smaller than
+   its outline), and the floating stage is the main stand-in. Seven elements
+   and one pseudo-element restyle, at the start and at the landing. */
+html.is-window-morphing--live :is(
+  .main,
+  .queue-panel,
+  .sidebar,
+  .player,
+  .titlebar__left,
+  .titlebar__search,
+  .titlebar__right
+) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html.is-window-morphing--live #app::before {
+  visibility: hidden;
+}
 
 .window-morph-surface {
   position: fixed;
   box-sizing: border-box;
   transform-origin: 0 0;
   will-change: transform, opacity;
+}
+
+/* A stand-in's look and corners, inside its outline so a new look can fade
+   in over it. Only its opacity animates. */
+.window-morph-skin {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
 }
 
 .window-morph-surface--backdrop {

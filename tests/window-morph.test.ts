@@ -2,13 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   boxTrack,
   cubicBezier,
+  MORPH_MS,
+  LIVE_CLASS,
+  parseRadius,
   playMorph,
+  cornersAt,
   SurfaceMorph,
   rebase,
+  rideOutline,
   slideFlip,
   stretchFlip,
   type Box,
   type LayoutSnapshot,
+  type Surface,
 } from "../src/lib/window-morph";
 
 const box = (x: number, y: number, width: number, height: number): Box => ({ x, y, width, height });
@@ -157,35 +163,54 @@ describe("morph animations", () => {
   });
 
 
-  it("surface morph: stand-ins take the panels' look, travel as exact boxes, then hand back", async () => {
+  const look = (radius: string, color: string): Surface => ({ image: "none", color, radius, border: "0px none", shadow: "none" });
+
+  it("live morph: the real panels ride their outlines at their real size", async () => {
     vi.useFakeTimers();
     try {
       const app = document.getElementById("app")!;
-      const morph = new SurfaceMorph(floating, full, {});
-      const layers = document.querySelectorAll(".window-morph-layer");
-      expect(layers).toHaveLength(2);
-      // Back layer under #app (the window background), front layer over it.
-      expect(app.previousElementSibling?.classList.contains("window-morph-layer--back")).toBe(true);
-      const main = document.querySelector<HTMLElement>(".window-morph-surface--main")!;
-      expect([main.style.left, main.style.width]).toEqual(["84px", "800px"]);
-      // The real interface fades out, then stays fully hidden (and undrawn) while the surfaces travel.
-      expect(calls.find((c) => c.node === app)!.keyframes.at(-1)).toEqual({ opacity: 0 });
+      const mainNode = document.querySelector<HTMLElement>(".main")!;
+      const morph = new SurfaceMorph(floating, full, {
+        before: { main: look("26px", "rgb(1, 1, 1)"), sidebar: look("28px", "rgb(2, 2, 2)") },
+        after: { main: look("16px", "rgb(3, 3, 3)"), sidebar: look("16px", "rgb(4, 4, 4)"), queue: look("16px", "rgb(5, 5, 5)") },
+      });
+      // The fills sit under #app; the interface itself is never hidden.
+      expect(app.previousElementSibling?.classList.contains("window-morph-layer")).toBe(true);
+      expect(document.documentElement.classList.contains(LIVE_CLASS)).toBe(true);
+      expect(calls.some((c) => c.node === app)).toBe(false);
 
-      vi.advanceTimersByTime(100);
-      await morph.ready;
-      morph.travel();
-      expect(app.style.opacity).toBe("0");
-      expect([main.style.left, main.style.width]).toEqual(["250px", "1650px"]);
-      const move = calls.filter((c) => c.node === main).at(-1)!;
-      expect(move.keyframes).toEqual([{ transform: stretchFlip(box(84, 64, 800, 500), box(250, 60, 1650, 900)) }, { transform: "none" }]);
-      // Panels that only exist in the new layout appear as a stand-in too.
-      expect(document.querySelector(".window-morph-surface--queue")).not.toBeNull();
-      // Nothing that holds images is scaled: only stand-ins and #app opacity animate.
+      // The real page only moves: no scale, so its pictures are never redrawn at a new size.
+      const panel = calls.filter((c) => c.node === mainNode);
+      const move = panel.find((c) => c.keyframes[0].transform !== undefined)!;
+      expect(move.keyframes).toEqual([{ transform: "translate(-166px, 4px)" }, { transform: "none" }]);
       for (const call of calls) {
         if (call.keyframes.some((k) => String(k.transform ?? "").includes("scale"))) {
           expect(call.node.classList.contains("window-morph-surface")).toBe(true);
         }
       }
+      // Growing, it is cut down to its outline, and the clip is its own animation.
+      const clip = panel.find((c) => c.keyframes[0].clipPath !== undefined)!;
+      expect(clip.keyframes[0].clipPath).toBe("inset(0px 850px 400px 0px round 26px 26px 26px 26px)");
+      expect(clip.keyframes.at(-1)!.clipPath).toBe("inset(0px 0px 0px 0px round 16px 16px 16px 16px)");
+      expect(clip.keyframes.every((k) => k.transform === undefined)).toBe(true);
+
+      // Its fill travels as an exact box, turning from the old look into the new one.
+      const ghost = document.querySelector<HTMLElement>(".window-morph-surface--main")!;
+      expect([ghost.style.left, ghost.style.width]).toEqual(["250px", "1650px"]);
+      expect(calls.find((c) => c.node === ghost)!.keyframes[0].transform).toBe(stretchFlip(box(84, 64, 800, 500), box(250, 60, 1650, 900)));
+      const skins = ghost.querySelectorAll<HTMLElement>(".window-morph-skin");
+      expect(Array.from(skins, (s) => s.style.backgroundColor)).toEqual(["rgb(1, 1, 1)", "rgb(3, 3, 3)"]);
+
+      // A panel new to the layout fades in where it lands.
+      const queue = document.querySelector<HTMLElement>(".queue-panel")!;
+      expect(calls.find((c) => c.node === queue)!.keyframes).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+
+      // Landing: the fills go and the panels take their own back, in one go.
+      vi.advanceTimersByTime(MORPH_MS);
+      expect(document.querySelector(".window-morph-surface--main")).toBeNull();
+      expect(document.documentElement.classList.contains(LIVE_CLASS)).toBe(false);
+      // The window background stays until the morph ends.
+      expect(document.querySelector(".window-morph-surface--backdrop")).not.toBeNull();
 
       vi.advanceTimersByTime(1000);
       await morph.finished;
@@ -194,5 +219,53 @@ describe("morph animations", () => {
       vi.useRealTimers();
     }
   });
+
+  it("live morph: shrinking, a panel is never clipped and only follows its outline", async () => {
+    vi.useFakeTimers();
+    try {
+      const morph = new SurfaceMorph(full, floating, {
+        before: { main: look("16px", "rgb(3, 3, 3)"), sidebar: look("16px", "rgb(4, 4, 4)") },
+        after: { main: look("26px", "rgb(1, 1, 1)"), sidebar: look("9999px", "rgb(2, 2, 2)") },
+      });
+      const sidebar = document.querySelector<HTMLElement>(".sidebar")!;
+      expect(calls.filter((c) => c.node === sidebar).every((c) => c.keyframes[0].clipPath === undefined)).toBe(true);
+      // The capsule lands with half its 56px width as radius, not 9999px.
+      const skins = document.querySelectorAll<HTMLElement>(".window-morph-surface--sidebar .window-morph-skin");
+      expect(skins[1].style.borderRadius).toBe("28px");
+      // The queue, gone from the floating layout, fades where it was.
+      const queue = document.querySelector<HTMLElement>(".window-morph-surface--queue")!;
+      expect(calls.find((c) => c.node === queue)!.keyframes).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+      vi.advanceTimersByTime(2000);
+      await morph.finished;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
+describe("live morph geometry", () => {
+  it("reads computed radii per corner", () => {
+    const b = box(0, 0, 200, 64);
+    expect(parseRadius("26px", b)).toEqual([26, 26, 26, 26]);
+    expect(parseRadius("0px 16px", b)).toEqual([0, 16, 0, 16]);
+    expect(parseRadius("1px 2px 3px", b)).toEqual([1, 2, 3, 2]);
+    expect(parseRadius("50%", b)).toEqual([32, 32, 32, 32]);
+    expect(parseRadius("", b)).toEqual([0, 0, 0, 0]);
+  });
+
+  it("divides corners by the scale they are drawn at, so they stay round on screen", () => {
+    expect(cornersAt([20, 20, 0, 0], 4, 2)).toBe("5px 5px 0px 0px / 10px 10px 0px 0px");
+  });
+
+  it("puts a panel's anchor on its outline's and clips only what sticks out", () => {
+    const panel = box(0, 0, 1000, 80);
+    // A capsule-sized outline in the middle of the screen, anchored at its middle.
+    const ride = rideOutline(panel, box(300, 10, 400, 60), [0.5, 0.5]);
+    expect([ride.dx, ride.dy]).toEqual([0, 0]);
+    expect(ride.inset).toEqual([10, 300, 10, 300]);
+    // Anchored top-left: the clip comes off the right and bottom only.
+    expect(rideOutline(panel, box(50, 20, 400, 60), [0, 0])).toEqual({ dx: 50, dy: 20, inset: [0, 600, 20, 0] });
+    // A bigger outline never clips.
+    expect(rideOutline(panel, box(0, 0, 1200, 100), [0, 0]).inset).toEqual([0, 0, 0, 0]);
+  });
+});
