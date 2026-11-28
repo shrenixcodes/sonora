@@ -675,6 +675,28 @@
   color: var(--color-danger);
 }
 
+/* The retry link reads as an action, not part of the error. */
+.player__retry {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+  transition: color var(--duration-fast) var(--ease-out),
+              text-decoration-color var(--duration-fast) var(--ease-out);
+}
+
+.player--error .player__artist:not(:disabled):hover .player__marquee-text,
+.player--error .player__artist:not(:disabled):focus-visible .player__marquee-text {
+  text-decoration: none;
+}
+
+.player--error .player__artist:hover .player__retry,
+.player--error .player__artist:focus-visible .player__retry {
+  color: var(--color-accent);
+  text-decoration-color: currentColor;
+}
+
 /* ── End-of-queue hint ──────────────────────────────────── */
 /* Rises over the player bar with its tail on the Next button. */
 
