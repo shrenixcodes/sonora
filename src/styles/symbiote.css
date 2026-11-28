@@ -129,8 +129,7 @@ html.app--restoring {
 /* Promote the pieces to their own layers before they move, so the first
    frame of the entrance does not stall building them */
 html.symbiote-primed :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art),
-html.app--restoring :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art),
-html.is-window-morphing :is(.titlebar, .sidebar, .main, .queue-panel, .player) {
+html.app--restoring :is(.titlebar__left, .titlebar__search, .titlebar__right, .sidebar, .main, .queue-panel, .player, .ambient-art) {
   will-change: transform, opacity;
 }
 

@@ -489,4 +489,36 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     expect(second.sent).toEqual([{ action: "load", value: "bbbbbbbbbbb" }]);
     expect(second.engine.currentState.status).toBe("loading");
   });
+
+  it("keeps the track duration when a time report carries a crossfaded stream's length", () => {
+    const { engine } = setup();
+    engine.playTrack(list[0], list);
+    engine.handleBridgeState(report({ reason: "track", videoId: "aaaaaaaaaaa", title: "Song aaaaaaaaaaa" }));
+    // YTM's own title differs from the catalog's, and the video element briefly
+    // reports the 39:18 stream it is crossfading into.
+    engine.handleBridgeState(
+      report({ reason: "time", videoId: "aaaaaaaaaaa", title: "Song AAA (Remastered)", currentTime: 195, duration: 2358 }),
+    );
+    expect(engine.currentTrack?.title).toBe("Song AAA (Remastered)");
+    expect(engine.currentTrack?.duration).toBe(200);
+    expect(engine.currentState.duration).toBe(200);
+  });
+
+  it("adopts a track without a time-report duration and backfills it from its track report", () => {
+    const { engine } = setup();
+    engine.playTrack(list[0], [list[0]]);
+    engine.handleBridgeState(report({ reason: "track", videoId: "aaaaaaaaaaa", title: "Song aaaaaaaaaaa" }));
+    storage.saveSettings({ ...storage.getSettings(), autoPlayNext: true });
+
+    engine.handleBridgeState(
+      report({ reason: "time", videoId: "zzzzzzzzzzz", title: "Autoplayed", currentTime: 1, duration: 2358 }),
+    );
+    expect(engine.currentTrack?.id).toBe("zzzzzzzzzzz");
+    expect(engine.currentTrack?.duration).toBe(0);
+
+    engine.handleBridgeState(
+      report({ reason: "track", videoId: "zzzzzzzzzzz", title: "Autoplayed", currentTime: 1, duration: 170.4 }),
+    );
+    expect(engine.currentTrack?.duration).toBe(170);
+  });
 });

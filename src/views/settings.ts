@@ -159,6 +159,13 @@ export function renderSettings(container: HTMLElement): void {
           createFpsSelector(currentSettings.ambientFpsLimit),
         ),
 
+        // Maximize / restore animation
+        createSettingRow(
+          "Window Animation",
+          "How panels move when the window maximizes or restores. Light suits PCs without a graphics card",
+          createWindowAnimationSelector(currentSettings.windowAnimation ?? "auto"),
+        ),
+
         // Fluid Animations & Launch Splash
         createSettingRow(
           "Interface Animations",
@@ -646,6 +653,34 @@ function createFpsSelector(currentFps: number): HTMLElement {
     storage.saveSettings({
       ambientFpsLimit: parseInt(select.value, 10) as 15 | 30 | 60,
     });
+  });
+
+  return select;
+}
+
+function createWindowAnimationSelector(current: NonNullable<UserSettings["windowAnimation"]>): HTMLElement {
+  const select = el("select", {
+    className: "settings__select",
+    attrs: { "aria-label": "Window Animation" },
+  });
+
+  const options: Array<{ val: NonNullable<UserSettings["windowAnimation"]>; label: string }> = [
+    { val: "auto", label: "Auto (Detect Graphics)" },
+    { val: "full", label: "Full (Graphics Card)" },
+    { val: "light", label: "Light (No Graphics Card)" },
+    { val: "slow", label: "Slow Motion (6x, for checking)" },
+  ];
+
+  options.forEach(({ val, label }) => {
+    const opt = document.createElement("option");
+    opt.value = val;
+    opt.textContent = label;
+    if (val === current) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  select.addEventListener("change", () => {
+    storage.saveSettings({ windowAnimation: select.value as NonNullable<UserSettings["windowAnimation"]> });
   });
 
   return select;

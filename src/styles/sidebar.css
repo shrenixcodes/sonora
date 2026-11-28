@@ -206,7 +206,7 @@
 /* ── About Sonora Pop-up Dialog ────────────────────────────── */
 .about-popup {
   margin: auto;
-  width: min(436px, calc(100vw - 36px));
+  width: min(436px, calc(var(--frame-w) - 36px));
   padding: var(--space-6);
   border: 1px solid var(--color-panel-border);
   border-radius: var(--radius-2xl, 20px);
@@ -453,14 +453,14 @@
   flex-shrink: 0;
 }
 
-@media (max-width: 440px) {
-  .about-popup__actions {
-    flex-wrap: wrap;
-  }
+/* Frame at most/least 440px wide (was a viewport media query; the window
+   no longer changes size, src/lib/window-mode.ts sets the band classes). */
+:where(html.fw-max-440) .about-popup__actions {
+  flex-wrap: wrap;
+}
 
-  .about-popup__actions .btn {
-    min-width: 140px;
-  }
+:where(html.fw-max-440) .about-popup__actions .btn {
+  min-width: 140px;
 }
 
 @keyframes aboutPopupEnter {

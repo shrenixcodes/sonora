@@ -130,4 +130,9 @@ export interface UserSettings {
   autoPlayNext: boolean;
   enableDiscordRpc: boolean;
   audioOutputDeviceId?: string | null;
+  /**
+   * Maximize/restore animation. "auto" picks "light" when the machine has no
+   * usable GPU (src/lib/render-tier.ts); "light" never scales large layers.
+   */
+  windowAnimation?: "auto" | "full" | "light" | "slow";
 }

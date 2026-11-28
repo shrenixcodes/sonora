@@ -21,6 +21,29 @@ export interface DiscordActivityPayload {
   clientId?: string;
 }
 
+/**
+ * The track length to show in Discord. The engine's `state.duration` is the
+ * value the player bar shows and is guarded against YTM crossfade pollution,
+ * so it wins; `track.duration` (catalog metadata) is only a fallback.
+ * Pass `state` only when it is known to describe `track`: on "trackChange"
+ * the engine has not yet reset `state.duration` from the previous song.
+ */
+export function presenceDuration(track: Track, state?: PlaybackState): number | undefined {
+  if (state && state.duration > 0) return Math.round(state.duration);
+  return track.duration > 0 ? Math.round(track.duration) : undefined;
+}
+
+/**
+ * Elapsed seconds, kept a second short of the duration. Discord only draws the
+ * progress bar when the end lies after the start of the elapsed time (the
+ * backend drops the end once elapsed reaches the duration), so a presence sent
+ * in the song's last second would otherwise lose its bar.
+ */
+export function presenceElapsed(currentTime: number, duration: number | undefined): number {
+  const elapsed = Math.max(0, Math.round(currentTime));
+  return duration !== undefined && duration > 1 ? Math.min(elapsed, duration - 1) : elapsed;
+}
+
 export class DiscordRpcService {
   private lastActivity: DiscordActivityPayload | null = null;
   private lastSendTimestamp: number = 0;
@@ -85,13 +108,14 @@ export class DiscordRpcService {
       return;
     }
     const state = playerEngine.currentState;
+    const durationSeconds = presenceDuration(track, state);
     this.sendActivity({
       title: track.title,
       artist: track.artist,
       album: track.album,
       artworkUrl: track.artworkUrl,
-      durationSeconds: track.duration || (state.duration > 0 ? Math.round(state.duration) : undefined),
-      elapsedSeconds: Math.round(state.currentTime),
+      durationSeconds,
+      elapsedSeconds: presenceElapsed(state.currentTime, durationSeconds),
       isPlaying: state.status === "playing",
     });
   }
@@ -102,13 +126,16 @@ export class DiscordRpcService {
       return;
     }
     const state = playerEngine.currentState;
+    // state.duration may still be the previous song's here; the stateChange
+    // that follows every track change sends the engine's settled duration.
+    const durationSeconds = presenceDuration(track);
     this.sendActivity({
       title: track.title,
       artist: track.artist,
       album: track.album,
       artworkUrl: track.artworkUrl,
-      durationSeconds: track.duration || (state.duration > 0 ? Math.round(state.duration) : undefined),
-      elapsedSeconds: Math.round(state.currentTime),
+      durationSeconds,
+      elapsedSeconds: presenceElapsed(state.currentTime, durationSeconds),
       isPlaying: state.status === "playing",
     });
   }
@@ -126,8 +153,7 @@ export class DiscordRpcService {
       this.lastActivity.artist !== state.currentTrack.artist;
     const playStateChanged = !this.lastActivity || this.lastActivity.isPlaying !== isPlaying;
 
-    const currentDuration =
-      state.currentTrack.duration || (state.duration > 0 ? Math.round(state.duration) : undefined);
+    const currentDuration = presenceDuration(state.currentTrack, state);
     const durationChanged =
       !this.lastActivity ||
       (currentDuration !== undefined && this.lastActivity.durationSeconds !== currentDuration);
@@ -136,7 +162,12 @@ export class DiscordRpcService {
     const now = Date.now();
     const elapsedRealSec = (now - this.lastSendTimestamp) / 1000;
     const expectedElapsed = (this.lastActivity?.elapsedSeconds ?? 0) + (isPlaying ? elapsedRealSec : 0);
-    const seekDetected = Math.abs(expectedElapsed - state.currentTime) > 4;
+    // The engine holds the time at the duration while the page finishes the
+    // stream (the video can run a little longer than its listed length). That
+    // pause in the clock is not a seek, and re-sending there would only throw
+    // the bar away.
+    const heldAtEnd = currentDuration !== undefined && state.currentTime >= currentDuration - 1;
+    const seekDetected = !heldAtEnd && Math.abs(expectedElapsed - state.currentTime) > 4;
 
     if (trackChanged || playStateChanged || seekDetected || durationChanged) {
       this.sendActivity({
@@ -145,7 +176,7 @@ export class DiscordRpcService {
         album: state.currentTrack.album,
         artworkUrl: state.currentTrack.artworkUrl,
         durationSeconds: currentDuration,
-        elapsedSeconds: Math.round(state.currentTime),
+        elapsedSeconds: presenceElapsed(state.currentTime, currentDuration),
         isPlaying,
       });
     }

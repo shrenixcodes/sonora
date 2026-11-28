@@ -163,7 +163,7 @@
 .now-playing__art-wrapper {
   width: 100%;
   aspect-ratio: 1;
-  max-width: min(380px, 46vh);
+  max-width: min(380px, calc(var(--frame-h) * 0.46));
   max-width: min(380px, calc(100cqh - 130px));
   border-radius: var(--radius-2xl);
   overflow: hidden;
@@ -349,7 +349,7 @@
 }
 
 .now-playing[data-lyrics-size="off"] .now-playing__art-wrapper {
-  max-width: min(440px, 56vh);
+  max-width: min(440px, calc(var(--frame-h) * 0.56));
   max-width: min(440px, calc(100cqh - 120px));
 }
 
@@ -381,9 +381,11 @@ html[data-immersive][data-window] #app.app--queue-open {
 
 html[data-immersive] .now-playing {
   position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
+  /* Covers the frame: the whole window when maximized, the floating window otherwise. */
+  left: var(--frame-x);
+  top: var(--frame-y);
+  width: var(--frame-w);
+  height: var(--frame-h);
   z-index: var(--z-modal);
   --lyrics-font-size: var(--text-3xl);
 }
@@ -412,7 +414,7 @@ html[data-immersive][data-window] .main {
 }
 
 html[data-immersive] .now-playing__content {
-  padding: var(--space-6) clamp(var(--space-6), 5vw, var(--space-12));
+  padding: var(--space-6) clamp(var(--space-6), calc(var(--frame-w) * 0.05), var(--space-12));
 }
 
 /* The controls stay reachable but stop competing with the song. */
@@ -427,7 +429,7 @@ html[data-immersive] .now-playing__topbar:focus-within {
 }
 
 html[data-immersive] .now-playing__body {
-  gap: clamp(var(--space-8), 6vw, var(--space-12));
+  gap: clamp(var(--space-8), calc(var(--frame-w) * 0.06), var(--space-12));
 }
 
 html[data-immersive] .now-playing__left {
@@ -435,7 +437,7 @@ html[data-immersive] .now-playing__left {
 }
 
 html[data-immersive] .now-playing__art-wrapper {
-  max-width: min(440px, 44vh);
+  max-width: min(440px, calc(var(--frame-h) * 0.44));
   max-width: min(440px, calc(100cqh - 150px));
 }
 
@@ -464,6 +466,6 @@ html[data-immersive] .now-playing[data-lyrics-size="off"] .now-playing__left {
 }
 
 html[data-immersive] .now-playing[data-lyrics-size="off"] .now-playing__art-wrapper {
-  max-width: min(520px, 56vh);
+  max-width: min(520px, calc(var(--frame-h) * 0.56));
   max-width: min(520px, calc(100cqh - 150px));
 }

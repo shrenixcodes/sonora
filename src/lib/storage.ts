@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   autoPlayNext: true,
   enableDiscordRpc: true,
   audioOutputDeviceId: null,
+  windowAnimation: "auto",
 };
 
 const VALID_REPEAT_MODES = new Set<RepeatMode>(["off", "all", "one"]);

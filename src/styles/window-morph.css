@@ -1,0 +1,76 @@
+/*
+ * Maximize ⇄ restore morph (src/lib/window-morph.ts).
+ *
+ * The real panels glide between layouts with transform/opacity animations,
+ * which the compositor runs without repainting. Everything here only keeps
+ * that cheap: promoted layers for the moving pieces, no transitions fighting
+ * the animation, and one flat layer for the maximized window's background.
+ */
+
+/* Surface morph (SurfaceMorph): flat stand-ins for the panels and the window
+   background. No images, no blur, so scaling them costs almost nothing. The
+   back layer sits under #app (inserted just before it), the front one over it. */
+.window-morph-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.window-morph-layer--back { z-index: 0; }
+.window-morph-layer--front { z-index: 9000; }
+
+.window-morph-surface {
+  position: fixed;
+  box-sizing: border-box;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+}
+
+.window-morph-surface--backdrop {
+  background: var(--color-bg);
+}
+
+/* The light morph's background layer (playMorph). */
+.window-morph-backdrop {
+  position: fixed;
+  pointer-events: none;
+  background: var(--color-bg);
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+}
+
+/* While morphing, the backdrop layer above stands in for #app's own opaque
+   background, so it can grow instead of appearing at full size at once. */
+html.is-window-morphing #app {
+  background: transparent;
+}
+
+/* A layout switch must not set off size and spacing transitions that would
+   keep moving things after the morph lands. Only the elements that have them
+   are listed (more in symbiote.css): a catch-all such as `#app *`, or a
+   custom property changed on <html>, makes the browser restyle all ~3,700
+   elements at the start and end of every morph, measured at ~120 ms. The
+   moving panels themselves use no backdrop blur. */
+html.is-window-morphing :is(
+  .now-playing__art-wrapper,
+  .now-playing__fs-btn,
+  .now-playing__quality-badge,
+  .lyrics__scroll-lock,
+  .search__filter-chip,
+  .settings__btn,
+  .settings__seg-btn
+) {
+  transition: none !important;
+}
+
+/* The light morph slides the small pieces itself. */
+html.is-window-morphing--lite :is(.queue-panel, .sidebar, .player, .titlebar__left, .titlebar__search, .titlebar__right) {
+  will-change: transform, opacity;
+}
+
+/* Software compositing: only the small sliding pieces get their own layers;
+   promoting the full-window stage would cost a CPU-side texture per frame. */
+html.is-window-morphing--lite :is(.main, .queue-panel),
+html.is-window-morphing--lite #app::before {
+  will-change: auto;
+}

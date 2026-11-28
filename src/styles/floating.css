@@ -10,6 +10,33 @@
  * nearly opaque fills to keep text readable over any wallpaper.
  */
 
+/*
+ * The window itself never changes size: it always covers the monitor's work
+ * area, and "floating" is a frame drawn inside it (src/lib/window-mode.ts).
+ * --frame-* describe that frame in viewport pixels; in the full layout they
+ * fall back to the whole viewport. Styles that used to measure the window
+ * (vw/vh, width media queries) measure the frame instead: the width bands
+ * are classes on <html>, e.g. html.fw-max-700 = frame at most 700px wide.
+ */
+:root {
+  --frame-x: 0px;
+  --frame-y: 0px;
+  --frame-w: 100vw;
+  --frame-h: 100vh;
+  /* Gaps between the frame and the viewport's right and bottom edges. */
+  --frame-r: 0px;
+  --frame-b: 0px;
+}
+
+/* The frame: the whole interface, placed where the floating window is. */
+html[data-window="floating"] #app {
+  position: fixed;
+  left: var(--frame-x);
+  top: var(--frame-y);
+  width: var(--frame-w);
+  height: var(--frame-h);
+}
+
 html[data-window="floating"] {
   --float-gap: 14px;
   --rail-width: 56px;
@@ -163,25 +190,36 @@ html[data-window="floating"] .titlebar {
   gap: var(--space-3);
 }
 
+/* Resize handles hug the frame's edges (the frame is resized in the page,
+   src/lib/window-mode.ts, not by the OS). */
 .window-resize-handle {
   display: none;
   position: fixed;
   z-index: 10001;
+  touch-action: none;
 }
 
 html[data-window="floating"] .window-resize-handle { display: block; }
-.window-resize-handle--north, .window-resize-handle--south { left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
-.window-resize-handle--north { top: 0; }
-.window-resize-handle--south { bottom: 0; }
-.window-resize-handle--west, .window-resize-handle--east { top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
-.window-resize-handle--west { left: 0; }
-.window-resize-handle--east { right: 0; }
+/* Each strip straddles the frame's edge (--rz-out outside, the rest inside),
+   since the window around the frame is free screen space: easier to catch
+   than a strip that only runs along the inside. */
+html[data-window="floating"] { --rz: 12px; --rz-out: 6px; --rz-corner: 18px; }
+.window-resize-handle--north, .window-resize-handle--south { left: calc(var(--frame-x) + var(--rz-corner) - var(--rz-out)); width: calc(var(--frame-w) - 2 * (var(--rz-corner) - var(--rz-out))); height: var(--rz); cursor: ns-resize; }
+.window-resize-handle--north { top: calc(var(--frame-y) - var(--rz-out)); }
+.window-resize-handle--south { top: calc(var(--frame-y) + var(--frame-h) + var(--rz-out) - var(--rz)); }
+.window-resize-handle--west, .window-resize-handle--east { top: calc(var(--frame-y) + var(--rz-corner) - var(--rz-out)); height: calc(var(--frame-h) - 2 * (var(--rz-corner) - var(--rz-out))); width: var(--rz); cursor: ew-resize; }
+.window-resize-handle--west { left: calc(var(--frame-x) - var(--rz-out)); }
+.window-resize-handle--east { left: calc(var(--frame-x) + var(--frame-w) + var(--rz-out) - var(--rz)); }
 .window-resize-handle--northwest, .window-resize-handle--northeast,
-.window-resize-handle--southwest, .window-resize-handle--southeast { width: 14px; height: 14px; }
-.window-resize-handle--northwest { top: 0; left: 0; cursor: nwse-resize; }
-.window-resize-handle--northeast { top: 0; right: 0; cursor: nesw-resize; }
-.window-resize-handle--southwest { bottom: 0; left: 0; cursor: nesw-resize; }
-.window-resize-handle--southeast { bottom: 0; right: 0; cursor: nwse-resize; }
+.window-resize-handle--southwest, .window-resize-handle--southeast { width: var(--rz-corner); height: var(--rz-corner); }
+.window-resize-handle--northwest { top: calc(var(--frame-y) - var(--rz-out)); left: calc(var(--frame-x) - var(--rz-out)); cursor: nwse-resize; }
+.window-resize-handle--northeast { top: calc(var(--frame-y) - var(--rz-out)); left: calc(var(--frame-x) + var(--frame-w) + var(--rz-out) - var(--rz-corner)); cursor: nesw-resize; }
+.window-resize-handle--southwest { top: calc(var(--frame-y) + var(--frame-h) + var(--rz-out) - var(--rz-corner)); left: calc(var(--frame-x) - var(--rz-out)); cursor: nesw-resize; }
+.window-resize-handle--southeast { top: calc(var(--frame-y) + var(--frame-h) + var(--rz-out) - var(--rz-corner)); left: calc(var(--frame-x) + var(--frame-w) + var(--rz-out) - var(--rz-corner)); cursor: nwse-resize; }
+
+/* While the frame is dragged or resized, keep the cursor and skip text selection. */
+html.is-frame-dragging, html.is-frame-dragging * { cursor: grabbing !important; user-select: none !important; }
+html.is-frame-resizing * { user-select: none !important; }
 
 html[data-window="floating"] .titlebar__left,
 html[data-window="floating"] .titlebar__right,
@@ -232,8 +270,7 @@ html[data-window="floating"] .titlebar__grip {
   margin-left: var(--space-1);
   color: var(--color-text-tertiary);
   cursor: grab;
-  -webkit-app-region: drag;
-  app-region: drag;
+  touch-action: none;
 }
 
 html[data-window="floating"] .titlebar__grip:active {
@@ -273,7 +310,7 @@ html[data-window="floating"] .sidebar__playlists:empty {
 html[data-window="floating"] .sidebar__link {
   justify-content: center;
   width: 38px;
-  height: clamp(20px, calc((100vh - 230px) / 10), 38px);
+  height: clamp(20px, calc((var(--frame-h) - 230px) / 10), 38px);
   padding: 0;
   border-radius: var(--radius-full);
 }
@@ -318,11 +355,9 @@ html[data-window="floating"] .player {
   border-radius: var(--radius-full);
 }
 
-@media (max-width: 700px) {
-  html[data-window="floating"] .player {
-    gap: var(--space-2);
-    padding: 0 var(--space-3) 0 var(--space-2);
-  }
+html[data-window="floating"]:where(.fw-max-700) .player {
+  gap: var(--space-2);
+  padding: 0 var(--space-3) 0 var(--space-2);
 }
 
 html[data-window="floating"] .player__artwork {
@@ -354,14 +389,12 @@ html[data-window="floating"] .shelf {
   gap: var(--space-3);
 }
 
-@media (min-width: 1040px) {
-  html[data-window="floating"] #app.app--queue-open .shelf {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+html[data-window="floating"]:where(.fw-min-1040) #app.app--queue-open .shelf {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 
-  html[data-window="floating"] #app:not(.app--queue-open) .shelf {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
+html[data-window="floating"]:where(.fw-min-1040) #app:not(.app--queue-open) .shelf {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 html[data-window="floating"] .shelf .shelf-card {
@@ -377,6 +410,11 @@ html[data-window="floating"] dialog {
 
 html[data-window="floating"] dialog::backdrop {
   background: transparent;
+}
+
+/* Modal dialogs center on the frame, not on the whole screen. */
+html[data-window="floating"] dialog[open] {
+  inset: var(--frame-y) var(--frame-r) var(--frame-b) var(--frame-x);
 }
 
 html[data-window="floating"]:has(dialog[open]) :is(.titlebar, .sidebar, .main, .queue-panel, .player, #app::before) {

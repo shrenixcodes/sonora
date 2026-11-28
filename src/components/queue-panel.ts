@@ -5,6 +5,7 @@
  * Opened and closed from the player's queue button; the choice is remembered.
  */
 
+import { currentFrameWidth } from "@/lib/window-mode";
 import { el, formatTime } from "@/lib/dom";
 import { attachSongContextMenu } from "@/components/song-context-menu";
 import { createSongRadioButton } from "@/components/song-radio";
@@ -31,7 +32,8 @@ class QueuePanelState extends EventEmitter<{ change: boolean }> {
 
   init(): void {
     const saved = localStorage.getItem(STORAGE_KEY);
-    this.open = saved ? saved === "open" : window.innerWidth >= AUTO_OPEN_MIN_WIDTH;
+    // The window always covers the screen now; what matters is the frame the layout fills.
+    this.open = saved ? saved === "open" : currentFrameWidth() >= AUTO_OPEN_MIN_WIDTH;
     this.apply();
   }
 
@@ -71,12 +73,12 @@ export function createQueuePanel(): HTMLElement {
     children: [
       el("div", {
         className: "queue-panel__header",
-        attrs: { "data-tauri-drag-region": "" },
+        attrs: { "data-drag-region": "" },
         children: [
           el("div", {
             className: "queue-panel__header-title",
-            attrs: { "data-tauri-drag-region": "" },
-            children: [el("h2", { className: "queue-panel__title", attrs: { "data-tauri-drag-region": "" }, text: "Up next" }), count],
+            attrs: { "data-drag-region": "" },
+            children: [el("h2", { className: "queue-panel__title", attrs: { "data-drag-region": "" }, text: "Up next" }), count],
           }),
           closeBtn,
         ],

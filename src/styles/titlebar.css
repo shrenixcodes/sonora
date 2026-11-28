@@ -17,8 +17,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  -webkit-app-region: drag;
-  app-region: drag;
+  /* No app-region: drag here. That hands the press to Windows as a native
+     title bar, so the page never sees it; the floating frame is moved by the
+     page (data-drag-region, src/lib/window-mode.ts) and the OS window must
+     stay maximized. */
 }
 
 .titlebar__left button,
@@ -31,8 +33,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  -webkit-app-region: drag;
-  app-region: drag;
   cursor: grab;
 }
 
@@ -103,7 +103,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  width: min(440px, 42vw);
+  width: min(440px, calc(var(--frame-w) * 0.42));
   height: 30px;
   padding: 0 var(--space-2) 0 var(--space-3);
   border-radius: var(--radius-full);
