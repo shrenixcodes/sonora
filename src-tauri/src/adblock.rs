@@ -1,5 +1,7 @@
 //! Request filtering for the YouTube Music webview on Windows.
 
+use std::path::Path;
+
 use adblock::{engine::Engine, lists::FilterSet, request::Request};
 use tauri::{Runtime, WebviewWindow};
 use webview2_com::{
@@ -35,6 +37,8 @@ const LISTS: [(&str, &str, &str, &str); 4] = [
 ];
 const MAX_LIST_BYTES: u64 = 5 * 1024 * 1024;
 const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+/// Part of the compiled engine's cache key; change it when list handling changes.
+const ENGINE_CACHE_TAG: &str = "sonora-adblock-1";
 
 fn valid_list(content: &str, title: &str) -> bool {
     content.len() > 1000
@@ -42,7 +46,7 @@ fn valid_list(content: &str, title: &str) -> bool {
         && content.lines().take(20).any(|line| line.starts_with(title))
 }
 
-fn load_lists(cache: Option<&std::path::Path>) -> Vec<String> {
+fn load_lists(cache: Option<&Path>) -> Vec<String> {
     LISTS
         .iter()
         .map(|(name, _, title, bundled)| {
@@ -69,7 +73,70 @@ fn build_engine(lists: &[String]) -> Engine {
     Engine::new_with_filter_set(filters)
 }
 
-fn refresh_lists(cache: &std::path::Path) -> bool {
+/// Stable FNV-1a hash of the lists, so a compiled engine is reused only for identical rules.
+fn fingerprint(lists: &[String]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut feed = |bytes: &[u8]| {
+        for byte in bytes {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    feed(ENGINE_CACHE_TAG.as_bytes());
+    for list in lists {
+        feed(&(list.len() as u64).to_le_bytes());
+        feed(list.as_bytes());
+    }
+    hash
+}
+
+fn engine_path(cache: &Path, lists: &[String]) -> std::path::PathBuf {
+    cache.join(format!("engine-{:016x}.dat", fingerprint(lists)))
+}
+
+/// Reloads the engine compiled from these exact lists, compiling and saving it when missing.
+///
+/// Compiling the bundled lists takes hundreds of milliseconds; reloading takes a few.
+fn load_engine(cache: Option<&Path>) -> Engine {
+    let lists = load_lists(cache);
+    let Some(cache) = cache else {
+        return build_engine(&lists);
+    };
+    let path = engine_path(cache, &lists);
+    if let Ok(bytes) = std::fs::read(&path) {
+        let mut engine = Engine::default();
+        if engine.deserialize(&bytes).is_ok() {
+            return engine;
+        }
+    }
+    let engine = build_engine(&lists);
+    store_engine(cache, &path, &engine);
+    engine
+}
+
+fn store_engine(cache: &Path, path: &Path, engine: &Engine) {
+    if std::fs::create_dir_all(cache).is_err() {
+        return;
+    }
+    // Engines compiled from older lists are never read again.
+    if let Ok(entries) = std::fs::read_dir(cache) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("engine-") && name.ends_with(".dat") && entry.path() != path {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    let temporary = path.with_extension("tmp");
+    if std::fs::write(&temporary, engine.serialize()).is_err()
+        || std::fs::rename(&temporary, path).is_err()
+    {
+        let _ = std::fs::remove_file(temporary);
+    }
+}
+
+fn refresh_lists(cache: &Path) -> bool {
     if std::fs::create_dir_all(cache).is_err() {
         return false;
     }
@@ -156,9 +223,7 @@ pub fn attach<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
         .map(|path| path.join("adblock"));
     let window = window.clone();
     std::thread::spawn(move || {
-        let engine = std::sync::Arc::new(std::sync::RwLock::new(build_engine(&load_lists(
-            cache.as_deref(),
-        ))));
+        let engine = std::sync::Arc::new(std::sync::RwLock::new(load_engine(cache.as_deref())));
         let active_engine = engine.clone();
         if let Err(error) = window.with_webview(move |platform| unsafe {
             let result = (|| -> windows::core::Result<()> {
@@ -222,7 +287,7 @@ pub fn attach<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
         if let Some(cache) = cache
             && refresh_lists(&cache)
         {
-            let replacement = build_engine(&load_lists(Some(&cache)));
+            let replacement = load_engine(Some(&cache));
             if let Ok(mut active) = engine.write() {
                 *active = replacement;
             }
@@ -281,5 +346,60 @@ mod tests {
             "image",
             "GET"
         ));
+    }
+
+    fn engine_files(cache: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(cache)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("engine-"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn reuses_the_compiled_engine_until_the_lists_change() {
+        let cache = std::env::temp_dir().join(format!("sonora-adblock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&cache);
+        let source = "https://music.youtube.com/watch?v=test";
+        let ad = "https://ad.doubleclick.net/ddm/trackimp/example";
+
+        let compiled = load_engine(Some(&cache));
+        let saved = engine_files(&cache);
+        assert_eq!(saved.len(), 1);
+        assert!(should_block(&compiled, source, ad, "image", "GET"));
+
+        let reloaded = load_engine(Some(&cache));
+        assert_eq!(engine_files(&cache), saved);
+        assert!(should_block(&reloaded, source, ad, "image", "GET"));
+
+        // A corrupt file is replaced by a freshly compiled engine.
+        std::fs::write(cache.join(&saved[0]), b"corrupt").unwrap();
+        let rebuilt = load_engine(Some(&cache));
+        assert!(should_block(&rebuilt, source, ad, "image", "GET"));
+        assert!(std::fs::read(cache.join(&saved[0])).unwrap().len() > 1000);
+
+        // A refreshed list produces a new engine and drops the stale one.
+        let (name, _, _, bundled) = LISTS[2];
+        std::fs::write(
+            cache.join(name),
+            format!("{bundled}\n||sonora-test.example^\n"),
+        )
+        .unwrap();
+        let refreshed = load_engine(Some(&cache));
+        let replaced = engine_files(&cache);
+        assert_eq!(replaced.len(), 1);
+        assert_ne!(replaced, saved);
+        assert!(should_block(
+            &refreshed,
+            source,
+            "https://sonora-test.example/pixel.gif",
+            "image",
+            "GET"
+        ));
+
+        let _ = std::fs::remove_dir_all(&cache);
     }
 }
