@@ -508,6 +508,8 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     first.engine.playTrack(list[1], list);
     first.engine.handleBridgeState(report({ reason: "play", videoId: "bbbbbbbbbbb" }));
     first.engine.playNext(list[0]);
+    // Closing the app flushes the batched save.
+    window.dispatchEvent(new Event("pagehide"));
 
     const second = setup();
     expect(second.sent).toEqual([]);
@@ -520,6 +522,28 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     second.engine.togglePlay();
     expect(second.sent).toEqual([{ action: "load", value: "bbbbbbbbbbb" }]);
     expect(second.engine.currentState.status).toBe("loading");
+  });
+
+  it("writes the queue once after a run of skips settles, with the latest track", () => {
+    vi.useFakeTimers();
+    try {
+      const { engine } = setup();
+      engine.playTrack(list[0], list);
+      vi.advanceTimersByTime(1000);
+      const writes = vi.spyOn(Storage.prototype, "setItem");
+      const queueWrites = () => writes.mock.calls.filter(([key]) => key === "sonora:queue").length;
+
+      engine.next();
+      engine.next();
+      engine.previous();
+      expect(queueWrites()).toBe(0);
+
+      vi.advanceTimersByTime(1000);
+      expect(queueWrites()).toBe(1);
+      expect(storage.getLastTrack()?.id).toBe("bbbbbbbbbbb");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the track duration when a time report carries a crossfaded stream's length", () => {
