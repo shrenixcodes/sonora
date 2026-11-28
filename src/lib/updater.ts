@@ -6,6 +6,7 @@
  */
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { FALLBACK_APP_INFO } from "@/lib/app-info";
 import { EventEmitter } from "@/lib/events";
 
 export interface ReleaseCheckResult {
@@ -41,7 +42,7 @@ interface UpdaterEvents {
   change: UpdaterSnapshot;
 }
 
-const FALLBACK_VERSION = "0.7.20";
+const FALLBACK_VERSION = FALLBACK_APP_INFO.version;
 export const SONORA_REPO_URL = "https://github.com/shrenixcodes/sonora";
 const LATEST_RELEASE_URL = `${SONORA_REPO_URL}/releases/latest`;
 
