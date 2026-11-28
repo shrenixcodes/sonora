@@ -396,6 +396,38 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     });
   });
 
+  it("stops filling in progress while the window is hidden and catches up when shown", () => {
+    vi.useFakeTimers();
+    const setHidden = (hidden: boolean) => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    try {
+      const { engine } = setup();
+      engine.playTrack(list[0], list);
+      engine.handleBridgeState(report({ reason: "play", videoId: "aaaaaaaaaaa", currentTime: 10 }));
+      const ticks = vi.fn();
+      engine.on("timeUpdate", ticks);
+
+      vi.advanceTimersByTime(1000);
+      expect(ticks).toHaveBeenCalledTimes(4);
+
+      setHidden(true);
+      ticks.mockClear();
+      vi.advanceTimersByTime(5000);
+      expect(ticks).not.toHaveBeenCalled();
+
+      setHidden(false);
+      expect(ticks).toHaveBeenCalledTimes(1);
+      expect(engine.currentState.currentTime).toBeGreaterThan(15);
+      vi.advanceTimersByTime(1000);
+      expect(ticks).toHaveBeenCalledTimes(5);
+    } finally {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+      vi.useRealTimers();
+    }
+  });
+
   it("explains that playback needs the desktop app", () => {
     const { engine } = setup(false);
     engine.playTrack(list[0], list);

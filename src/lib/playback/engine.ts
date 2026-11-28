@@ -87,6 +87,15 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     if (bridge.available) {
       bridge.onState((s) => this.handleBridgeState(s)).catch((err) => this.fail(err));
     }
+    // Nobody sees the progress bar while the window is hidden or minimized.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        this.stopTicker();
+      } else if (this.state.status === "playing") {
+        this.tick();
+        this.startTicker();
+      }
+    });
     storage.on("settingsChange", (settings) => {
       const next = audioConfigFromSettings(settings);
       const key = JSON.stringify(next);
@@ -668,14 +677,16 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   /** The page reports about once a second; fill in between so the progress bar moves smoothly. */
   private startTicker(): void {
-    if (this.ticker !== null) return;
-    this.ticker = window.setInterval(() => {
-      if (this.state.status !== "playing" || this.state.isAd) return;
-      const elapsed = (performance.now() - this.lastReport.at) / 1000;
-      const time = Math.min(this.lastReport.time + elapsed, this.state.duration || Infinity);
-      this.state.currentTime = time;
-      this.emit("timeUpdate", { currentTime: time, duration: this.state.duration });
-    }, TICK_MS);
+    if (this.ticker !== null || document.hidden) return;
+    this.ticker = window.setInterval(() => this.tick(), TICK_MS);
+  }
+
+  private tick(): void {
+    if (this.state.status !== "playing" || this.state.isAd) return;
+    const elapsed = (performance.now() - this.lastReport.at) / 1000;
+    const time = Math.min(this.lastReport.time + elapsed, this.state.duration || Infinity);
+    this.state.currentTime = time;
+    this.emit("timeUpdate", { currentTime: time, duration: this.state.duration });
   }
 
   private stopTicker(): void {
