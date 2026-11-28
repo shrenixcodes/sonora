@@ -305,6 +305,58 @@ describe("YouTube Music bridge script", () => {
       expect(saverParsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([137, 249, 140]);
     });
 
+    it("keeps only the smallest video stream per codec whatever the audio quality", () => {
+      setupPage({ ad: false });
+      localStorage.setItem("yt-player-quality", JSON.stringify({ data: "auto" }));
+      const bridge = loadBridge();
+
+      const payload = () =>
+        JSON.stringify({
+          videoDetails: { videoId: "dQw4w9WgXcQ", title: "Track" },
+          streamingData: {
+            adaptiveFormats: [
+              { itag: 137, mimeType: 'video/mp4; codecs="avc1.640028"', height: 1080, bitrate: 4000000 },
+              { itag: 160, mimeType: 'video/mp4; codecs="avc1.4d400c"', height: 144, bitrate: 110000 },
+              { itag: 248, mimeType: 'video/webm; codecs="vp9"', height: 1080, bitrate: 2600000 },
+              { itag: 278, mimeType: 'video/webm; codecs="vp9"', height: 144, bitrate: 95000 },
+              { itag: 399, mimeType: 'video/mp4; codecs="av01.0.08M.08"', height: 1080, bitrate: 2000000 },
+              {
+                itag: 251,
+                mimeType: 'audio/webm; codecs="opus"',
+                bitrate: 160000,
+                audioQuality: "AUDIO_QUALITY_MEDIUM",
+              },
+            ],
+          },
+        });
+
+      for (const quality of ["lossless", "high", "balanced", "saver"]) {
+        bridge.exec("audioConfig", { quality, profile: "off", normalizeVolume: false } as unknown as number);
+        const parsed = JSON.parse(payload()) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+        expect(parsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([160, 278, 399, 251]);
+        expect(JSON.parse(localStorage.getItem("yt-player-quality")!).data).toBe("auto");
+      }
+    });
+
+    it("leaves video streams alone when audio only comes muxed with video", () => {
+      setupPage({ ad: false });
+      const bridge = loadBridge();
+      bridge.exec("audioConfig", { quality: "high", profile: "off", normalizeVolume: true } as unknown as number);
+
+      const parsed = JSON.parse(
+        JSON.stringify({
+          videoDetails: { videoId: "dQw4w9WgXcQ" },
+          streamingData: {
+            adaptiveFormats: [
+              { itag: 22, mimeType: 'video/mp4; codecs="avc1.64001F, mp4a.40.2"', height: 720 },
+              { itag: 18, mimeType: 'video/mp4; codecs="avc1.42001E, mp4a.40.2"', height: 360 },
+            ],
+          },
+        }),
+      ) as { streamingData: { adaptiveFormats: Array<{ itag: number }> } };
+      expect(parsed.streamingData.adaptiveFormats.map((f) => f.itag)).toEqual([22, 18]);
+    });
+
     it("avoids forcing tiny quality when only muxed formats exist in high or lossless mode", () => {
       const { video, player } = setupPage({ ad: false });
       const playerWithRange = player as HTMLElement & {
