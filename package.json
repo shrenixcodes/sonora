@@ -11,7 +11,8 @@
     "tauri:build": "tauri build",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "version:bump": "node scripts/bump-version.mjs"
   },
   "keywords": [
     "music",

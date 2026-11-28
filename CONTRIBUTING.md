@@ -33,6 +33,8 @@ cd ..
 pnpm tauri:build
 ```
 
+To change the app version, run `pnpm version:bump <major.minor.patch>`; it updates `package.json`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`, and the frontend fallback together.
+
 Describe the problem, the final behavior, and the checks you ran in your pull request. If a check cannot run in your environment, explain why. For UI changes, include a genuine capture from the Windows app with account details and personal listening data removed (see [the capture guide](docs/design/captures.md)).
 
 ## Design
