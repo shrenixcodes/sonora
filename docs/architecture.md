@@ -26,7 +26,7 @@ flowchart LR
 | --- | --- |
 | [commands.rs](../src-tauri/src/commands.rs) | `get_app_info`, `get_platform_info` — returns compiled crate version and host OS/architecture |
 | [ytm.rs](../src-tauri/src/ytm.rs) | `ytm_control`, `ytm_request`, `ytm_report`, `ytm_response`, `ytm_set_signin_visible`, `ytm_sign_out` — bridges playback controls, audio config, account status, and catalog queries (`ytm://state`, `ytm://response`) |
-| [adblock.rs](../src-tauri/src/adblock.rs) | Intercepts WebView2 network requests on Windows using `adblock-rust` (`0.13.6`) with bundled EasyList & Brave filter lists (refreshed at most once every 24h over HTTPS) alongside `ytm_ad_filter.js` |
+| [adblock.rs](../src-tauri/src/adblock.rs) | Intercepts WebView2 network requests on Windows using `adblock-rust` (`0.13.6`) with bundled EasyList & Brave filter lists (refreshed at most once every 24h over HTTPS, with the compiled engine cached on disk so launches skip re-parsing) alongside `ytm_ad_filter.js` |
 | [audio_devices.rs](../src-tauri/src/audio_devices.rs) | `get_audio_output_devices`, `set_audio_output_device` — enumerates Windows Core Audio endpoints and routes Sonora's process tree (`sonora.exe` + WebView2 children) via `AudioPolicyConfig` |
 | [window_mode.rs](../src-tauri/src/window_mode.rs) | `set_floating_regions`, `present_main_window` — samples cursor bounds (`50ms` active / `500ms` idle) in floating layout so transparent gaps pass clicks to the desktop; emits `sonora://will-minimize`, `sonora://minimize`, and `sonora://restore` |
 | [discord.rs](../src-tauri/src/discord.rs) | `discord_set_activity`, `discord_clear_activity` — background worker maintaining Discord IPC (*Listening to Sonora*) with `15s` reconnect and `60s` keepalive refresh |
