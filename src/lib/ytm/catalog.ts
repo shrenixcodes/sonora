@@ -6,6 +6,7 @@
  * doesn't refetch it; identical requests in flight share one call.
  */
 
+import { BoundedCache } from "@/lib/cache";
 import { CatalogError, requestCatalog, type CatalogRequest } from "@/lib/ytm/client";
 import {
   parseAccountProfile,
@@ -65,6 +66,9 @@ export interface SearchResults {
 const HOME_TTL_MS = 5 * 60_000;
 /** Playlists change rarely; a short cache makes playing one again instant. */
 const PLAYLIST_TTL_MS = 10 * 60_000;
+/** A long session browses far more pages than it revisits; keep the recent ones. */
+const MAX_CACHED_PLAYLISTS = 30;
+const MAX_CACHED_ARTISTS = 50;
 /**
  * The YouTube Music page takes a few seconds to load when Sonora starts, and
  * reloads whenever a song is loaded. A request sent while it loads either gets
@@ -213,8 +217,8 @@ export class Catalog {
   private home: { page: HomePage; at: number } | null = null;
   private explore: { shelves: HomeShelf[]; at: number } | null = null;
   private inFlight = new Map<string, Promise<unknown>>();
-  private playlists = new Map<string, { tracks: Track[]; at: number }>();
-  private artists = new Map<string, { page: ArtistPage; at: number }>();
+  private playlists = new BoundedCache<string, { tracks: Track[]; at: number }>(MAX_CACHED_PLAYLISTS);
+  private artists = new BoundedCache<string, { page: ArtistPage; at: number }>(MAX_CACHED_ARTISTS);
   /** How many pages each Home page has loaded, to cap how far it goes. */
   private homePages = new WeakMap<HomePage, number>();
 
