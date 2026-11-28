@@ -178,7 +178,8 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       if (first) this.playTrack(first);
       return;
     }
-    if (this.needsInitialLoad) {
+    // The page never loaded a track that failed, so "play" would resume whatever it last had.
+    if (this.needsInitialLoad || this.state.status === "error") {
       this.load(this.state.currentTrack);
       return;
     }
@@ -186,11 +187,21 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   }
 
   resume(): void {
-    if (this.needsInitialLoad && this.state.currentTrack) {
+    if ((this.needsInitialLoad || this.state.status === "error") && this.state.currentTrack) {
       this.load(this.state.currentTrack);
       return;
     }
     this.send({ action: "play" });
+  }
+
+  /** Whether the track that failed to load can be asked for again. */
+  get canRetry(): boolean {
+    return this.bridge.available && this.state.status === "error" && this.state.currentTrack !== null;
+  }
+
+  /** Loads the current track again after it failed to load. */
+  retry(): void {
+    if (this.canRetry && this.state.currentTrack) this.load(this.state.currentTrack);
   }
 
   pause(): void {
@@ -520,6 +531,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.needsInitialLoad = false;
     this.setCurrent(track, false);
     this.state.status = "loading";
+    this.state.error = undefined;
     this.state.duration = track.duration || 0;
     this.state.audioInfo = null;
     this.setTime(0);
@@ -674,7 +686,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     this.clearSkipTimer();
     this.stopTicker();
     this.state.status = "error";
-    this.state.error = typeof err === "string" ? err : "YouTube Music did not respond. Try again.";
+    this.state.error = typeof err === "string" ? err : "YouTube Music did not respond.";
     this.emit("stateChange", this.currentState);
   }
 

@@ -191,7 +191,11 @@ class PlayerBar {
       onClick: () => {
         const track = playerEngine.currentTrack;
         const state = playerEngine.currentState;
-        if (!track || state.isAd || state.error || state.status === "loading" || !track.artist.trim()) return;
+        if (playerEngine.canRetry) {
+          playerEngine.retry();
+          return;
+        }
+        if (!track || state.error || state.isAd || state.status === "loading" || !track.artist.trim()) return;
         openArtist({ id: track.artistId, name: track.artist });
       },
     });
@@ -498,13 +502,28 @@ class PlayerBar {
   ): void {
     if (!this.elements) return;
     const { artist: artistEl, artistViewport, artistText } = this.elements;
-    const changed = artistText.textContent !== text;
-    if (changed) artistText.textContent = text;
+    // A failed track offers "Try again" first, so it stays visible however narrow the line is.
+    const canRetry = Boolean(state.error && track && playerEngine.canRetry);
+    const shown = canRetry ? `Try again · ${text}` : text;
+    const changed = artistText.textContent !== shown;
+    if (changed) {
+      if (canRetry) {
+        artistText.replaceChildren(
+          el("span", { className: "player__retry", text: "Try again" }),
+          document.createTextNode(` · ${text}`),
+        );
+      } else {
+        artistText.textContent = text;
+      }
+    }
     const canOpen = Boolean(
       track && !state.error && !state.isAd && state.status !== "loading" && track.artist.trim(),
     );
-    artistEl.toggleAttribute("disabled", !canOpen);
-    if (canOpen && track) {
+    artistEl.toggleAttribute("disabled", !canOpen && !canRetry);
+    if (canRetry) {
+      artistEl.setAttribute("title", `${text} Click to try again.`);
+      artistEl.setAttribute("aria-label", `${text} Try again`);
+    } else if (canOpen && track) {
       artistEl.setAttribute("title", `Open artist: ${track.artist}`);
       artistEl.setAttribute("aria-label", `Open artist ${track.artist}`);
     } else {
