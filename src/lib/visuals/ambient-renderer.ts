@@ -219,6 +219,10 @@ export class AmbientVisualRenderer {
   };
   private isRunning = false;
   private paletteConverged = false;
+  /** False while the music is paused; animated modes then hold still once colors settle. */
+  private playbackActive = true;
+  /** When the loop last stopped, so the shader clock can skip the stopped time. */
+  private stoppedAt: number | null = null;
   private mode: AmbientVisualMode = "aurora";
   private targetFps = 30;
   private lastFrameTime = 0;
@@ -361,9 +365,27 @@ export class AmbientVisualRenderer {
     return this.mode === "minimal" || this.mode === "cinematic";
   }
 
+  /** Static modes never move, and nothing needs to move while the music is paused. */
+  private canHoldStill(): boolean {
+    return this.isStaticMode() || !this.playbackActive;
+  }
+
+  /** Runs frames until new colors settle, for a renderer that is otherwise holding still. */
   private wakeStaticMode(): void {
     this.paletteConverged = false;
-    if (this.isStaticMode() && !this.isRunning && this.gl && !document.hidden) {
+    if (this.canHoldStill() && !this.isRunning && this.gl && !document.hidden && !this.pausedForMorph) {
+      this.resume();
+    }
+  }
+
+  /**
+   * Follows playback: animated modes keep moving while music plays and freeze
+   * on their last frame once paused and settled, then carry on from that frame.
+   */
+  setPlaybackActive(active: boolean): void {
+    if (this.playbackActive === active) return;
+    this.playbackActive = active;
+    if (active && !this.isRunning && this.gl && !document.hidden && !this.pausedForMorph) {
       this.resume();
     }
   }
@@ -460,10 +482,15 @@ export class AmbientVisualRenderer {
     if (this.isRunning || this.mode === "none") return;
     this.isRunning = true;
     this.lastFrameTime = performance.now();
+    if (this.stoppedAt !== null) {
+      this.startTime += this.lastFrameTime - this.stoppedAt;
+      this.stoppedAt = null;
+    }
     this.loop();
   }
 
   pause(): void {
+    if (this.isRunning) this.stoppedAt = performance.now();
     this.isRunning = false;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
@@ -503,8 +530,8 @@ export class AmbientVisualRenderer {
     this.lastFrameTime = now - (elapsed % interval);
 
     this.render();
-    // Static modes (minimal, cinematic) have no time-varying animation once colors settle.
-    if (this.gl && this.isStaticMode() && this.paletteConverged) {
+    // Static modes, or any mode while paused, have nothing left to draw once colors settle.
+    if (this.gl && this.canHoldStill() && this.paletteConverged) {
       this.pause();
       return;
     }

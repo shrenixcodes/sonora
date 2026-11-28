@@ -63,6 +63,10 @@ export function renderNowPlaying(container: HTMLElement): void {
   lyricsController.updateTime(playerEngine.currentState.currentTime);
   const openingPalette = playerEngine.currentPalette;
   if (openingPalette) visualEngine.setPalette(openingPalette);
+  // Loading counts as playing so the visuals do not stall between tracks.
+  const visualsFollowPlayback = (status: string) =>
+    visualEngine.setPlaybackActive(status === "playing" || status === "loading");
+  visualsFollowPlayback(playerEngine.currentState.status);
 
   // ── Top Bar Controls ────────────────────────────────────
   const closeBtn = el("button", {
@@ -379,6 +383,7 @@ export function renderNowPlaying(container: HTMLElement): void {
       visualEngine.setPalette(palette);
     }),
   );
+  unsubs.push(playerEngine.on("stateChange", (state) => visualsFollowPlayback(state.status)));
 
   unsubs.push(
     playerEngine.on("lyricsChange", (lyrics) => {
