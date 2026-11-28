@@ -128,8 +128,8 @@ body {
   height: 130%;
   max-width: none;
   object-fit: cover;
-  filter: blur(var(--ambient-glow-blur)) saturate(140%);
-  /* Keep the blurred artwork cached in its own texture layer across transforms. */
+  /* Already blurred once into a small canvas (src/lib/ambience.ts); a live
+     filter here would be redrawn under every frame of anything above it. */
   transform: translateZ(0);
   will-change: opacity;
   opacity: 0;
