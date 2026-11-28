@@ -10,6 +10,7 @@ All notable changes to Sonora are documented in this file.
 - Pressing Next at the end of the queue with Autoplay off now shows an "End of queue" hint above the player instead of doing nothing.
 - The Now Playing quality label is plain text; clicking it steps through Saver, Balanced, High, and Lossless.
 - A failed play, pause, seek, or volume command is logged instead of replacing the player with "YouTube Music did not respond"; only a failed track load shows that error.
+- A song that fails to load shows a "Try again" link in the player that loads it again; pressing Play retries it too instead of resuming whatever the page last had.
 - The floating window can be dragged to another monitor, and Win+Left, Win+Right, and Snap Layouts place it instead of being undone.
 
 ### Performance
