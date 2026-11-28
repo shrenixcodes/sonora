@@ -74,16 +74,6 @@
   const saveAudioConfig = (next) => {
     try {
       localStorage.setItem(AUDIO_CONFIG_STORAGE_KEY, JSON.stringify(next));
-      if (next.quality === "lossless" || next.quality === "high") {
-        localStorage.setItem(
-          "yt-player-quality",
-          JSON.stringify({
-            data: "highres",
-            expiration: Date.now() + 30 * 86400 * 1000,
-            creation: Date.now(),
-          }),
-        );
-      }
     } catch {
       // Storage may be blocked in restricted contexts.
     }
@@ -147,6 +137,26 @@
       if (!prev || bitrateOf(f) > bitrateOf(prev)) best.set(fam, f);
     }
     return Array.from(best.values());
+  };
+
+  // Only the audio is ever heard. Keeping the smallest picture of each video codec
+  // stops the player ramping up to HD frames, while still leaving it a codec it can decode.
+  const smallestVideoPerCodec = (videoFormats) => {
+    const smallest = new Map();
+    const pixels = (f) => Number(f?.height) || Number.MAX_SAFE_INTEGER;
+    for (const f of videoFormats) {
+      const mime = typeof f?.mimeType === "string" ? f.mimeType.toLowerCase() : "";
+      const codec = (mime.split("codecs=")[1] || mime).replace(/["\s]/g, "").split(".")[0];
+      const prev = smallest.get(codec);
+      if (
+        !prev ||
+        pixels(f) < pixels(prev) ||
+        (pixels(f) === pixels(prev) && bitrateOf(f) < bitrateOf(prev))
+      ) {
+        smallest.set(codec, f);
+      }
+    }
+    return videoFormats.filter((f) => Array.from(smallest.values()).includes(f));
   };
 
   const selectAudioFormats = (audioFormats, requestedQuality) => {
@@ -308,7 +318,7 @@
             : selected[0];
         if (mutateFormats) {
           try {
-            streaming.adaptiveFormats = [...videoFormats, ...selected];
+            streaming.adaptiveFormats = [...smallestVideoPerCodec(videoFormats), ...selected];
           } catch {
             // Frozen or read-only player response objects remain intact.
           }
