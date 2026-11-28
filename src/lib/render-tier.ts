@@ -40,3 +40,10 @@ export function renderTier(): RenderTier {
   cached ??= detect();
   return cached;
 }
+
+/** Exposes the tier to CSS, which swaps glass blurs for solid tints on "software". */
+export function markRenderTier(root: HTMLElement = document.documentElement): RenderTier {
+  const tier = renderTier();
+  root.dataset.renderTier = tier;
+  return tier;
+}

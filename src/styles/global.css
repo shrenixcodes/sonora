@@ -173,6 +173,32 @@ body {
   }
 }
 
+/* ── Software rendering ──────────────────────────────────
+ * Without a usable GPU every blurred layer is redrawn by the CPU each frame
+ * (src/lib/render-tier.ts). Use the reduced-transparency look: solid panel
+ * tints instead of glass, and the color-wash backdrop without the blurred
+ * artwork layer.
+ */
+html[data-render-tier="software"] {
+  --glass-backdrop-thin: none;
+  --glass-backdrop: none;
+  --glass-backdrop-strong: none;
+  --glass-backdrop-deep: none;
+  --color-panel: #1A1621;
+}
+
+html[data-render-tier="software"][data-theme="light"] {
+  --color-panel: #F8F5EC;
+}
+
+html[data-render-tier="software"][data-window="floating"] {
+  --float-fill: color-mix(in oklab, var(--color-bg) 92%, var(--ambience-2));
+}
+
+html[data-render-tier="software"] .ambient-art {
+  display: none;
+}
+
 /* ── Scrollbar ───────────────────────────────────────────── */
 
 ::-webkit-scrollbar {

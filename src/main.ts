@@ -15,6 +15,7 @@ import { storage } from "@/lib/storage";
 import { playerEngine } from "@/lib/playback/engine";
 import { AmbientArtwork, applyAmbience, syncShellAccent } from "@/lib/ambience";
 import { initWindowMode } from "@/lib/window-mode";
+import { markRenderTier } from "@/lib/render-tier";
 import { discordRpc } from "@/lib/discord-rpc";
 import { searchQuery } from "@/lib/search-query";
 import { account } from "@/lib/ytm/account";
@@ -100,6 +101,8 @@ function init(): void {
     .finally(() => {
       if (launching) showLaunchSplash().catch((err) => console.error("[main] launch animation failed:", err));
     });
+
+  markRenderTier();
 
   // Register routes
   router
