@@ -307,8 +307,9 @@ function switchLayout(mode: WindowMode, changed: boolean): void {
  * Switches the layout. With `animate`, the panels' surfaces travel from their
  * boxes in the current layout to their boxes in the new one (both share one
  * viewport, so the "before" boxes are simply measured here). The default
- * morph (SurfaceMorph) fades the old content out for a moment first, then
- * switches; the light one (no GPU) switches at once and slides the small pieces.
+ * morph (SurfaceMorph) switches at once and carries the real panels, at their
+ * real size, along outlines travelling between the two; the light one (no
+ * GPU) also switches at once but only slides the small pieces.
  */
 function applyMode(mode: WindowMode, animate: boolean): void {
   const prevMode = currentMode;
@@ -346,32 +347,15 @@ function applyMode(mode: WindowMode, animate: boolean): void {
     return;
   }
 
-  // Lay the new layout out once to learn its boxes and looks, then put the
-  // current one back; all in this task, so nothing of it is drawn.
-  currentMode = mode;
-  document.documentElement.dataset.window = mode;
-  applyFrame();
+  // Read the old looks, apply the new layout and read its boxes and looks,
+  // then start the morph: all in this task, so the old layout's last frame
+  // stays up until the first frame of the panels travelling.
+  const looksBefore = surfacesOf(before);
+  switchLayout(mode, true);
   const after = measureLayout(mode);
-  const targets = surfacesOf(after);
-  currentMode = prevMode;
-  document.documentElement.dataset.window = prevMode;
-  applyFrame();
-
-  const surfaces = new SurfaceMorph(before, after, targets);
-  runningMorph = surfaces;
-  whenDone(surfaces);
-  void surfaces.ready.then(() => {
-    if (runningMorph !== surfaces) return;
-    // Start the travel first: a light commit, so it is running on the
-    // compositor before the main thread spends 100-250 ms painting the new
-    // layout. Switch that a frame later, hidden under the travelling surfaces.
-    surfaces.travel();
-    requestAnimationFrame(() =>
-      setTimeout(() => {
-        if (runningMorph === surfaces) switchLayout(mode, true);
-      }, 0),
-    );
-  });
+  const live = new SurfaceMorph(before, after, { before: looksBefore, after: surfacesOf(after) });
+  runningMorph = live;
+  whenDone(live);
 }
 
 function effectiveMode(): WindowMode {

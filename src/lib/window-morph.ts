@@ -325,16 +325,20 @@ export function playMorph(
   return morph.seal(true);
 }
 
-/* ── Surface morph (the default) ─────────────────────────────────────────────
- * Scaling a panel that holds album art makes the GPU re-decode every image at
- * each new scale: measured at ~300 ms of image decoding per worker thread and
- * ~170 ms of uploads during a single maximize, which is where the dropped
- * frames came from. So only flat surfaces travel: rounded rectangles that take
- * each panel's look (background, border, radius), plus the window background.
- * They hold no images and cost almost nothing to scale. The real interface
- * fades out in place, the surfaces travel from the old layout's boxes to the
- * new layout's, and the new layout, drawn once at its real size, fades in
- * over them as they land.
+/* ── Live morph (the default) ────────────────────────────────────────────────
+ * The real interface travels. The new layout is applied at once, and every
+ * panel rides an outline that travels from the panel's old box to its new
+ * one: songs, tiles and controls stay on screen the whole way, at their real
+ * size, revealed by the moving outline.
+ *
+ * Nothing that holds images is scaled. Scaling a panel with album art makes
+ * the GPU re-decode every image at each new scale (measured at ~300 ms of
+ * decoding and ~170 ms of uploads in a single maximize). So the panels are
+ * only shifted (transform: translate) and cut to their outline (clip-path),
+ * which leave their pictures as they were drawn. Their own backgrounds are
+ * switched off meanwhile: each outline's fill is a flat stand-in behind them,
+ * holding no images, which is cheap to scale and turns from the panel's old
+ * look into its new one on the way.
  */
 
 /** How a panel's surface looks: what a stand-in copies so the swap is seamless. */
@@ -346,12 +350,8 @@ export interface Surface {
   shadow: string;
 }
 
-/** Old content fading out before the surfaces travel. */
-export const SURFACE_FADE_OUT_MS = 80;
-/** New content fading in over the landing surfaces. */
-export const SURFACE_REVEAL_MS = 170;
-/** Fraction of the travel after which the reveal starts: the surfaces are within a few pixels of landing. */
-const REVEAL_AT = 0.8;
+/** On <html> while a live morph plays: panels give up their own fill to the stand-ins (window-morph.css). */
+export const LIVE_CLASS = "is-window-morphing--live";
 
 function surfaceOf(node: Element, pseudo?: string): Surface {
   const cs = getComputedStyle(node, pseudo);
@@ -380,6 +380,98 @@ export function surfacesOf(snapshot: LayoutSnapshot, root: ParentNode = document
   return out;
 }
 
+/** A corner radius per corner, in CSS pixels: top-left, top-right, bottom-right, bottom-left. */
+export type Corners = [number, number, number, number];
+
+/**
+ * Reads a computed `border-radius` into its four corners. Percentages are
+ * taken against the shorter side of `box`; elliptical radii keep their
+ * horizontal part.
+ */
+export function parseRadius(value: string | undefined, box: Box): Corners {
+  const short = Math.min(box.width, box.height);
+  const parts = (value ?? "")
+    .split("/")[0]
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => (token.endsWith("%") ? (parseFloat(token) / 100) * short : parseFloat(token)))
+    .filter(Number.isFinite);
+  const [a = 0, b = a, c = a, d = b] = parts;
+  return [a, b, c, d];
+}
+
+/** Radii a box can actually show: none larger than half its shorter side (a capsule). */
+function fitCorners(radius: Corners, box: { width: number; height: number }): Corners {
+  const max = Math.min(box.width, box.height) / 2;
+  return radius.map((r) => Math.max(0, Math.min(r, max))) as Corners;
+}
+
+/**
+ * A `border-radius` that shows `radius` on screen while its element is drawn
+ * scaled by (sx, sy): the scale would stretch the corners into ovals, so each
+ * one is divided by it.
+ */
+export function cornersAt(radius: Corners, sx: number, sy: number): string {
+  const across = radius.map((v) => `${round(v / sx)}px`).join(" ");
+  const down = radius.map((v) => `${round(v / sy)}px`).join(" ");
+  return `${across} / ${down}`;
+}
+
+const px = (values: readonly number[]) => values.map((v) => `${round(v)}px`).join(" ");
+
+/**
+ * Where each panel holds on to its outline: [x, y], 0 the start edge, 0.5 the
+ * middle, 1 the end edge. Pages and lists keep their top-left corner (their
+ * content starts there); the player and search keep their middle, where their
+ * controls are; the window buttons keep the right edge.
+ */
+const ANCHORS: Record<MorphPartId, readonly [number, number]> = {
+  main: [0, 0],
+  queue: [0, 0],
+  sidebar: [0, 0],
+  player: [0.5, 0.5],
+  "titlebar-left": [0, 0.5],
+  "titlebar-search": [0.5, 0.5],
+  "titlebar-right": [1, 0.5],
+};
+
+/**
+ * How a panel laid out at `box` rides an outline at `outline`: the shift that
+ * puts the panel's anchor on the outline's, and the clip, in the panel's own
+ * coordinates (top, right, bottom, left), that cuts it down to the outline
+ * where it is bigger. Both change linearly with the outline, so two keyframes
+ * on the outline's easing follow it exactly.
+ */
+export function rideOutline(
+  box: Box,
+  outline: Box,
+  anchor: readonly [number, number],
+): { dx: number; dy: number; inset: [number, number, number, number] } {
+  const [ax, ay] = anchor;
+  const extraW = Math.max(0, box.width - outline.width);
+  const extraH = Math.max(0, box.height - outline.height);
+  return {
+    dx: outline.x + ax * outline.width - (box.x + ax * box.width),
+    dy: outline.y + ay * outline.height - (box.y + ay * box.height),
+    inset: [ay * extraH, (1 - ax) * extraW, (1 - ay) * extraH, ax * extraW],
+  };
+}
+
+/**
+ * The old look fades out while the new one fades in, both inside the
+ * travelling outline. Each keeps fixed corners, right for when it is the one
+ * on show (the old at the start, the new at the landing), so the corners
+ * change through the crossfade: nothing is repainted while the panels move.
+ */
+const SKIN_OUT: Keyframe[] = [
+  { opacity: 1 },
+  { opacity: 1, offset: 0.2, easing: "ease-in-out" },
+  { opacity: 0, offset: 0.75 },
+  { opacity: 0 },
+];
+const SKIN_IN: Keyframe[] = [{ opacity: 0, easing: "ease-in-out" }, { opacity: 1, offset: 0.6 }, { opacity: 1 }];
+
 function placeBox(node: HTMLElement, box: Box): void {
   Object.assign(node.style, {
     left: `${box.x}px`,
@@ -389,144 +481,72 @@ function placeBox(node: HTMLElement, box: Box): void {
   });
 }
 
-function paintSurface(node: HTMLElement, surface: Surface | undefined): void {
-  if (!surface) return;
-  Object.assign(node.style, {
-    backgroundImage: surface.image,
-    backgroundColor: surface.color,
-    borderRadius: surface.radius,
-    border: surface.border,
-    boxShadow: surface.shadow,
-  });
+/** A layer painted with a panel's look. */
+function makeSkin(surface: Surface | undefined, radius = surface?.radius): HTMLDivElement {
+  const skin = document.createElement("div");
+  skin.className = "window-morph-skin";
+  if (surface) {
+    Object.assign(skin.style, {
+      backgroundImage: surface.image,
+      backgroundColor: surface.color,
+      borderRadius: radius ?? "",
+      border: surface.border,
+      boxShadow: surface.shadow,
+    });
+  }
+  return skin;
+}
+
+/** Each panel's look in the old and the new layout, read before and after the switch. */
+export interface MorphLooks {
+  before: Partial<Record<MorphPartId, Surface>>;
+  after: Partial<Record<MorphPartId, Surface>>;
 }
 
 /**
- * Plays the surface morph in two steps:
- *  1. `new SurfaceMorph(before, after, targets)`: stand-ins appear over the
- *     panels of the current layout while the real interface fades out
- *     (`ready` resolves). `after` and `targets` describe the new layout,
- *     measured beforehand (window-mode.ts lays it out once and switches back).
- *  2. `travel()`: the stand-ins travel to the new boxes and the new interface
- *     fades in over them. The caller switches the real layout a frame after
- *     this, so the travel is already running on the compositor before the
- *     main thread starts painting the new layout.
+ * Plays the live morph. Create it in the same task that applies the new
+ * layout (`after`), so the old layout's last frame stays on screen until the
+ * morph's first one. `looks` must be read before LIVE_CLASS goes on, which
+ * this constructor does.
  */
 export class SurfaceMorph implements RunningMorph {
-  readonly ready: Promise<void>;
   readonly finished: Promise<void>;
   private resolveFinished: () => void = () => {};
+  /** Everything that lasts until the landing. */
   private readonly animations: Animation[] = [];
+  /** What lasts until the end: the window background and the artwork glow coming back. */
+  private readonly held: Animation[] = [];
   private readonly timers: Array<ReturnType<typeof setTimeout>> = [];
-  private readonly back: HTMLDivElement;
-  private readonly front: HTMLDivElement;
+  private readonly layer: HTMLDivElement;
   private readonly backdrop: HTMLDivElement;
-  private readonly ghosts = new Map<MorphPartId, HTMLDivElement>();
-  private readonly app: HTMLElement | null;
-  private appFade: Animation | null = null;
+  private readonly ghosts: HTMLDivElement[] = [];
+  private landed = false;
   private stopped = false;
 
   constructor(
-    private readonly before: LayoutSnapshot,
-    private readonly after: LayoutSnapshot,
-    private readonly targets: Partial<Record<MorphPartId, Surface>>,
+    before: LayoutSnapshot,
+    after: LayoutSnapshot,
+    looks: MorphLooks,
     root: ParentNode = document,
   ) {
     this.finished = new Promise((resolve) => (this.resolveFinished = resolve));
-    this.app = root.querySelector<HTMLElement>("#app");
+    const app = root.querySelector<HTMLElement>("#app");
 
-    this.back = document.createElement("div");
-    this.back.className = "window-morph-layer window-morph-layer--back";
-    this.front = document.createElement("div");
-    this.front.className = "window-morph-layer window-morph-layer--front";
-    for (const layer of [this.back, this.front]) layer.setAttribute("aria-hidden", "true");
+    // Under #app (inserted just before it): the window background and the
+    // panels' fills, with the real panels riding on top of them.
+    this.layer = document.createElement("div");
+    this.layer.className = "window-morph-layer";
+    this.layer.setAttribute("aria-hidden", "true");
     this.backdrop = document.createElement("div");
     this.backdrop.className = "window-morph-surface window-morph-surface--backdrop";
-    this.back.appendChild(this.backdrop);
-    if (this.app?.parentNode) this.app.parentNode.insertBefore(this.back, this.app);
-    else document.body.appendChild(this.back);
-    document.body.appendChild(this.front);
+    this.layer.appendChild(this.backdrop);
+    if (app?.parentNode) app.parentNode.insertBefore(this.layer, app);
+    else document.body.appendChild(this.layer);
+    document.documentElement.classList.add(LIVE_CLASS);
 
-    // The maximized window's opaque background, behind everything.
-    placeBox(this.backdrop, before.mode === "full" ? before.app : before.stage);
-    this.backdrop.style.opacity = before.mode === "full" ? "1" : "0";
-
-    const surfaces = surfacesOf(before, root);
-    for (const [id, box] of Object.entries(before.parts) as Array<[MorphPartId, Box]>) {
-      const ghost = document.createElement("div");
-      ghost.className = `window-morph-surface window-morph-surface--${id}`;
-      placeBox(ghost, box);
-      paintSurface(ghost, surfaces[id]);
-      this.front.appendChild(ghost);
-      this.ghosts.set(id, ghost);
-    }
-
-    const fadeOut = ms(SURFACE_FADE_OUT_MS);
-    // The stand-ins fade in over the panels as the real interface fades out.
-    this.front.style.opacity = "0";
-    this.add(play(this.front, [{ opacity: 0 }, { opacity: 1 }], { duration: fadeOut, easing: "linear", fill: "forwards" }));
-    if (this.app) {
-      this.appFade = this.add(
-        play(this.app, [{ opacity: 1 }, { opacity: 0 }], { duration: fadeOut, easing: "linear", fill: "forwards" }),
-      );
-    }
-    this.ready = new Promise((resolve) => this.later(resolve, fadeOut));
-  }
-
-  private add(animation: Animation | null): Animation | null {
-    if (animation) this.animations.push(animation);
-    return animation;
-  }
-
-  private later(fn: () => void, delay: number): void {
-    this.timers.push(setTimeout(fn, delay));
-  }
-
-  /**
-   * Step 2: carry the surfaces into the new layout and reveal it.
-   *
-   * The new layout stays fully hidden while the surfaces travel. Drawing it
-   * for the first time (its album art at new sizes) is the heaviest GPU job of
-   * the whole switch, measured at 60-110 ms even with no animation at all;
-   * hidden, the browser does not draw it yet, so the flat surfaces have the
-   * GPU to themselves while they move. It is drawn when the reveal starts,
-   * when nothing is moving any more.
-   */
-  travel(): void {
-    if (this.stopped) return;
-    const after = this.after;
-    if (this.app) {
-      this.appFade?.cancel();
-      this.appFade = null;
-      this.app.style.opacity = "0";
-    }
     const duration = ms(MORPH_MS);
     const timing: KeyframeAnimationOptions = { duration, easing: MORPH_EASING, fill: "forwards" };
-    const before = this.before;
-    const targets = this.targets;
-
-    for (const [id, ghost] of this.ghosts) {
-      const to = after.parts[id];
-      const from = before.parts[id]!;
-      if (!to) {
-        this.add(play(ghost, [{ opacity: 1 }, { opacity: 0 }], { ...timing, duration: duration * 0.5 }));
-        continue;
-      }
-      // Laid out at the target box; the transform carries it there from the old one.
-      placeBox(ghost, to);
-      const radius = targets[id]?.radius;
-      if (radius) ghost.style.borderRadius = radius;
-      this.add(play(ghost, [{ transform: stretchFlip(from, to) }, { transform: "none" }], timing));
-    }
-    for (const [id, to] of Object.entries(after.parts) as Array<[MorphPartId, Box]>) {
-      if (this.ghosts.has(id)) continue;
-      const ghost = document.createElement("div");
-      ghost.className = `window-morph-surface window-morph-surface--${id}`;
-      placeBox(ghost, to);
-      paintSurface(ghost, targets[id]);
-      this.front.appendChild(ghost);
-      this.ghosts.set(id, ghost);
-      this.add(play(ghost, [{ opacity: 0 }, { opacity: 1 }], timing));
-    }
+    const crossfade: KeyframeAnimationOptions = { duration, easing: "linear", fill: "forwards" };
 
     // The window background grows out of the old stage, or shrinks into the new one.
     const toFull = after.mode === "full";
@@ -534,7 +554,7 @@ export class SurfaceMorph implements RunningMorph {
     const stageBox = toFull ? before.stage : after.stage;
     placeBox(this.backdrop, fullBox);
     const collapsed = stretchFlip(stageBox, fullBox);
-    this.add(
+    this.hold(
       play(
         this.backdrop,
         toFull
@@ -544,24 +564,109 @@ export class SurfaceMorph implements RunningMorph {
       ),
     );
 
-    // Reveal the new interface over the landing surfaces, then hand over.
-    const reveal = ms(SURFACE_REVEAL_MS);
-    const revealDelay = duration * REVEAL_AT;
-    this.later(() => {
-      if (this.stopped) return;
-      if (this.app) {
-        this.app.style.opacity = "";
-        this.add(play(this.app, [{ opacity: 0 }, { opacity: 1 }], { duration: reveal, easing: "linear" }));
+    for (const [id, selector] of MORPH_PARTS) {
+      const from = before.parts[id];
+      const to = after.parts[id];
+      const node = root.querySelector<HTMLElement>(selector);
+      const oldLook = looks.before[id];
+      const newLook = looks.after[id];
+
+      if (from && !to) {
+        // Gone from the new layout: its fill fades where it was.
+        const ghost = this.makeGhost(id, from);
+        ghost.appendChild(makeSkin(oldLook));
+        this.add(play(ghost, [{ opacity: 1 }, { opacity: 0 }], { ...timing, duration: duration * 0.5 }));
+        continue;
       }
-      this.add(play(this.front, [{ opacity: 1 }, { opacity: 0 }], { duration: reveal, easing: "linear", fill: "forwards" }));
-      this.later(() => this.stop(), Math.max(reveal, duration - revealDelay) + 20);
-    }, revealDelay);
+      if (!to) continue;
+      if (!from) {
+        // New in this layout: it fades in where it lands.
+        const ghost = this.makeGhost(id, to);
+        ghost.appendChild(makeSkin(newLook));
+        this.add(play(ghost, [{ opacity: 0 }, { opacity: 1 }], timing));
+        if (node) this.add(play(node, [{ opacity: 0 }, { opacity: 1 }], timing));
+        continue;
+      }
+
+      // The fill: laid out at the new box, stretched back over the old one,
+      // travelling with the old look turning into the new.
+      const ghost = this.makeGhost(id, to);
+      const oldSkin = makeSkin(oldLook, cornersAt(fitCorners(parseRadius(oldLook?.radius, from), from), from.width / to.width, from.height / to.height));
+      ghost.appendChild(oldSkin);
+      this.add(play(ghost, [{ transform: stretchFlip(from, to) }, { transform: "none" }], timing));
+      if (newLook) {
+        const newSkin = makeSkin(newLook, px(fitCorners(parseRadius(newLook.radius, to), to)));
+        ghost.appendChild(newSkin);
+        this.add(play(oldSkin, SKIN_OUT, crossfade));
+        this.add(play(newSkin, SKIN_IN, crossfade));
+      }
+
+      // The panel itself, in the new layout at its real size, rides the fill.
+      if (!node) continue;
+      const start = rideOutline(to, from, ANCHORS[id]);
+      this.add(play(node, [{ transform: `translate(${round(start.dx)}px, ${round(start.dy)}px)` }, { transform: "none" }], timing));
+      if (start.inset.some((v) => v > 0.5)) {
+        // Bigger than its outline (growing): cut down to it, with its corners.
+        const [top, right, bottom, left] = start.inset;
+        const shown = { width: to.width - left - right, height: to.height - top - bottom };
+        const r0 = fitCorners(parseRadius(oldLook?.radius, from), shown);
+        const r1 = fitCorners(parseRadius(newLook?.radius ?? oldLook?.radius, to), to);
+        // Its own animation: a clip must not hold the move back from the compositor.
+        this.add(
+          play(
+            node,
+            [{ clipPath: `inset(${px(start.inset)} round ${px(r0)})` }, { clipPath: `inset(0px 0px 0px 0px round ${px(r1)})` }],
+            timing,
+          ),
+        );
+      }
+    }
+
+    // The 36px-blurred artwork glow stays hidden while panels move (blurs are
+    // the costliest thing to move) and comes back once they land.
+    const glow = root.querySelector(".ambient-art");
+    const total = duration + ms(AMBIENT_RETURN_MS);
+    if (glow) {
+      this.hold(play(glow, [{ opacity: 0 }, { opacity: 0, offset: duration / total }, { opacity: 1 }], {
+        duration: total,
+        easing: "linear",
+      }));
+    }
+
+    this.later(() => this.land(), duration);
+    this.later(() => this.stop(), total);
   }
 
-  stop(): void {
-    if (this.stopped) return;
-    this.stopped = true;
-    for (const timer of this.timers) clearTimeout(timer);
+  private makeGhost(id: MorphPartId, box: Box): HTMLDivElement {
+    const ghost = document.createElement("div");
+    ghost.className = `window-morph-surface window-morph-surface--${id}`;
+    placeBox(ghost, box);
+    this.layer.appendChild(ghost);
+    this.ghosts.push(ghost);
+    return ghost;
+  }
+
+  private add(animation: Animation | null): Animation | null {
+    if (animation) this.animations.push(animation);
+    return animation;
+  }
+
+  private hold(animation: Animation | null): void {
+    if (animation) this.held.push(animation);
+  }
+
+  private later(fn: () => void, delay: number): void {
+    this.timers.push(setTimeout(fn, delay));
+  }
+
+  /**
+   * The landing: the panels take their own fills back from the stand-ins,
+   * which look the same by now, in one frame. The window background stays
+   * until the morph ends, as #app's own is off until then.
+   */
+  private land(): void {
+    if (this.landed) return;
+    this.landed = true;
     for (const animation of this.animations) {
       try {
         animation.cancel();
@@ -569,9 +674,23 @@ export class SurfaceMorph implements RunningMorph {
         // Already done
       }
     }
-    if (this.app) this.app.style.opacity = "";
-    this.back.remove();
-    this.front.remove();
+    for (const ghost of this.ghosts) ghost.remove();
+    document.documentElement.classList.remove(LIVE_CLASS);
+  }
+
+  stop(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.land();
+    for (const animation of this.held) {
+      try {
+        animation.cancel();
+      } catch {
+        // Already done
+      }
+    }
+    this.layer.remove();
     this.resolveFinished();
   }
 }
