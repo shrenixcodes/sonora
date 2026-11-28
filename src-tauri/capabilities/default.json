@@ -25,6 +25,8 @@
     "allow-ytm-sign-out",
     "allow-ytm-request",
     "allow-set-floating-regions",
-    "allow-present-main-window"
+    "allow-present-main-window",
+    "allow-follow-cursor-to-monitor",
+    "allow-settle-restored-window"
   ]
 }
