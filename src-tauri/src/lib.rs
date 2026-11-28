@@ -34,6 +34,8 @@ pub fn run() {
             ytm::ytm_response,
             window_mode::set_floating_regions,
             window_mode::present_main_window,
+            window_mode::follow_cursor_to_monitor,
+            window_mode::settle_restored_window,
         ])
         .setup(|app| {
             log::info!("Sonora v{} starting", app.package_info().version);

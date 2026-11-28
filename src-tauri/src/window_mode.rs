@@ -18,8 +18,11 @@ use std::sync::{Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use serde::Deserialize;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Runtime, State, WebviewWindow};
+use serde::{Deserialize, Serialize};
+use tauri::{
+    AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalRect, PhysicalSize, Runtime,
+    State, WebviewWindow,
+};
 
 const MAIN_LABEL: &str = "main";
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -29,6 +32,8 @@ const GEOMETRY_REFRESH: Duration = Duration::from_secs(1);
 /// Faster than a quick flick of the mouse, in CSS pixels per millisecond.
 const CURSOR_SPEED: f64 = 4.0;
 const ENTRANCE_DURATION: Duration = Duration::from_millis(420);
+/// How close, in physical pixels, a window edge must be to a work-area edge to count as touching it.
+const SNAP_TOLERANCE: i32 = 8;
 const ENTRANCE_FRAME: Duration = Duration::from_millis(16);
 
 /// A panel's bounds in CSS pixels, relative to the window's top-left corner.
@@ -156,6 +161,129 @@ pub fn set_floating_regions(
     *state.regions.lock().map_err(|e| e.to_string())? = regions;
     state.wake.notify_all();
     Ok(())
+}
+
+/// Where the floating frame lands once the OS window has moved, in the window's
+/// new CSS pixels, together with that window's viewport size.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Placement {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub viewport_width: f64,
+    pub viewport_height: f64,
+}
+
+fn same_monitor(a: &Monitor, b: &Monitor) -> bool {
+    a.position() == b.position() && a.size() == b.size()
+}
+
+/// A physical rectangle as CSS pixels relative to a work area's top-left corner.
+fn placement_in(
+    position: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+    area: PhysicalRect<i32, u32>,
+    scale: f64,
+) -> Placement {
+    Placement {
+        x: (position.x - area.position.x) as f64 / scale,
+        y: (position.y - area.position.y) as f64 / scale,
+        width: size.width as f64 / scale,
+        height: size.height as f64 / scale,
+        viewport_width: area.size.width as f64 / scale,
+        viewport_height: area.size.height as f64 / scale,
+    }
+}
+
+/// Whether a restored window was snapped (Win+Arrow, Snap Layouts): it lines up
+/// with at least two edges of the work area without filling it.
+fn looks_snapped(
+    position: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+    area: PhysicalRect<i32, u32>,
+) -> bool {
+    let near = |a: i32, b: i32| (a - b).abs() <= SNAP_TOLERANCE;
+    let (left, top) = (position.x, position.y);
+    let (right, bottom) = (left + size.width as i32, top + size.height as i32);
+    let (area_left, area_top) = (area.position.x, area.position.y);
+    let area_right = area_left + area.size.width as i32;
+    let area_bottom = area_top + area.size.height as i32;
+    let touching = [
+        near(left, area_left),
+        near(top, area_top),
+        near(right, area_right),
+        near(bottom, area_bottom),
+    ]
+    .iter()
+    .filter(|&&edge| edge)
+    .count();
+    (2..4).contains(&touching)
+}
+
+/// Ends a floating-frame drag that was dropped on another monitor: the OS
+/// window, which stays maximized, moves there, and the frame follows the
+/// pointer. Returns where the pointer now is, or nothing when it never left
+/// the window's monitor.
+#[tauri::command]
+pub fn follow_cursor_to_monitor<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Option<Placement>, String> {
+    let window = app
+        .get_webview_window(MAIN_LABEL)
+        .ok_or("main window is not available")?;
+    let cursor = cursor_position(&window).ok_or("cursor position is unavailable")?;
+    let Some(target) = window
+        .monitor_from_point(cursor.x, cursor.y)
+        .map_err(|e| e.to_string())?
+    else {
+        return Ok(None);
+    };
+    let current = window.current_monitor().map_err(|e| e.to_string())?;
+    if current.is_some_and(|monitor| same_monitor(&monitor, &target)) {
+        return Ok(None);
+    }
+
+    let area = *target.work_area();
+    log::debug!(
+        "moving the window to the monitor at {:?}",
+        target.position()
+    );
+    window.unmaximize().map_err(|e| e.to_string())?;
+    window
+        .set_position(area.position)
+        .map_err(|e| e.to_string())?;
+    window.maximize().map_err(|e| e.to_string())?;
+
+    let scale = target.scale_factor();
+    let cursor = PhysicalPosition::new(cursor.x.round() as i32, cursor.y.round() as i32);
+    Ok(Some(placement_in(
+        cursor,
+        PhysicalSize::new(0, 0),
+        area,
+        scale,
+    )))
+}
+
+/// Puts the window back to maximized after something restored it. A snap
+/// (Win+Left, Win+Right, Snap Layouts) becomes the floating frame's new spot on
+/// whichever monitor it landed on; any other restore keeps the frame as it was.
+#[tauri::command]
+pub fn settle_restored_window<R: Runtime>(app: AppHandle<R>) -> Result<Option<Placement>, String> {
+    let window = app
+        .get_webview_window(MAIN_LABEL)
+        .ok_or("main window is not available")?;
+    let snapped = (|| {
+        let monitor = window.current_monitor().ok()??;
+        let position = window.inner_position().ok()?;
+        let size = window.inner_size().ok()?;
+        let area = *monitor.work_area();
+        looks_snapped(position, size, area)
+            .then(|| placement_in(position, size, area, monitor.scale_factor()))
+    })();
+    window.maximize().map_err(|e| e.to_string())?;
+    Ok(snapped)
 }
 
 /// Shows the main window once the frontend has painted, sliding in from the
@@ -404,6 +532,62 @@ mod tests {
         for distance in [210.0, 480.0, 900.0] {
             assert!(poll_interval(distance).as_secs_f64() * 1000.0 * CURSOR_SPEED <= distance);
         }
+    }
+
+    fn work_area() -> PhysicalRect<i32, u32> {
+        PhysicalRect {
+            position: PhysicalPosition::new(1920, 0),
+            size: PhysicalSize::new(2560, 1392),
+        }
+    }
+
+    #[test]
+    fn recognises_snapped_windows_but_not_plain_restores() {
+        let area = work_area();
+        // Left and right halves, and a quarter.
+        assert!(looks_snapped(
+            PhysicalPosition::new(1920, 0),
+            PhysicalSize::new(1280, 1392),
+            area
+        ));
+        assert!(looks_snapped(
+            PhysicalPosition::new(3200, 0),
+            PhysicalSize::new(1280, 1392),
+            area
+        ));
+        assert!(looks_snapped(
+            PhysicalPosition::new(3200, 696),
+            PhysicalSize::new(1280, 696),
+            area
+        ));
+        // A centered window, and one filling the whole area.
+        assert!(!looks_snapped(
+            PhysicalPosition::new(2600, 300),
+            PhysicalSize::new(1180, 780),
+            area
+        ));
+        assert!(!looks_snapped(area.position, area.size, area));
+    }
+
+    #[test]
+    fn places_rectangles_in_the_work_area_in_css_pixels() {
+        let placed = placement_in(
+            PhysicalPosition::new(3200, 0),
+            PhysicalSize::new(1280, 1392),
+            work_area(),
+            2.0,
+        );
+        assert_eq!(
+            placed,
+            Placement {
+                x: 640.0,
+                y: 0.0,
+                width: 640.0,
+                height: 696.0,
+                viewport_width: 1280.0,
+                viewport_height: 696.0,
+            }
+        );
     }
 
     #[test]

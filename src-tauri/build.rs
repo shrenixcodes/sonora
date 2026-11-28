@@ -21,6 +21,8 @@ const APP_COMMANDS: &[&str] = &[
     "ytm_response",
     "set_floating_regions",
     "present_main_window",
+    "follow_cursor_to_monitor",
+    "settle_restored_window",
 ];
 
 fn main() {

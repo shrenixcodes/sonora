@@ -18,6 +18,11 @@
  *
  * In floating mode the panels' bounds are sent to the backend, which lets
  * clicks in the empty space around the frame reach the desktop.
+ *
+ * The frame cannot leave the OS window, so the OS window follows it instead:
+ * a frame dropped past the edge of the screen moves the window to the monitor
+ * under the pointer, and a Windows snap (Win+Left, Win+Right, Snap Layouts)
+ * re-maximizes the window and puts the frame where the snap would have.
  */
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -55,6 +60,12 @@ export interface Frame {
 interface Size {
   width: number;
   height: number;
+}
+
+/** A spot in the OS window after it moved, with its new viewport (src-tauri/src/window_mode.rs). */
+export interface Placement extends Frame {
+  viewportWidth: number;
+  viewportHeight: number;
 }
 
 /** Same as the window's size and minimum size before the window stopped resizing. */
@@ -148,6 +159,19 @@ export function resizeFrame(start: Frame, edge: ResizeEdge, dx: number, dy: numb
   return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
 }
 
+/** Whether a drag was let go beyond the window, which only spans its own monitor. */
+export function droppedOutside(x: number, y: number, view: Size): boolean {
+  return x < 0 || y < 0 || x >= view.width || y >= view.height;
+}
+
+/** The frame on its new monitor, held by the same point it was grabbed at. */
+export function frameAtPointer(current: Frame, pointer: Placement, grab: { x: number; y: number }): Frame {
+  return clampFrame(
+    { ...current, x: pointer.x - grab.x, y: pointer.y - grab.y },
+    { width: pointer.viewportWidth, height: pointer.viewportHeight },
+  );
+}
+
 /** Width-band classes standing in for the viewport media queries the layout used to have. */
 export function widthBands(width: number): string[] {
   const bands = [440, 700, 720, 820, 1100, 1200].filter((max) => width <= max).map((max) => `fw-max-${max}`);
@@ -168,6 +192,8 @@ let lastSentRegionSignature: string | null = null;
 let regionsLocked = false;
 const modeListeners = new Set<(state: { mode: WindowMode; maximized: boolean }) => void>();
 let runningMorph: RunningMorph | null = null;
+/** While the OS window moves between monitors it is briefly restored; that is not the user's restore. */
+let relocating = false;
 
 const viewport = (): Size => ({ width: window.innerWidth, height: window.innerHeight });
 
@@ -516,18 +542,41 @@ function onDragRegionPointerDown(event: PointerEvent): void {
     scheduleFrameApply();
   };
 
-  const onUp = () => {
+  const onUp = (up: PointerEvent) => {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onUp);
     document.documentElement.classList.remove("is-frame-dragging");
-    if (dragging) saveFrame();
+    if (dragging) {
+      saveFrame();
+      if (origin && up.type === "pointerup" && droppedOutside(up.clientX, up.clientY, viewport())) {
+        void followPointerToMonitor({ x: pointerAtOrigin.x - origin.x, y: pointerAtOrigin.y - origin.y });
+      }
+    }
     lockRegions(false);
   };
 
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
   window.addEventListener("pointercancel", onUp);
+}
+
+/** Moves the OS window to the monitor a frame was dropped on, keeping the frame under the pointer. */
+async function followPointerToMonitor(grab: { x: number; y: number }): Promise<void> {
+  if (!isTauri() || relocating) return;
+  relocating = true;
+  try {
+    const pointer = await invoke<Placement | null>("follow_cursor_to_monitor");
+    if (!pointer) return;
+    frame = frameAtPointer(getFrame(), pointer, grab);
+    saveFrame();
+    applyFrame();
+    scheduleRegionSync();
+  } catch (err) {
+    console.error("[window-mode] could not move to the other monitor:", err);
+  } finally {
+    relocating = false;
+  }
 }
 
 function onDragRegionDoubleClick(event: MouseEvent): void {
@@ -618,6 +667,7 @@ export async function initWindowMode(): Promise<void> {
    * The OS window must stay maximized. Fullscreen (immersive Now Playing)
    * shows the full layout. If something restored the window anyway (Win+Down),
    * that reads as "restore": switch to floating and maximize the window again.
+   * A snap (Win+Left or Win+Right) also moves the frame to the snapped spot.
    */
   const syncWindowState = async (animate: boolean) => {
     const [maximized, isFullscreen, minimized] = await Promise.all([
@@ -625,11 +675,19 @@ export async function initWindowMode(): Promise<void> {
       appWindow.isFullscreen(),
       appWindow.isMinimized(),
     ]);
-    if (minimized) return;
+    if (minimized || relocating) return;
     if (!maximized && !isFullscreen) {
       chosenMode = "floating";
       sessionStore.setItem(MODE_KEY, chosenMode);
-      await appWindow.maximize().catch((err) => console.error("[window-mode] could not maximize:", err));
+      const snapped = await invoke<Placement | null>("settle_restored_window").catch(async (err) => {
+        console.error("[window-mode] could not settle the restored window:", err);
+        await appWindow.maximize().catch((error) => console.error("[window-mode] could not maximize:", error));
+        return null;
+      });
+      if (snapped) {
+        frame = clampFrame(snapped, { width: snapped.viewportWidth, height: snapped.viewportHeight });
+        saveFrame();
+      }
     }
     fullscreen = isFullscreen;
     applyMode(effectiveMode(), animate);
