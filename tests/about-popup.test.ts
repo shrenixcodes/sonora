@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { showAboutPopup } from "../src/components/about-popup";
+import { FALLBACK_APP_INFO } from "../src/lib/app-info";
 import { createSidebar } from "../src/components/sidebar";
 
 describe("About Sonora Pop-up and centered brand logo", () => {
@@ -52,7 +53,7 @@ describe("About Sonora Pop-up and centered brand logo", () => {
     expect(title?.textContent).toBe("Sonora");
 
     const version = dialog?.querySelector(".about-popup__version");
-    expect(version?.textContent).toContain("v0.7.20");
+    expect(version?.textContent).toContain(`v${FALLBACK_APP_INFO.version}`);
 
     const metaList = dialog?.querySelector(".about-popup__meta-list");
     expect(metaList?.textContent).toContain("Runtime");

@@ -16,7 +16,7 @@ export interface PlatformInfo {
 
 export const FALLBACK_APP_INFO: AppInfo = {
   name: "Sonora",
-  version: "0.7.20",
+  version: "0.7.53",
 };
 
 export const FALLBACK_PLATFORM_INFO: PlatformInfo = {

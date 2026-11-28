@@ -7,19 +7,9 @@
 
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
-import { isTauri, invoke } from "@tauri-apps/api/core";
+import { getAppRuntimeInfo, type PlatformInfo } from "@/lib/app-info";
 import { showLaunchSplash } from "@/lib/visuals/splash-screen";
 import { describeUpdateSnapshot, openExternalUrl, SONORA_REPO_URL, updater } from "@/lib/updater";
-
-interface AppInfo {
-  name: string;
-  version: string;
-}
-
-interface PlatformInfo {
-  os: string;
-  arch: string;
-}
 
 function formatPlatformDisplay(info: PlatformInfo): string {
   const osMap: Record<string, string> = {
@@ -44,21 +34,7 @@ export async function showAboutPopup(): Promise<void> {
   // Remove any previously open about dialog
   document.querySelector(".about-popup")?.remove();
 
-  let appInfo: AppInfo = { name: "Sonora", version: "0.7.20" };
-  let platformInfo: PlatformInfo = { os: "windows", arch: "x64" };
-
-  if (isTauri()) {
-    try {
-      const [app, plat] = await Promise.all([
-        invoke<AppInfo>("get_app_info"),
-        invoke<PlatformInfo>("get_platform_info"),
-      ]);
-      if (app) appInfo = app;
-      if (plat) platformInfo = plat;
-    } catch {
-      // Retain fallback app info
-    }
-  }
+  const { app: appInfo, platform: platformInfo } = await getAppRuntimeInfo();
 
   let isClosing = false;
   let stopUpdater: (() => void) | null = null;
