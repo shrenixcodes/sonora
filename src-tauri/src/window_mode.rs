@@ -8,8 +8,11 @@
 //! turns cursor events off whenever the pointer is outside all of them.
 //!
 //! Windows sends no mouse events to a window that ignores the cursor, so the
-//! pointer is sampled on a timer. The timer only runs in floating mode and
-//! idles while the window is hidden or minimized.
+//! pointer is sampled on a timer. The timer only runs in floating mode, idles
+//! while the window is hidden or minimized, and slows down while the pointer is
+//! too far from every panel to reach one before the next sample. Window
+//! geometry is a round trip through the main thread, so it is re-read only
+//! when the panels change or about once a second.
 
 use std::sync::{Condvar, Mutex};
 use std::thread;
@@ -20,7 +23,11 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Runtime, State, Webvi
 
 const MAIN_LABEL: &str = "main";
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
+const MAX_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const IDLE_INTERVAL: Duration = Duration::from_millis(500);
+const GEOMETRY_REFRESH: Duration = Duration::from_secs(1);
+/// Faster than a quick flick of the mouse, in CSS pixels per millisecond.
+const CURSOR_SPEED: f64 = 4.0;
 const ENTRANCE_DURATION: Duration = Duration::from_millis(420);
 const ENTRANCE_FRAME: Duration = Duration::from_millis(16);
 
@@ -49,6 +56,70 @@ pub struct FloatingRegions {
 /// Whether a point in CSS pixels lands on any panel.
 fn hits_any(regions: &[HitRect], x: f64, y: f64) -> bool {
     regions.iter().any(|r| r.contains(x, y))
+}
+
+/// Distance in CSS pixels from a point to the nearest panel; zero on a panel.
+fn distance_to_nearest(regions: &[HitRect], x: f64, y: f64) -> f64 {
+    regions
+        .iter()
+        .map(|r| {
+            let dx = (r.x - x).max(x - (r.x + r.width)).max(0.0);
+            let dy = (r.y - y).max(y - (r.y + r.height)).max(0.0);
+            dx.hypot(dy)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// The next sample can wait as long as the pointer needs to reach a panel.
+fn poll_interval(distance: f64) -> Duration {
+    let min = POLL_INTERVAL.as_millis() as f64;
+    let max = MAX_POLL_INTERVAL.as_millis() as f64;
+    let wait = if distance.is_finite() {
+        distance / CURSOR_SPEED
+    } else {
+        max
+    };
+    Duration::from_millis(wait.clamp(min, max) as u64)
+}
+
+/// The window's content origin and size, read through the main thread.
+#[derive(Clone, Copy)]
+struct Geometry {
+    origin: PhysicalPosition<i32>,
+    scale: f64,
+    width: f64,
+    height: f64,
+}
+
+fn read_geometry<R: Runtime>(window: &WebviewWindow<R>) -> Option<Geometry> {
+    // The content origin, not the outer one: the window is kept maximized, and
+    // a maximized resizable window's outer edge sits ~8 px past the screen on
+    // every side, which shifted every hit test onto the 8 px resize strips'
+    // neighbours.
+    let origin = window.inner_position().ok()?;
+    let size = window.inner_size().ok()?;
+    let scale = window.scale_factor().ok()?;
+    Some(Geometry {
+        origin,
+        scale,
+        width: size.width as f64 / scale,
+        height: size.height as f64 / scale,
+    })
+}
+
+/// The desktop cursor position, read straight from Windows without waking the main thread.
+#[cfg(windows)]
+fn cursor_position<R: Runtime>(_window: &WebviewWindow<R>) -> Option<PhysicalPosition<f64>> {
+    use windows::Win32::{Foundation::POINT, UI::WindowsAndMessaging::GetCursorPos};
+    let mut point = POINT::default();
+    // Safety: GetCursorPos writes only into the POINT it is given.
+    unsafe { GetCursorPos(&mut point) }.ok()?;
+    Some(PhysicalPosition::new(point.x as f64, point.y as f64))
+}
+
+#[cfg(not(windows))]
+fn cursor_position<R: Runtime>(window: &WebviewWindow<R>) -> Option<PhysicalPosition<f64>> {
+    window.cursor_position().ok()
 }
 
 /// Converts the desktop cursor position into the window's CSS pixel space.
@@ -168,6 +239,12 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
     thread::spawn(move || {
         let mut ignoring = false;
         let mut was_minimized = false;
+        let mut active = false;
+        let mut geometry: Option<Geometry> = None;
+        let mut refreshed_at = Instant::now();
+        let mut last_regions: Option<Vec<HitRect>> = None;
+        let mut last_cursor: Option<PhysicalPosition<f64>> = None;
+        let mut wait = POLL_INTERVAL;
         loop {
             let Some(window) = app.get_webview_window(MAIN_LABEL) else {
                 return;
@@ -195,37 +272,55 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
             let regions = guard.clone();
             drop(guard);
 
-            let is_min = window.is_minimized().unwrap_or(false);
-            if was_minimized && !is_min {
-                log::info!("Window restored from minimized state");
-                let _ = window.emit("sonora://restore", ());
-            } else if !was_minimized && is_min {
-                log::info!("Window minimized");
-                let _ = window.emit("sonora://minimize", ());
+            let stale = !active
+                || regions != last_regions
+                || (regions.is_some() && geometry.is_none())
+                || refreshed_at.elapsed() >= GEOMETRY_REFRESH;
+            if stale {
+                let is_min = window.is_minimized().unwrap_or(false);
+                if was_minimized && !is_min {
+                    log::info!("Window restored from minimized state");
+                    let _ = window.emit("sonora://restore", ());
+                } else if !was_minimized && is_min {
+                    log::info!("Window minimized");
+                    let _ = window.emit("sonora://minimize", ());
+                }
+                was_minimized = is_min;
+                active = window.is_visible().unwrap_or(false) && !is_min;
+                geometry = if active && regions.is_some() {
+                    read_geometry(&window)
+                } else {
+                    None
+                };
+                refreshed_at = Instant::now();
+                last_regions = regions.clone();
+                last_cursor = None;
             }
-            was_minimized = is_min;
 
-            let active = window.is_visible().unwrap_or(false) && !is_min;
-            let should_ignore = match (&regions, active) {
-                // The content origin, not the outer one: the window is kept
-                // maximized, and a maximized resizable window's outer edge
-                // sits ~8 px past the screen on every side, which shifted
-                // every hit test onto the 8 px resize strips' neighbours.
-                (Some(regions), true) => match (
-                    window.cursor_position(),
-                    window.inner_position(),
-                    window.inner_size(),
-                    window.scale_factor(),
-                ) {
-                    (Ok(cursor), Ok(origin), Ok(size), Ok(scale)) => {
-                        let (x, y) = to_window_css(cursor, origin, scale);
-                        let win_w = size.width as f64 / scale;
-                        let win_h = size.height as f64 / scale;
-                        is_inside_window(x, y, win_w, win_h) && !hits_any(regions, x, y)
+            let should_ignore = match (&regions, geometry) {
+                (Some(regions), Some(geometry)) => match cursor_position(&window) {
+                    // A pointer that has not moved lands where it did last time.
+                    Some(cursor) if Some(cursor) == last_cursor => ignoring,
+                    Some(cursor) => {
+                        last_cursor = Some(cursor);
+                        let (x, y) = to_window_css(cursor, geometry.origin, geometry.scale);
+                        wait = poll_interval(distance_to_nearest(regions, x, y));
+                        is_inside_window(x, y, geometry.width, geometry.height)
+                            && !hits_any(regions, x, y)
                     }
-                    _ => false,
+                    None => {
+                        wait = POLL_INTERVAL;
+                        false
+                    }
                 },
-                _ => false,
+                (Some(_), None) if active => {
+                    wait = POLL_INTERVAL;
+                    false
+                }
+                _ => {
+                    wait = IDLE_INTERVAL;
+                    false
+                }
             };
 
             if should_ignore != ignoring && window.set_ignore_cursor_events(should_ignore).is_ok() {
@@ -233,11 +328,7 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
                 ignoring = should_ignore;
             }
 
-            thread::sleep(if regions.is_some() && active {
-                POLL_INTERVAL
-            } else {
-                IDLE_INTERVAL
-            });
+            thread::sleep(wait);
         }
     });
 }
@@ -287,6 +378,32 @@ mod tests {
         assert_eq!(parsed, Some(vec![rect(1.0, 2.0, 3.0, 4.0)]));
         let full: Option<Vec<HitRect>> = serde_json::from_str("null").unwrap();
         assert_eq!(full, None);
+    }
+
+    #[test]
+    fn measures_distance_to_the_nearest_panel() {
+        let regions = [
+            rect(100.0, 100.0, 200.0, 100.0),
+            rect(500.0, 100.0, 50.0, 50.0),
+        ];
+        assert_eq!(distance_to_nearest(&regions, 150.0, 150.0), 0.0);
+        assert_eq!(distance_to_nearest(&regions, 150.0, 40.0), 60.0);
+        assert_eq!(distance_to_nearest(&regions, 400.0, 120.0), 100.0);
+        assert!((distance_to_nearest(&regions, 60.0, 70.0) - 50.0).abs() < 1e-9);
+        assert!(distance_to_nearest(&[], 0.0, 0.0).is_infinite());
+    }
+
+    #[test]
+    fn samples_slower_only_when_no_panel_is_within_reach() {
+        assert_eq!(poll_interval(0.0), POLL_INTERVAL);
+        assert_eq!(poll_interval(100.0), POLL_INTERVAL);
+        assert_eq!(poll_interval(600.0), Duration::from_millis(150));
+        assert_eq!(poll_interval(5000.0), MAX_POLL_INTERVAL);
+        assert_eq!(poll_interval(f64::INFINITY), MAX_POLL_INTERVAL);
+        // Never longer than the pointer needs to cross the gap at flick speed.
+        for distance in [210.0, 480.0, 900.0] {
+            assert!(poll_interval(distance).as_secs_f64() * 1000.0 * CURSOR_SPEED <= distance);
+        }
     }
 
     #[test]
