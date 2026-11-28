@@ -143,26 +143,34 @@ export function formatAudioTelemetry(
   return parts.join(" · ");
 }
 
-export function formatCompactQualityBadge(
-  settings: Pick<UserSettings, "audioQuality" | "audioEnhancement">,
+/** True while the playing stream was picked for a different quality than the one now chosen. */
+export function isQualityChangePending(
+  settings: Pick<UserSettings, "audioQuality">,
   info?: AudioStreamInfo | null,
-): string | null {
-  if (settings.audioQuality === "lossless") {
-    if (info?.fallbackUsed) {
-      return info.bitrateKbps ? `Best · ${info.bitrateKbps} kbps` : "Best Available";
-    }
-    return info?.bitrateKbps ? `Lossless · ${info.bitrateKbps} kbps` : "Lossless Studio";
+): boolean {
+  return Boolean(info?.effectiveQuality && !info.fallbackUsed && info.effectiveQuality !== settings.audioQuality);
+}
+
+export function formatCompactQualityBadge(
+  settings: Pick<UserSettings, "audioQuality">,
+  info?: AudioStreamInfo | null,
+): string {
+  const requested = sanitizeAudioQuality(settings.audioQuality);
+  if (info?.fallbackUsed && (requested === "lossless" || requested === "high")) {
+    return info.bitrateKbps ? `Best · ${info.bitrateKbps} kbps` : "Best Available";
   }
-  if (settings.audioQuality === "high") {
-    if (info?.fallbackUsed) {
-      return info.bitrateKbps ? `Best · ${info.bitrateKbps} kbps` : "Best Available";
-    }
-    if (info?.bitrateKbps) return `High · ${info.bitrateKbps} kbps`;
-    if (settings.audioEnhancement !== "off") return audioEnhancementOption(settings.audioEnhancement).label;
-    return null;
+  const label = audioQualityOption(requested).label;
+  // The stream only changes with the next song, so the old bitrate would misdescribe a new choice.
+  if (info?.bitrateKbps && !isQualityChangePending(settings, info)) {
+    return `${label} · ${info.bitrateKbps} kbps`;
   }
-  if (settings.audioEnhancement !== "off") {
-    return audioEnhancementOption(settings.audioEnhancement).label;
-  }
-  return null;
+  return label;
+}
+
+/** Order the Now Playing quality text steps through, wrapping back to the lightest. */
+const QUALITY_CYCLE: readonly AudioQualityMode[] = ["saver", "balanced", "high", "lossless"];
+
+export function nextAudioQuality(mode: AudioQualityMode): AudioQualityMode {
+  const index = QUALITY_CYCLE.indexOf(sanitizeAudioQuality(mode));
+  return QUALITY_CYCLE[(index + 1) % QUALITY_CYCLE.length];
 }
