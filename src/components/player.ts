@@ -18,6 +18,8 @@ import type { Track, PlaybackState } from "@/types/music";
 
 /** One wheel notch or arrow key on the progress bar. */
 const SEEK_STEP_SECONDS = 5;
+/** How long the end-of-queue hint stays up after the last Next press. */
+const QUEUE_END_HINT_MS = 2400;
 /** One wheel notch or arrow key on the volume bar. */
 const VOLUME_STEP = 0.05;
 /** Minimum pixel overflow before enabling marquee scroll on metadata lines. */
@@ -87,7 +89,9 @@ class PlayerBar {
     volumeBtn: HTMLElement;
     lyricsBtn: HTMLElement;
     deviceBtn: HTMLElement;
+    queueEndHint: HTMLElement;
   } | null = null;
+  private queueEndTimer: number | null = null;
 
   private progressSlider: Slider | null = null;
   private volumeSlider: Slider | null = null;
@@ -273,6 +277,12 @@ class PlayerBar {
 
     const meta = el("div", { className: "player__meta", children: [title, artist] });
 
+    // Announced politely when Next has nothing left to play; empty until then.
+    const queueEndHint = el("div", {
+      className: "queue-end-hint",
+      attrs: { role: "status", "aria-live": "polite" },
+    });
+
     const root = el("div", {
       className: "player",
       children: [
@@ -310,6 +320,7 @@ class PlayerBar {
             deviceBtn,
           ],
         }),
+        queueEndHint,
       ],
     });
 
@@ -338,6 +349,7 @@ class PlayerBar {
       volumeBtn,
       lyricsBtn,
       deviceBtn,
+      queueEndHint,
     };
 
     this.setupInteractivity();
@@ -349,6 +361,49 @@ class PlayerBar {
     requestAnimationFrame(() => this.syncMetadataMarquees());
 
     return root;
+  }
+
+  private showQueueEndHint(detail: string): void {
+    if (!this.elements) return;
+    const { root, queueEndHint: hint, skipFwdBtn } = this.elements;
+
+    // Point the hint's tail at the Next button wherever the layout has put it.
+    const rootBox = root.getBoundingClientRect();
+    const buttonBox = skipFwdBtn.getBoundingClientRect();
+    if (buttonBox.width > 0) {
+      hint.style.setProperty("--hint-x", `${buttonBox.left - rootBox.left + buttonBox.width / 2}px`);
+    }
+
+    hint.replaceChildren(
+      el("span", { className: "queue-end-hint__icon", html: icon("queue") }),
+      el("span", { className: "queue-end-hint__title", text: "End of queue" }),
+      el("span", { className: "queue-end-hint__detail", text: detail }),
+    );
+    hint.classList.add("is-visible");
+
+    if (!shouldReduceMotion() && typeof skipFwdBtn.animate === "function") {
+      // A short knock against the end of the list.
+      skipFwdBtn.animate(
+        [
+          { transform: "translateX(0)" },
+          { transform: "translateX(3px)", offset: 0.35 },
+          { transform: "translateX(-1px)", offset: 0.7 },
+          { transform: "translateX(0)" },
+        ],
+        { duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+      );
+    }
+
+    if (this.queueEndTimer !== null) window.clearTimeout(this.queueEndTimer);
+    this.queueEndTimer = window.setTimeout(() => this.hideQueueEndHint(), QUEUE_END_HINT_MS);
+  }
+
+  private hideQueueEndHint(): void {
+    if (this.queueEndTimer !== null) {
+      window.clearTimeout(this.queueEndTimer);
+      this.queueEndTimer = null;
+    }
+    this.elements?.queueEndHint.classList.remove("is-visible");
   }
 
   private syncMetadataMarquees(reset = false): void {
@@ -550,7 +605,12 @@ class PlayerBar {
     });
 
     playerEngine.on("trackChange", (track: Track | null) => {
+      this.hideQueueEndHint();
       this.applyTrackDisplay(track, true);
+    });
+
+    playerEngine.on("queueEnd", ({ autoplay }) => {
+      this.showQueueEndHint(autoplay ? "Pick a song to start" : "Autoplay is off");
     });
 
     storage.on("likeChange", ({ trackId, isLiked }) => {

@@ -674,3 +674,106 @@
 .player--error .player__artist {
   color: var(--color-danger);
 }
+
+/* ── End-of-queue hint ──────────────────────────────────── */
+/* Rises over the player bar with its tail on the Next button. */
+
+.queue-end-hint {
+  --hint-x: 50%;
+  position: absolute;
+  left: var(--hint-x);
+  bottom: calc(100% + var(--space-3));
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--glass-sheen), var(--color-surface);
+  box-shadow: var(--glass-edge), var(--elevation-2);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 6px) scale(0.94);
+  transform-origin: 50% 100%;
+  transition: opacity var(--duration-normal) var(--ease-in-out),
+              transform var(--duration-normal) var(--ease-in-out),
+              visibility 0s linear var(--duration-normal);
+}
+
+.queue-end-hint.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0) scale(1);
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-slow) var(--ease-spring),
+              visibility 0s;
+}
+
+/* The tail: a rotated square sharing the pill's surface and border. */
+.queue-end-hint::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  border-bottom-right-radius: 2px;
+  background: var(--color-surface);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.queue-end-hint__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+  color: var(--color-accent);
+}
+
+.queue-end-hint__icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.queue-end-hint__title {
+  font-weight: var(--weight-semibold);
+}
+
+.queue-end-hint__detail {
+  color: var(--color-text-secondary);
+}
+
+.queue-end-hint__detail::before {
+  content: "\00B7";
+  margin-right: var(--space-2);
+  color: var(--color-text-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-end-hint,
+  .queue-end-hint.is-visible {
+    transform: translate(-50%, 0);
+    transition: opacity var(--duration-normal) linear, visibility 0s linear var(--duration-normal);
+  }
+
+  .queue-end-hint.is-visible {
+    transition: opacity var(--duration-normal) linear, visibility 0s;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .queue-end-hint {
+    background: var(--color-surface);
+  }
+}

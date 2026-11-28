@@ -23,6 +23,8 @@ export interface PlaybackEvents {
   queueChange: Track[];
   paletteChange: ArtworkPalette;
   lyricsChange: LyricsData | null;
+  /** Next was pressed but nothing is left to play. */
+  queueEnd: { autoplay: boolean };
 }
 
 /** The part of the bridge the engine needs; swapped for a fake in tests. */
@@ -188,6 +190,8 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     } else if (this.state.currentTrack && storage.getSettings().autoPlayNext) {
       // Past the end of Sonora's list, let YouTube Music continue with its own radio.
       this.send({ action: "next" });
+    } else {
+      this.emit("queueEnd", { autoplay: storage.getSettings().autoPlayNext });
     }
   }
 
