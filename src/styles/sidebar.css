@@ -109,56 +109,6 @@
   height: 18px;
 }
 
-.sidebar__playlists {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-3);
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.sidebar__playlists:empty {
-  padding: 0;
-  border-top: none;
-}
-
-.sidebar__playlist-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-
-.sidebar__playlist-item:hover {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-
-.sidebar__playlist-item--active {
-  background: color-mix(in oklab, var(--color-accent) 20%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px color-mix(in oklab, var(--color-accent) 25%, transparent);
-  color: var(--color-text);
-}
-
-.sidebar__playlist-title {
-  min-width: 0;
-  flex: 1;
-}
-
-.sidebar__playlist-art {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-secondary);
-  flex-shrink: 0;
-  object-fit: cover;
-}
-
 /* ── Centered Musical Brand Icon (No Text) ─────────────────── */
 .sidebar__brand {
   display: flex;

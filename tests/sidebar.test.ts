@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createSidebar } from "../src/components/sidebar";
-import { router } from "../src/lib/router";
 import { storage } from "../src/lib/storage";
 
-describe("Sidebar tap jiggle and playlists", () => {
+describe("Sidebar tap jiggle", () => {
   beforeEach(() => {
     localStorage.clear();
     window.location.hash = "#/";
@@ -54,8 +53,7 @@ describe("Sidebar tap jiggle and playlists", () => {
     expect(sidebar.classList.contains("sidebar--jiggle")).toBe(false);
   });
 
-  it("populates sidebar playlists, reacts to playlist changes, and opens the selected playlist", () => {
-    const navigate = vi.spyOn(router, "navigate");
+  it("keeps saved playlists out of the sidebar rail", () => {
     storage.savePlaylist({
       id: "pl_1",
       title: "Road Trip",
@@ -66,21 +64,10 @@ describe("Sidebar tap jiggle and playlists", () => {
 
     const sidebar = createSidebar();
     document.body.appendChild(sidebar);
-
-    const items = sidebar.querySelectorAll<HTMLAnchorElement>(".sidebar__playlist-item");
-    expect(items).toHaveLength(1);
-    expect(items[0].textContent).toContain("Road Trip");
-    expect(items[0].querySelector("img")?.getAttribute("src")).toBe("https://example.com/art.jpg");
-
-    items[0].click();
-    expect(navigate).toHaveBeenCalledWith("/playlist?source=local&id=pl_1");
-
-    // Adding and deleting playlists updates the sidebar list automatically
     storage.savePlaylist({ id: "pl_2", title: "Chill", trackCount: 0, tracks: [], isCustom: true });
-    expect(sidebar.querySelectorAll(".sidebar__playlist-item")).toHaveLength(2);
 
-    storage.deletePlaylist("pl_1");
-    storage.deletePlaylist("pl_2");
-    expect(sidebar.querySelector(".sidebar__playlists")?.children).toHaveLength(0);
+    expect(sidebar.querySelector('nav[aria-label="Playlists"]')).toBeNull();
+    expect(sidebar.textContent).not.toContain("Road Trip");
+    expect(sidebar.textContent).not.toContain("Chill");
   });
 });

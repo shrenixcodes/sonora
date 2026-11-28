@@ -114,7 +114,7 @@ export function createSidebar(): HTMLElement {
 
   sidebar.addEventListener("click", (e) => {
     const target = e.target;
-    if (target instanceof Element && target.closest(".sidebar__brand, .sidebar__link, .sidebar__playlist-item, button")) {
+    if (target instanceof Element && target.closest(".sidebar__brand, .sidebar__link, button")) {
       triggerJiggle();
     }
   });
@@ -124,17 +124,13 @@ export function createSidebar(): HTMLElement {
     }
   });
 
-  let activePath = window.location.hash.slice(1) || "/";
-
   // Track active route
   function updateActive(path: string): void {
-    activePath = path || activePath;
     const links = sidebar.querySelectorAll<HTMLElement>(".sidebar__link");
     links.forEach((link) => {
       const linkPath = link.dataset.path;
       link.classList.toggle("sidebar__link--active", linkPath === path);
     });
-
   }
 
   let wasConnected = false;
