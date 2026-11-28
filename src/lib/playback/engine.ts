@@ -406,7 +406,10 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
         title: report.title!,
         artist: report.artist ?? current.artist,
         artworkUrl: report.artworkUrl ?? current.artworkUrl,
-        duration: report.duration > 0 ? Math.round(report.duration) : current.duration,
+        // Only a "track" report (loadedmetadata) carries a duration known to
+        // belong to this video; live "time" reports can expose the length of a
+        // stream YTM is crossfading into, which must not stick to the track.
+        duration: report.reason === "track" && report.duration > 0 ? Math.round(report.duration) : current.duration,
       });
     }
 
@@ -423,9 +426,15 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
         // metadata refinement but rejects a crossfade song swap.
         const established = this.state.duration;
         const delta = Math.abs(report.duration - established);
-        const nearEnd = established > 0 && this.state.currentTime / established > 0.9;
+        const position = Math.max(this.state.currentTime, report.currentTime);
+        const nearEnd = established > 0 && position / established > 0.9;
         if (!nearEnd || report.reason === "track" || delta < 3) {
           this.state.duration = report.duration;
+        }
+        // Backfill a track adopted without a trustworthy duration.
+        const current = this.state.currentTrack;
+        if (report.reason === "track" && current && !current.duration && report.videoId === current.id) {
+          this.setCurrent({ ...current, duration: Math.round(report.duration) }, false);
         }
       }
       this.setTime(report.ad ? 0 : report.currentTime);
@@ -475,7 +484,8 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
       title: report.title!,
       artist: report.artist ?? "",
       album: report.album ?? undefined,
-      duration: Math.round(report.duration),
+      // See reportCorrectsCurrentTrack: only "track" reports are trusted for length.
+      duration: report.reason === "track" ? Math.round(report.duration) : 0,
       artworkUrl: report.artworkUrl ?? "",
     });
   }
