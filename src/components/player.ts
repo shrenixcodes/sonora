@@ -92,6 +92,8 @@ class PlayerBar {
     queueEndHint: HTMLElement;
   } | null = null;
   private queueEndTimer: number | null = null;
+  /** The second and duration the progress bar last showed. */
+  private shownProgress = { second: -1, duration: -1 };
 
   private progressSlider: Slider | null = null;
   private volumeSlider: Slider | null = null;
@@ -640,6 +642,11 @@ class PlayerBar {
 
     playerEngine.on("timeUpdate", ({ currentTime, duration }) => {
       if (!this.elements || this.progressSlider?.dragging) return;
+      // The label changes once a second and the bar moves a pixel or two. Drawing
+      // the engine's in-between ticks redraws the transparent window for nothing.
+      const second = Math.floor(currentTime);
+      if (second === this.shownProgress.second && duration === this.shownProgress.duration) return;
+      this.shownProgress = { second, duration };
 
       this.elements.currentTime.textContent = formatTime(currentTime);
       if (duration > 0) {
