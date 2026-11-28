@@ -35,6 +35,8 @@ export interface PlaybackBridge {
 }
 
 const TICK_MS = 250;
+/** Queue saves are batched: a run of skips writes the (up to 500 track) queue once. */
+const SAVE_DELAY_MS = 1000;
 const RESTART_THRESHOLD_S = 3;
 const UNAVAILABLE_MESSAGE = "Playback works in the Sonora desktop app.";
 /** A page that never reports back (unavailable video, network trouble) must not leave "Loading…" forever. */
@@ -70,6 +72,7 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   /** When the last skip was handled, and the load a run of them is still waiting to send. */
   private lastSkipAt = 0;
   private skipTimer: number | null = null;
+  private saveTimer: number | null = null;
   private lastSentAudioConfigKey: string | null = null;
   private isRepeatingCurrent = false;
   /** True when currentTrack was restored from storage and has not yet been loaded in the webview. */
@@ -91,11 +94,13 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.stopTicker();
+        this.flushPlaybackState();
       } else if (this.state.status === "playing") {
         this.tick();
         this.startTicker();
       }
     });
+    window.addEventListener("pagehide", () => this.flushPlaybackState());
     storage.on("settingsChange", (settings) => {
       const next = audioConfigFromSettings(settings);
       const key = JSON.stringify(next);
@@ -558,6 +563,15 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
   }
 
   private persistPlaybackState(): void {
+    if (this.saveTimer !== null) return;
+    this.saveTimer = window.setTimeout(() => this.flushPlaybackState(), SAVE_DELAY_MS);
+  }
+
+  /** Writes the latest queue now if a save is waiting. */
+  private flushPlaybackState(): void {
+    if (this.saveTimer === null) return;
+    window.clearTimeout(this.saveTimer);
+    this.saveTimer = null;
     storage.saveQueue(this.queue.snapshot());
     storage.saveLastTrack(this.state.currentTrack);
   }
