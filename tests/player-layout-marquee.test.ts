@@ -92,7 +92,8 @@ describe("Player responsive CSS & metadata marquee", () => {
     expect(playerCss).not.toContain("min-width: 400px");
     expect(playerCss).toContain("minmax(0, 1.15fr) auto minmax(max-content, 0.85fr)");
     expect(playerCss).toMatch(/\.player__controls\s*\{[^}]*min-width:\s*0;[^}]*clamp\(/s);
-    expect(playerCss).toContain("@media (max-width: 820px)");
+    // Frame-width band (the window no longer resizes; window-mode.ts sets the class).
+    expect(playerCss).toContain(":where(html.fw-max-820) .player__volume-slider");
     expect(playerCss).toContain("@container player (max-width: 780px)");
     expect(playerCss).toContain(".player__volume-slider");
     expect(playerCss).toContain("@keyframes player-marquee-bounce");

@@ -22,6 +22,7 @@
         "transparent": true,
         "shadow": false,
         "center": true,
+        "maximized": true,
         "resizable": true,
         "visible": false,
         "dragDropEnabled": false

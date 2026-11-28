@@ -77,6 +77,12 @@
 
 .section {
   margin-bottom: var(--space-10);
+  /* Off-screen sections skip layout and paint. Home has ~20 shelves with
+     ~290 images, and only two or three are on screen: measured on a
+     maximize, paint went from 294 to 53 ms and per-frame overhead with it.
+     The remembered size keeps the scrollbar steady as sections come into view. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 .section__header {
@@ -701,22 +707,22 @@
   background: var(--color-scrollbar);
 }
 
-@media (max-width: 1200px) {
-  .shelf {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-    overflow-x: visible;
-    scroll-snap-type: none;
-    margin: 0;
-    padding-inline: 0;
-    padding-bottom: 0;
-    gap: var(--space-3);
-  }
+/* Frame at most/least 1200px wide (was a viewport media query; the window
+   no longer changes size, src/lib/window-mode.ts sets the band classes). */
+:where(html.fw-max-1200) .shelf {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  overflow-x: visible;
+  scroll-snap-type: none;
+  margin: 0;
+  padding-inline: 0;
+  padding-bottom: 0;
+  gap: var(--space-3);
+}
 
-  .shelf .shelf-card {
-    margin: 0;
-    scroll-snap-align: none;
-  }
+:where(html.fw-max-1200) .shelf .shelf-card {
+  margin: 0;
+  scroll-snap-align: none;
 }
 
 .shelf-card {
@@ -918,8 +924,8 @@
 
 .playlist-picker,
 .sonora-dialog {
-  width: min(400px, calc(100vw - 32px));
-  max-height: min(70vh, 520px);
+  width: min(400px, calc(var(--frame-w) - 32px));
+  max-height: min(calc(var(--frame-h) * 0.7), 520px);
   padding: 24px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
@@ -936,7 +942,7 @@
 .playlist-picker__empty,
 .playlist-picker__status,
 .sonora-dialog__subtitle { color: var(--color-text-secondary); margin-top: 8px; }
-.playlist-picker__list { display: grid; gap: 4px; max-height: 40vh; overflow-y: auto; margin-top: 16px; }
+.playlist-picker__list { display: grid; gap: 4px; max-height: calc(var(--frame-h) * 0.4); overflow-y: auto; margin-top: 16px; }
 .playlist-picker__item { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 10px; border-radius: var(--radius-md); text-align: left; }
 .playlist-picker__item:hover, .playlist-picker__item:focus-visible { background: var(--color-surface-secondary); }
 .playlist-picker__item:disabled { color: var(--color-text-tertiary); }
@@ -966,17 +972,17 @@
 .song-radio-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--radius-full); color: var(--color-text-secondary); }
 .song-radio-btn:hover, .song-radio-btn:focus-visible { color: var(--color-accent); background: var(--color-surface-secondary); outline: 2px solid var(--color-accent); outline-offset: -2px; }
 .song-radio-btn svg { width: 16px; height: 16px; }
-.song-radio-status { pointer-events: none; position: fixed; right: 20px; bottom: 100px; z-index: var(--z-toast); padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-lg); }
+.song-radio-status { pointer-events: none; position: fixed; right: calc(var(--frame-r) + 20px); bottom: calc(var(--frame-b) + 100px); z-index: var(--z-toast); padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-lg); }
 
 .update-toast {
   position: fixed;
-  right: 20px;
-  bottom: 104px;
+  right: calc(var(--frame-r) + 20px);
+  bottom: calc(var(--frame-b) + 104px);
   z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(360px, calc(100vw - 40px));
+  max-width: min(360px, calc(var(--frame-w) - 40px));
   padding: 10px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -1155,34 +1161,34 @@
   border-radius: 3px;
 }
 
-@media (max-width: 720px) {
-  .collection__header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-4);
-  }
+/* Frame at most/least 720px wide (was a viewport media query; the window
+   no longer changes size, src/lib/window-mode.ts sets the band classes). */
+:where(html.fw-max-720) .collection__header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
 
-  .collection__artwork {
-    width: 140px;
-    height: 140px;
-  }
+:where(html.fw-max-720) .collection__artwork {
+  width: 140px;
+  height: 140px;
+}
 
-  .collection__meta {
-    width: 100%;
-  }
+:where(html.fw-max-720) .collection__meta {
+  width: 100%;
+}
 
-  .track-row__album {
-    display: none;
-  }
+:where(html.fw-max-720) .track-row__album {
+  display: none;
+}
 
-  .track-row {
-    grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 40px;
-    gap: var(--space-2);
-  }
+:where(html.fw-max-720) .track-row {
+  grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 40px;
+  gap: var(--space-2);
+}
 
-  .track-row--removable {
-    grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 28px 40px;
-  }
+:where(html.fw-max-720) .track-row--removable {
+  grid-template-columns: 24px 36px minmax(0, 1fr) 28px 28px 28px 40px;
 }
 
 @container main (max-width: 620px) {

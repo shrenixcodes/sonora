@@ -1,9 +1,11 @@
 //! Floating window support for the main window.
 //!
-//! At its normal (restored) size Sonora draws floating panels on a transparent
-//! window. The empty space between them must not swallow clicks meant for the
-//! desktop, so the frontend reports where its panels are and this module turns
-//! cursor events off whenever the pointer is outside all of them.
+//! The main window stays maximized and transparent. In its floating layout
+//! Sonora draws the "floating window" as a frame of panels inside it
+//! (src/lib/window-mode.ts), so maximize and restore never resize the OS
+//! window. The empty space around the panels must not swallow clicks meant for
+//! the desktop, so the frontend reports where its panels are and this module
+//! turns cursor events off whenever the pointer is outside all of them.
 //!
 //! Windows sends no mouse events to a window that ignores the cursor, so the
 //! pointer is sampled on a timer. The timer only runs in floating mode and
@@ -205,9 +207,13 @@ pub fn start_click_through_sampler<R: Runtime>(app: &AppHandle<R>) {
 
             let active = window.is_visible().unwrap_or(false) && !is_min;
             let should_ignore = match (&regions, active) {
+                // The content origin, not the outer one: the window is kept
+                // maximized, and a maximized resizable window's outer edge
+                // sits ~8 px past the screen on every side, which shifted
+                // every hit test onto the 8 px resize strips' neighbours.
                 (Some(regions), true) => match (
                     window.cursor_position(),
-                    window.outer_position(),
+                    window.inner_position(),
                     window.inner_size(),
                     window.scale_factor(),
                 ) {
@@ -312,11 +318,13 @@ mod window_state {
 
     use tauri::{Emitter, Runtime, WebviewWindow};
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::Graphics::Dwm::{DWMWA_TRANSITIONS_FORCEDISABLED, DwmSetWindowAttribute};
     use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
     use windows::Win32::UI::WindowsAndMessaging::{
         SC_MINIMIZE, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SW_MINIMIZE, ShowWindowAsync,
         WM_SIZE, WM_SYSCOMMAND,
     };
+    use windows::core::BOOL;
 
     /* -- Minimize hand-off ---------------------------------------------------
      * Windows keeps the last frame a window painted and shows it first when the
@@ -377,6 +385,28 @@ mod window_state {
         false
     }
 
+    /* -- Native window animations off -----------------------------------------
+     * Windows animates maximize, restore and minimize by stretching a picture of
+     * the window for about 700 ms. The interface plays its own animations for
+     * all of these (window-morph.ts, symbiote.ts), so the native ones would only
+     * delay and fight them.
+     */
+    fn disable_native_transitions(hwnd: HWND) {
+        let disabled = BOOL::from(true);
+        // Safety: the attribute is a BOOL, passed by pointer with its size.
+        let result = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_TRANSITIONS_FORCEDISABLED,
+                &disabled as *const BOOL as *const _,
+                std::mem::size_of::<BOOL>() as u32,
+            )
+        };
+        if let Err(err) = result {
+            log::warn!("could not turn off native window animations: {err}");
+        }
+    }
+
     const SUBCLASS_ID: usize = 1;
 
     unsafe extern "system" fn on_message(
@@ -406,6 +436,7 @@ mod window_state {
                 let _ = target.emit(event, ());
             });
         }));
+        disable_native_transitions(hwnd);
         // Safety: the subclass lives as long as the window it is attached to.
         let installed = unsafe { SetWindowSubclass(hwnd, Some(on_message), SUBCLASS_ID, 0) };
         if !installed.as_bool() {

@@ -192,6 +192,24 @@ export class AmbientVisualRenderer {
   private frameTimer: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private readonly onWindowResize = () => this.handleResize();
+  /** Set while a maximize/restore morph has the renderer paused. */
+  private pausedForMorph = false;
+  /**
+   * The maximize/restore morph hides this canvas anyway; stopping the shader
+   * for its half second leaves the GPU to the morph on low-end machines.
+   */
+  private readonly onWindowMorph = (event: Event) => {
+    const active = (event as CustomEvent<{ active: boolean }>).detail?.active;
+    if (active) {
+      if (this.isRunning) {
+        this.pausedForMorph = true;
+        this.pause();
+      }
+    } else if (this.pausedForMorph) {
+      this.pausedForMorph = false;
+      if (!document.hidden) this.resume();
+    }
+  };
   private readonly onVisibilityChange = () => {
     if (document.hidden) {
       this.pause();
@@ -246,6 +264,7 @@ export class AmbientVisualRenderer {
 
   private setupListeners(): void {
     window.addEventListener("resize", this.onWindowResize);
+    window.addEventListener("sonora:window-morph", this.onWindowMorph);
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.handleResize());
       this.resizeObserver.observe(this.canvas);
@@ -533,6 +552,7 @@ export class AmbientVisualRenderer {
     this.pause();
     window.removeEventListener("resize", this.onWindowResize);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    window.removeEventListener("sonora:window-morph", this.onWindowMorph);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     if (this.gl && this.currentProgram) {

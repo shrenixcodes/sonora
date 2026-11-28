@@ -84,10 +84,10 @@ body {
     "player   player   player";
 }
 
-@media (max-width: 1100px) {
-  #app.app--queue-open {
-    --queue-width: 260px;
-  }
+/* Frame at most/least 1100px wide (was a viewport media query; the window
+   no longer changes size, src/lib/window-mode.ts sets the band classes). */
+:where(html.fw-max-1100) #app.app--queue-open {
+  --queue-width: 260px;
 }
 
 /* Shared look for the sidebar, content, queue and player panels: translucent

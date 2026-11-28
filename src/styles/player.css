@@ -212,7 +212,7 @@
   align-items: center;
   justify-content: center;
   min-width: 0;
-  width: clamp(230px, 36vw, 440px);
+  width: clamp(230px, calc(var(--frame-w) * 0.36), 440px);
   width: clamp(230px, 36cqi, 440px);
   height: 100%;
 }
@@ -458,10 +458,10 @@
   }
 }
 
-@media (max-width: 820px) {
-  .player__volume-slider {
-    display: none;
-  }
+/* Frame at most/least 820px wide (was a viewport media query; the window
+   no longer changes size, src/lib/window-mode.ts sets the band classes). */
+:where(html.fw-max-820) .player__volume-slider {
+  display: none;
 }
 
 @container player (max-width: 700px) {
@@ -498,52 +498,52 @@
   }
 }
 
-@media (max-width: 700px) {
-  .player {
-    gap: var(--space-2);
-    padding: 0 var(--space-3);
-  }
+/* Frame at most/least 700px wide (was a viewport media query; the window
+   no longer changes size, src/lib/window-mode.ts sets the band classes). */
+:where(html.fw-max-700) .player {
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
 
-  .player__track {
-    gap: var(--space-2);
-  }
+:where(html.fw-max-700) .player__track {
+  gap: var(--space-2);
+}
 
-  .player__controls {
-    width: clamp(196px, 38vw, 320px);
-    width: clamp(196px, 38cqi, 320px);
-  }
+:where(html.fw-max-700) .player__controls {
+  width: clamp(196px, calc(var(--frame-w) * 0.38), 320px);
+  width: clamp(196px, 38cqi, 320px);
+}
 
-  .player__buttons {
-    gap: var(--space-1);
-  }
+:where(html.fw-max-700) .player__buttons {
+  gap: var(--space-1);
+}
 
-  .player__btn,
-  .player__volume-btn,
-  .player__extra-btn {
-    width: 28px;
-    height: 28px;
-  }
+:where(html.fw-max-700) .player__btn,
+:where(html.fw-max-700) .player__volume-btn,
+:where(html.fw-max-700) .player__extra-btn {
+  width: 28px;
+  height: 28px;
+}
 
-  .player__play-btn {
-    width: 32px;
-    height: 32px;
-  }
+:where(html.fw-max-700) .player__play-btn {
+  width: 32px;
+  height: 32px;
+}
 
-  .player__time {
-    min-width: 30px;
-  }
+:where(html.fw-max-700) .player__time {
+  min-width: 30px;
+}
 
-  .player__right {
-    gap: var(--space-1);
-  }
+:where(html.fw-max-700) .player__right {
+  gap: var(--space-1);
 }
 
 .audio-device-menu {
   position: fixed;
-  right: 20px;
-  bottom: 92px;
+  right: calc(var(--frame-r) + 20px);
+  bottom: calc(var(--frame-b) + 92px);
   z-index: var(--z-popover, 400);
-  width: min(320px, calc(100vw - 24px));
+  width: min(320px, calc(var(--frame-w) - 24px));
   padding: 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);

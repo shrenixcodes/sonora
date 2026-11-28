@@ -1,7 +1,8 @@
 /**
  * Custom window titlebar.
  *
- * Provides drag-to-move (via data-tauri-drag-region), back/forward/refresh navigation,
+ * Provides drag-to-move (data-drag-region, handled in src/lib/window-mode.ts: the
+ * floating window is a frame inside the page, not the OS window), back/forward/refresh navigation,
  * the app-wide search field, and minimize/maximize/close controls.
  */
 
@@ -15,7 +16,7 @@ import { router } from "@/lib/router";
 import { searchQuery } from "@/lib/search-query";
 import { catalog } from "@/lib/ytm/catalog";
 import { prepareMinimize } from "@/lib/visuals/symbiote";
-import { setOptimisticMaximized, subscribeWindowMode } from "@/lib/window-mode";
+import { isFullscreenWindow, subscribeWindowMode, toggleMaximizeAnimated } from "@/lib/window-mode";
 
 const GRIP_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
 
@@ -36,28 +37,22 @@ export function createTitlebar(): HTMLElement {
   // Window controls need the Tauri runtime; in a plain browser (UI development) they do nothing.
   const appWindow = isTauri() ? getCurrentWindow() : null;
 
-  const startWindowDrag = (e: MouseEvent) => {
-    if (e.button === 0 && appWindow) {
-      appWindow.startDragging().catch((err) => {
-        console.error("[titlebar] startDragging failed:", err);
-      });
-    }
-  };
-
   const titlebar = el("header", {
     className: "titlebar",
-    // Tauri only starts a window drag when the pressed element itself carries this attribute.
-    attrs: { "data-tauri-drag-region": "" },
+    // Pressing anywhere here except on a control moves the floating frame
+    // (window-mode.ts). Not Tauri's drag region: that would drag the OS
+    // window, which has to stay maximized.
+    attrs: { "data-drag-region": "" },
     children: [
       // Left: navigation buttons
       el("div", {
         className: "titlebar__left",
-        attrs: { "data-tauri-drag-region": "" },
+        attrs: { "data-drag-region": "" },
         children: [
           // Drag handle for the floating layout, where the gaps around panels are click-through.
           el("span", {
             className: "titlebar__grip",
-            attrs: { "data-tauri-drag-region": "", title: "Drag to move", "aria-hidden": "true" },
+            attrs: { "data-drag-region": "", title: "Drag to move", "aria-hidden": "true" },
             html: GRIP_ICON,
           }),
           createNavControls(),
@@ -67,7 +62,7 @@ export function createTitlebar(): HTMLElement {
       // Center: search
       el("div", {
         className: "titlebar__center",
-        attrs: { "data-tauri-drag-region": "" },
+        attrs: { "data-drag-region": "" },
         children: [createSearchField()],
       }),
 
@@ -100,47 +95,31 @@ export function createTitlebar(): HTMLElement {
     ],
   });
 
-  titlebar.addEventListener("mousedown", (e: MouseEvent) => {
-    if (e.button !== 0 || !appWindow) return;
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    if (target.closest("button, input, select, textarea, a, .no-drag")) return;
-    if (target.closest("[data-tauri-drag-region]") || target === titlebar) {
-      startWindowDrag(e);
-    }
-  });
-
   return titlebar;
 }
 
 /** Maximize/restore button that stays in sync with window state without duplicate IPC polling. */
 function createMaximizeButton(appWindow: WindowHandle | null): HTMLElement {
-  let currentMax = false;
   const btn = el("button", {
     className: "titlebar__window-btn",
     html: icon("maximize"),
     attrs: { "aria-label": "Maximize", title: "Maximize" },
     onClick: async () => {
-      if (!appWindow) return;
-      await leaveFullscreen(appWindow);
-      const nextMax = !currentMax;
-      applyButtonState(nextMax);
-      setOptimisticMaximized(nextMax);
-      await appWindow.toggleMaximize();
+      // Only fullscreen needs the OS; otherwise this is a layout switch inside
+      // the page (the OS window stays maximized), with no round trip first.
+      if (appWindow && isFullscreenWindow()) await leaveFullscreen(appWindow);
+      await toggleMaximizeAnimated();
     },
   });
 
   const applyButtonState = (isMax: boolean) => {
-    currentMax = isMax;
     btn.innerHTML = icon(isMax ? "restore" : "maximize");
     const label = isMax ? "Restore" : "Maximize";
     btn.setAttribute("aria-label", label);
     btn.setAttribute("title", label);
   };
 
-  if (appWindow) {
-    subscribeWindowMode(({ maximized }) => applyButtonState(maximized));
-  }
+  subscribeWindowMode(({ maximized }) => applyButtonState(maximized));
 
   return btn;
 }
