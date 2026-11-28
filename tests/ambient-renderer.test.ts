@@ -104,4 +104,42 @@ describe("AmbientVisualRenderer frame scheduling", () => {
     vi.advanceTimersByTime(200);
     expect(frames()).toBeGreaterThan(afterSettle);
   });
+
+  it("freezes animated modes while music is paused and resumes without a jump", () => {
+    vi.useFakeTimers();
+    const frames = fakeDisplay(60);
+    const visuals = renderer();
+    const times: number[] = [];
+    const internals = visuals as unknown as {
+      gl: Record<string, unknown>;
+      currentProgram: Record<string, unknown>;
+      uniforms: Record<string, unknown>;
+    };
+    internals.gl = {
+      TRIANGLES: 4,
+      useProgram: vi.fn(),
+      uniform1f: vi.fn((_location: unknown, value: number) => times.push(value)),
+      uniform3fv: vi.fn(),
+      drawArrays: vi.fn(),
+    };
+    internals.currentProgram = {};
+    internals.uniforms = { time: {} };
+
+    visuals.resume();
+    vi.advanceTimersByTime(500);
+    expect(frames()).toBeGreaterThan(10);
+
+    visuals.setPlaybackActive(false);
+    vi.advanceTimersByTime(500);
+    const atRest = frames();
+    vi.advanceTimersByTime(5000);
+    expect(frames()).toBe(atRest);
+    const frozenTime = times[times.length - 1];
+
+    visuals.setPlaybackActive(true);
+    vi.advanceTimersByTime(100);
+    expect(frames()).toBeGreaterThan(atRest);
+    // The shader clock carries on from the frozen frame rather than skipping five seconds.
+    expect(times[times.length - 1] - frozenTime).toBeLessThan(0.5);
+  });
 });
