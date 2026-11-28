@@ -687,9 +687,12 @@
   gap: var(--space-4);
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  padding-bottom: var(--space-2);
-  margin: 0 calc(var(--space-2) * -1);
-  padding-inline: var(--space-2);
+  /* A scroller clips what spills out of it, and each card's hover fill
+     reaches 8px past the card on every side (.shelf-card margin), so leave
+     that much room all round; the negative margin keeps cards in place. */
+  margin: calc(var(--space-2) * -1);
+  margin-bottom: 0;
+  padding: var(--space-2);
 }
 
 /* The padding above only makes room for card hover fills; keep the
