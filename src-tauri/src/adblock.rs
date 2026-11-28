@@ -325,6 +325,58 @@ mod tests {
             "xmlhttprequest",
             "POST"
         ));
+        for (url, kind) in [
+            (
+                "https://imasdk.googleapis.com/js/sdkloader/ima3.js",
+                "script",
+            ),
+            (
+                "https://static.doubleclick.net/instream/ad_status.js",
+                "script",
+            ),
+            (
+                "https://googleads.g.doubleclick.net/pagead/id",
+                "xmlhttprequest",
+            ),
+            ("https://www.youtube.com/pagead/adview?ai=example", "image"),
+        ] {
+            assert!(should_block(&engine, source, url, kind, "GET"), "{url}");
+        }
+        // Playback, catalog and artwork requests must always load.
+        for (url, kind, method) in [
+            (
+                "https://music.youtube.com/youtubei/v1/player",
+                "xmlhttprequest",
+                "POST",
+            ),
+            (
+                "https://music.youtube.com/youtubei/v1/browse",
+                "xmlhttprequest",
+                "POST",
+            ),
+            (
+                "https://rr3---sn-abc.googlevideo.com/videoplayback?expire=1",
+                "media",
+                "GET",
+            ),
+            (
+                "https://rr3---sn-abc.googlevideo.com/videoplayback?expire=1",
+                "xmlhttprequest",
+                "POST",
+            ),
+            (
+                "https://lh3.googleusercontent.com/example=w544-h544",
+                "image",
+                "GET",
+            ),
+            (
+                "https://i.ytimg.com/vi/example/hqdefault.jpg",
+                "image",
+                "GET",
+            ),
+        ] {
+            assert!(!should_block(&engine, source, url, kind, method), "{url}");
+        }
         assert!(!should_block(
             &engine,
             source,
