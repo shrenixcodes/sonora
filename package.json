@@ -1,6 +1,6 @@
 {
   "name": "sonora",
-  "version": "0.7.53",
+  "version": "0.8.19",
   "description": "An immersive YouTube Music desktop client for Windows",
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
     "tauri:build": "tauri build",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "version:bump": "node scripts/bump-version.mjs"
   },
   "keywords": [
     "music",

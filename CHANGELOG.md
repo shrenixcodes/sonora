@@ -6,7 +6,22 @@ All notable changes to Sonora are documented in this file.
 
 ## [Unreleased]
 
+### Playback and interface
+- Pressing Next at the end of the queue with Autoplay off now shows an "End of queue" hint above the player instead of doing nothing.
+- The Now Playing quality label is plain text; clicking it steps through Saver, Balanced, High, and Lossless.
+- A failed play, pause, seek, or volume command is logged instead of replacing the player with "YouTube Music did not respond"; only a failed track load shows that error.
+- The floating window can be dragged to another monitor, and Win+Left, Win+Right, and Snap Layouts place it instead of being undone.
+
+### Performance
+- The hidden YouTube Music player keeps only the smallest video stream, and High or Lossless no longer ask it for HD video.
+- The compiled ad filter is cached on disk, so launches skip re-parsing the 2.5 MB of filter lists.
+- The Now Playing shader freezes once its colors settle while music is paused, and the progress ticker stops while the window is hidden.
+- The queue is saved at most once a second (and when the app closes) instead of on every skip.
+- Cached playlists and artist pages are capped, and machines rendering without a GPU use solid panel tints instead of blur.
+- The floating-mode cursor sampler reads the pointer directly, skips work when it has not moved, and slows down far from any panel.
+
 ### Documentation and maintenance
+- Added `pnpm version:bump <version>` and a test that fails when the version manifests disagree.
 - Added desktop app captures in `docs/images/` (launch splash GIF, taskbar restore GIF, floating `Fluid` hero GIF, 5 Now Playing shader screenshots, and matched Charcoal Dark / Bone Light Search views) and wired them into `README.md`.
 - Expanded `README.md` with Tech Stack, IPC architecture overview, full keyboard shortcuts table, exact `sonora-theme.json` schema, audio quality/DSP/per-app routing details, and visual mode / theme comparisons (fixing the inaccurate Settings intensity-slider reference).
 - Expanded `DESIGN.md` with complete Dark (`Charcoal`) and Light (`Bone`) token palettes, WCAG AA `4.5:1` adaptive artwork accents, full typography scale, motion curves, glass blur tiers, and icon stroke conventions.
