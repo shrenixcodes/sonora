@@ -877,7 +877,9 @@ mod tests {
         ));
 
         let history_script = request_script(5, &YtmRequest::History).unwrap();
-        assert!(history_script.contains(r#"window.__sonoraBridge.request(5, {"kind":"history"});"#));
+        assert!(
+            history_script.contains(r#"window.__sonoraBridge.request(5, {"kind":"history"});"#)
+        );
         let script = request_script(
             7,
             &YtmRequest::Search {
