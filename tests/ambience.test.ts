@@ -1,5 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
-import { AmbientArtwork, applyAmbience, applyArtworkAccent, syncShellAccent } from "../src/lib/ambience";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import {
+  ARTWORK_CANVAS_SIZE,
+  ARTWORK_FILTER,
+  AmbientArtwork,
+  applyAmbience,
+  applyArtworkAccent,
+  syncShellAccent,
+} from "../src/lib/ambience";
 import type { ArtworkPalette } from "../src/lib/visuals/color-extractor";
 
 const palette: ArtworkPalette = {
@@ -34,25 +43,64 @@ describe("applyAmbience", () => {
 });
 
 describe("AmbientArtwork", () => {
-  it("fades a new artwork in over the old one and clears on null", () => {
+  function setup() {
+    const drawn: unknown[][] = [];
+    const ctx = { filter: "", drawImage: (...args: unknown[]) => drawn.push(args) };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    const pending = new Map<string, (image: { width: number; height: number }) => void>();
+    const load = vi.fn(
+      (url: string) => new Promise<{ width: number; height: number }>((resolve) => pending.set(url, resolve)),
+    );
+    const art = new AmbientArtwork(document, load as never);
+    return { art, ctx, drawn, pending, load };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("fades a new artwork in over the old one and clears on null", async () => {
+    const { art, pending } = setup();
+    art.set("https://example.com/a.jpg");
+    art.set("https://example.com/a.jpg");
+    expect(art.element.querySelectorAll("canvas")).toHaveLength(1);
+
+    const first = art.element.querySelector("canvas")!;
+    pending.get("https://example.com/a.jpg")!({ width: 544, height: 544 });
+    await vi.waitFor(() => expect(first.classList.contains("is-visible")).toBe(true));
+
     vi.useFakeTimers();
-    const art = new AmbientArtwork();
-    art.set("https://example.com/a.jpg");
-    art.set("https://example.com/a.jpg");
-    expect(art.element.querySelectorAll("img")).toHaveLength(1);
-
-    const first = art.element.querySelector("img")!;
-    first.dispatchEvent(new Event("load"));
-    expect(first.classList.contains("is-visible")).toBe(true);
-
     art.set("https://example.com/b.jpg");
     expect(first.classList.contains("is-visible")).toBe(false);
-    expect(art.element.querySelectorAll("img")).toHaveLength(2);
+    expect(art.element.querySelectorAll("canvas")).toHaveLength(2);
 
     art.set(null);
     vi.runAllTimers();
-    expect(art.element.querySelectorAll("img")).toHaveLength(0);
+    expect(art.element.querySelectorAll("canvas")).toHaveLength(0);
     vi.useRealTimers();
+  });
+
+  it("blurs the artwork once into a small canvas instead of with a live CSS filter", async () => {
+    const { art, ctx, drawn, pending } = setup();
+    art.set("https://example.com/wide.jpg");
+    pending.get("https://example.com/wide.jpg")!({ width: 800, height: 600 });
+    const layer = art.element.querySelector("canvas")!;
+    await vi.waitFor(() => expect(layer.classList.contains("is-visible")).toBe(true));
+
+    // The whole image at its own shape, so object-fit: cover crops it as before.
+    expect([layer.width, layer.height]).toEqual([ARTWORK_CANVAS_SIZE, 96]);
+    expect(ctx.filter).toBe(ARTWORK_FILTER);
+    expect(drawn[0].slice(1)).toEqual([0, 0, ARTWORK_CANVAS_SIZE, 96]);
+
+    const css = readFileSync(path.resolve(import.meta.dirname, "../src/styles/global.css"), "utf8");
+    const layerRule = css.slice(css.indexOf(".ambient-art__layer {"), css.indexOf("}", css.indexOf(".ambient-art__layer {")));
+    expect(layerRule).not.toMatch(/filter:/);
+  });
+
+  it("drops a layer whose artwork never loads", async () => {
+    const drawn = vi.spyOn(HTMLCanvasElement.prototype, "getContext");
+    const art = new AmbientArtwork(document, () => Promise.reject(new Error("404")));
+    art.set("https://example.com/missing.jpg");
+    await vi.waitFor(() => expect(art.element.querySelectorAll("canvas")).toHaveLength(0));
+    expect(drawn).not.toHaveBeenCalled();
   });
 });
 

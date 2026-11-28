@@ -71,17 +71,58 @@ export function applyAmbience(
 }
 
 const ARTWORK_FADE_MS = 1200;
+/**
+ * The artwork is blurred once, small; the browser's smooth upscale to window
+ * size finishes the softening. The blur matches the old live
+ * `blur(36px)` on a ~2500px layer, scaled down to this canvas.
+ */
+export const ARTWORK_CANVAS_SIZE = 128;
+export const ARTWORK_FILTER = "blur(2.5px) saturate(140%)";
+
+export type ImageLoader = (url: string) => Promise<CanvasImageSource & { width: number; height: number }>;
+
+const loadImage: ImageLoader = (url) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`artwork failed to load: ${url}`));
+    image.src = url;
+  });
+
+/**
+ * Draws the whole artwork, blurred, into the layer at its own shape (longest
+ * side ARTWORK_CANVAS_SIZE), so object-fit crops it as it did the image.
+ * False when it cannot draw.
+ */
+function paintBlurred(layer: HTMLCanvasElement, image: CanvasImageSource & { width: number; height: number }): boolean {
+  if (image.width <= 0 || image.height <= 0) return false;
+  const scale = ARTWORK_CANVAS_SIZE / Math.max(image.width, image.height);
+  layer.width = Math.max(1, Math.round(image.width * scale));
+  layer.height = Math.max(1, Math.round(image.height * scale));
+  const ctx = layer.getContext("2d");
+  if (!ctx) return false;
+  ctx.filter = ARTWORK_FILTER;
+  ctx.drawImage(image, 0, 0, layer.width, layer.height);
+  return true;
+}
 
 /**
  * The current artwork behind the whole app. Two layers
  * cross-fade so a track change never flashes the bare background.
+ *
+ * A live CSS blur here was redrawn whenever anything above it changed: every
+ * frame of the Now Playing shader, and both layers through each cross-fade.
  */
 export class AmbientArtwork {
   readonly element: HTMLElement;
-  private current: HTMLImageElement | null = null;
+  private current: HTMLCanvasElement | null = null;
   private url: string | null = null;
 
-  constructor(doc: Document = document) {
+  constructor(
+    doc: Document = document,
+    private readonly load: ImageLoader = loadImage,
+  ) {
     this.element = doc.createElement("div");
     this.element.className = "ambient-art";
     this.element.setAttribute("aria-hidden", "true");
@@ -95,21 +136,21 @@ export class AmbientArtwork {
     if (previous) this.retire(previous);
     if (!url) return;
 
-    const layer = this.element.ownerDocument.createElement("img");
+    const layer = this.element.ownerDocument.createElement("canvas");
     layer.className = "ambient-art__layer";
-    layer.alt = "";
-    layer.decoding = "async";
-    // Show the layer only once it has loaded, so the old one fades into a real image.
-    layer.addEventListener("load", () => {
-      if (this.current === layer) layer.classList.add("is-visible");
-    }, { once: true });
-    layer.addEventListener("error", () => layer.remove(), { once: true });
-    layer.src = url;
     this.element.appendChild(layer);
     this.current = layer;
+    // Show the layer only once it holds the artwork, so the old one fades into a real image.
+    this.load(url)
+      .then((image) => {
+        if (this.current !== layer) return;
+        if (paintBlurred(layer, image)) layer.classList.add("is-visible");
+        else layer.remove();
+      })
+      .catch(() => layer.remove());
   }
 
-  private retire(layer: HTMLImageElement): void {
+  private retire(layer: HTMLCanvasElement): void {
     layer.classList.remove("is-visible");
     window.setTimeout(() => layer.remove(), ARTWORK_FADE_MS);
   }
