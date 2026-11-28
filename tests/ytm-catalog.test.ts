@@ -21,6 +21,20 @@ describe("Catalog", () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
+  it("keeps only the most recently opened artist pages cached", async () => {
+    const fetcher = vi.fn(async () => ({}));
+    const catalog = new Catalog(fetcher);
+
+    for (let i = 0; i < 51; i++) await catalog.getArtist(`UC${i}`);
+    expect(fetcher).toHaveBeenCalledTimes(51);
+
+    await catalog.getArtist("UC50");
+    expect(fetcher).toHaveBeenCalledTimes(51);
+    // The first page fell out of the cache once the 51st arrived.
+    await catalog.getArtist("UC0");
+    expect(fetcher).toHaveBeenCalledTimes(52);
+  });
+
   it("shares one call between identical requests in flight", async () => {
     let release!: (v: unknown) => void;
     const fetcher = vi.fn(() => new Promise((resolve) => (release = resolve)));
