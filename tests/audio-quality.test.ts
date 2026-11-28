@@ -5,7 +5,13 @@ vi.hoisted(() => {
 });
 
 import { storage, DEFAULT_SETTINGS } from "../src/lib/storage";
-import { formatAudioTelemetry, formatCompactQualityBadge, sanitizeAudioEnhancement, sanitizeAudioQuality } from "../src/lib/audio-quality";
+import {
+  formatAudioTelemetry,
+  formatCompactQualityBadge,
+  nextAudioQuality,
+  sanitizeAudioEnhancement,
+  sanitizeAudioQuality,
+} from "../src/lib/audio-quality";
 import { playerEngine } from "../src/lib/playback/engine";
 import { renderSettings } from "../src/views/settings";
 import { renderNowPlaying } from "../src/views/now-playing";
@@ -70,7 +76,21 @@ describe("Audio quality, Lossless mode, and Enhancement settings", () => {
         { codec: "Opus", bitrateKbps: 160, dspActive: true, effectiveQuality: "high", fallbackUsed: true },
       ),
     ).toContain("Best Available (High Quality)");
-    expect(formatCompactQualityBadge({ audioQuality: "balanced", audioEnhancement: "off" }, null)).toBeNull();
+    expect(formatCompactQualityBadge({ audioQuality: "balanced" }, null)).toBe("Balanced");
+    expect(formatCompactQualityBadge({ audioQuality: "saver" }, { bitrateKbps: 70, effectiveQuality: "saver" })).toBe(
+      "Saver · 70 kbps",
+    );
+    // Just switched: the old stream's bitrate belongs to the previous preset.
+    expect(
+      formatCompactQualityBadge({ audioQuality: "high" }, { bitrateKbps: 70, effectiveQuality: "saver" }),
+    ).toBe("High");
+  });
+
+  it("cycles through every quality preset and wraps around", () => {
+    expect(nextAudioQuality("saver")).toBe("balanced");
+    expect(nextAudioQuality("balanced")).toBe("high");
+    expect(nextAudioQuality("high")).toBe("lossless");
+    expect(nextAudioQuality("lossless")).toBe("saver");
   });
 
   it("exposes Lossless quality, enhancement profiles, and live telemetry in Settings", () => {
@@ -120,11 +140,20 @@ describe("Audio quality, Lossless mode, and Enhancement settings", () => {
     router.start(host);
 
     const badge = host.querySelector<HTMLButtonElement>(".now-playing__quality-badge")!;
-    expect(badge.hasAttribute("hidden")).toBe(true);
+    expect(badge.hasAttribute("hidden")).toBe(false);
+    expect(badge.textContent).toBe("Balanced");
 
     storage.saveSettings({ audioQuality: "lossless" });
-    expect(badge.hasAttribute("hidden")).toBe(false);
     expect(badge.textContent).toContain("Lossless");
     expect(badge.classList.contains("now-playing__quality-badge--lossless")).toBe(true);
+
+    // Clicking steps through the presets instead of opening Settings.
+    badge.click();
+    expect(storage.getSettings().audioQuality).toBe("saver");
+    expect(badge.textContent).toBe("Saver");
+    expect(window.location.hash).toBe("#/now-playing");
+    badge.click();
+    expect(storage.getSettings().audioQuality).toBe("balanced");
+    expect(badge.getAttribute("aria-label")).toBe("Audio quality: Balanced. Switch to High");
   });
 });

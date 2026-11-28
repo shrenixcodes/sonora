@@ -8,11 +8,17 @@
 
 import { el } from "@/lib/dom";
 import { icon } from "@/icons";
-import { formatCompactQualityBadge } from "@/lib/audio-quality";
+import {
+  audioQualityOption,
+  formatCompactQualityBadge,
+  isQualityChangePending,
+  nextAudioQuality,
+} from "@/lib/audio-quality";
 import { openAlbum, openArtist } from "@/lib/navigation";
 import { playerEngine } from "@/lib/playback/engine";
 import { LyricsController } from "@/lib/lyrics/synced-lyrics";
 import { AmbientVisualRenderer } from "@/lib/visuals/ambient-renderer";
+import { shouldReduceMotion } from "@/lib/visuals/motion";
 import { storage } from "@/lib/storage";
 import { router } from "@/lib/router";
 import { isTauri } from "@tauri-apps/api/core";
@@ -177,17 +183,22 @@ export function renderNowPlaying(container: HTMLElement): void {
     },
   });
 
+  // Plain text that steps through the quality presets on each click.
   const qualityBadgeBtn = el("button", {
     className: "now-playing__quality-badge",
-    attrs: {
-      type: "button",
-      title: "Open audio quality settings",
-      "aria-label": "Audio quality settings",
-      hidden: "",
-    },
+    attrs: { type: "button" },
     onClick: () => {
-      if (immersive) void setImmersive(false);
-      router.navigate("/settings");
+      const next = nextAudioQuality(storage.getSettings().audioQuality);
+      storage.saveSettings({ audioQuality: next });
+      if (!shouldReduceMotion() && typeof qualityBadgeBtn.animate === "function") {
+        qualityBadgeBtn.animate(
+          [
+            { opacity: 0.35, transform: "translateY(3px)" },
+            { opacity: 1, transform: "translateY(0)" },
+          ],
+          { duration: 220, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+        );
+      }
     },
   });
 
@@ -195,16 +206,16 @@ export function renderNowPlaying(container: HTMLElement): void {
     const currentSettings = storage.getSettings();
     const info = playerEngine.currentState.audioInfo;
     const label = formatCompactQualityBadge(currentSettings, info);
-    qualityBadgeBtn.toggleAttribute("hidden", !label);
     const isNativeLossless = currentSettings.audioQuality === "lossless" && !info?.fallbackUsed;
     qualityBadgeBtn.classList.toggle("now-playing__quality-badge--lossless", isNativeLossless);
     qualityBadgeBtn.classList.toggle("now-playing__quality-badge--fallback", Boolean(info?.fallbackUsed));
-    if (label) {
-      qualityBadgeBtn.textContent = label;
-      const tip = info?.fallbackReason ?? `Audio quality: ${label}. Open settings.`;
-      qualityBadgeBtn.setAttribute("title", tip);
-      qualityBadgeBtn.setAttribute("aria-label", `Audio quality: ${label}. Open settings.`);
-    }
+    qualityBadgeBtn.textContent = label;
+
+    const upcoming = audioQualityOption(nextAudioQuality(currentSettings.audioQuality)).label;
+    const pending = isQualityChangePending(currentSettings, info) ? " Applies from the next song." : "";
+    const reason = info?.fallbackUsed && info.fallbackReason ? ` ${info.fallbackReason}.` : "";
+    qualityBadgeBtn.setAttribute("title", `Audio quality: ${label}.${reason}${pending} Click for ${upcoming}.`);
+    qualityBadgeBtn.setAttribute("aria-label", `Audio quality: ${label}. Switch to ${upcoming}`);
   };
   updateQualityBadge();
 
