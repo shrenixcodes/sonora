@@ -333,6 +333,69 @@ describe("PlaybackEngine with the YouTube Music bridge", () => {
     await vi.waitFor(() => expect(engine.currentLyrics?.trackId).toBe("bbbbbbbbbbb"));
   });
 
+  describe("when a bridge command fails", () => {
+    function failingSetup(failing: YtmCommand["action"][]) {
+      const bridge = {
+        available: true,
+        control: vi.fn(async (command: YtmCommand) => {
+          if (failing.includes(command.action)) throw "bridge unavailable";
+        }),
+        onState: vi.fn(async () => () => {}),
+      };
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      return new PlaybackEngine(bridge);
+    }
+
+    it("keeps playing when a volume, seek or pause command is dropped", async () => {
+      const engine = failingSetup(["volume", "seek", "pause"]);
+      engine.playTrack(list[0], list);
+      engine.handleBridgeState(report({ reason: "play", videoId: "aaaaaaaaaaa", currentTime: 3 }));
+
+      engine.setVolume(0.4);
+      engine.seekTo(50);
+      engine.pause();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(engine.currentState.status).not.toBe("error");
+      expect(engine.currentState.error).toBeFalsy();
+      expect(console.warn).toHaveBeenCalled();
+    });
+
+    it("reports an error when the pending track fails to load", async () => {
+      const engine = failingSetup(["load"]);
+      engine.playTrack(list[0], list);
+
+      await vi.waitFor(() => expect(engine.currentState.status).toBe("error"));
+      expect(engine.currentState.error).toBe("bridge unavailable");
+    });
+
+    it("ignores a late load failure for a track the user already moved past", async () => {
+      let rejectFirst: (reason: unknown) => void = () => {};
+      const bridge = {
+        available: true,
+        control: vi.fn((command: YtmCommand) =>
+          command.action === "load" && command.value === "aaaaaaaaaaa"
+            ? new Promise<void>((_, reject) => (rejectFirst = reject))
+            : Promise.resolve(),
+        ),
+        onState: vi.fn(async () => () => {}),
+      };
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const engine = new PlaybackEngine(bridge);
+
+      engine.playTrack(list[0], list);
+      engine.playTrack(list[2], list);
+      rejectFirst("bridge unavailable");
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(engine.currentState.status).toBe("loading");
+      expect(engine.currentTrack?.id).toBe("ccccccccccc");
+    });
+  });
+
   it("explains that playback needs the desktop app", () => {
     const { engine } = setup(false);
     engine.playTrack(list[0], list);

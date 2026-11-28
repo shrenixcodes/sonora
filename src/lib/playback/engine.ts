@@ -602,7 +602,15 @@ export class PlaybackEngine extends EventEmitter<PlaybackEvents> {
 
   private send(command: YtmCommand): void {
     if (!this.bridge.available) return;
-    this.bridge.control(command).catch((err) => this.fail(err));
+    this.bridge.control(command).catch((err) => {
+      // Only a failed load leaves nothing to play. A dropped play, seek or volume
+      // command must not replace a working player with an error.
+      if (command.action === "load" && this.pendingId === command.value) {
+        this.fail(err);
+      } else {
+        console.warn(`[PlaybackEngine] "${command.action}" command failed`, err);
+      }
+    });
   }
 
   private reloadCurrentTrack(): void {
